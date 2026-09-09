@@ -43,13 +43,21 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
         api.dio.get('/services'),
         api.dio.get('/working-hours'),
         api.dio.get('/appointments', queryParameters: {
-          'starts_at_gte': DateTime.now().subtract(const Duration(days: 30)).toIso8601String(),
+          'starts_at_gte': DateTime.now()
+              .subtract(const Duration(days: 30))
+              .toIso8601String(),
         }),
       ]);
-      _clients = (results[0].data as List).map((j) => Client.fromJson(j)).toList();
-      _services = (results[1].data as List).map((j) => Service.fromJson(j)).toList();
-      _workingHours = (results[2].data as List).map((j) => WorkingHour.fromJson(j)).toList();
-      _existingAppointments = (results[3].data as List).map((j) => Appointment.fromJson(j)).toList();
+      _clients =
+          (results[0].data as List).map((j) => Client.fromJson(j)).toList();
+      _services =
+          (results[1].data as List).map((j) => Service.fromJson(j)).toList();
+      _workingHours = (results[2].data as List)
+          .map((j) => WorkingHour.fromJson(j))
+          .toList();
+      _existingAppointments = (results[3].data as List)
+          .map((j) => Appointment.fromJson(j))
+          .toList();
     } catch (_) {}
     if (mounted) setState(() => _loading = false);
   }
@@ -61,20 +69,29 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
 
     final slots = <DateTime>[];
     final dayAppointments = _existingAppointments
-        .where((a) => a.startsAt.year == date.year && a.startsAt.month == date.month && a.startsAt.day == date.day)
+        .where((a) =>
+            a.startsAt.year == date.year &&
+            a.startsAt.month == date.month &&
+            a.startsAt.day == date.day)
         .where((a) => a.status == 'pending' || a.status == 'confirmed')
         .toList();
 
     for (final wh in dayHours) {
-      var cursor = DateTime(date.year, date.month, date.day, wh.startTime.hour, wh.startTime.minute);
-      final end = DateTime(date.year, date.month, date.day, wh.endTime.hour, wh.endTime.minute);
-      
-      while (cursor.add(Duration(minutes: _selectedService?.durationMin ?? 60)).isBefore(end) ||
-             cursor.add(Duration(minutes: _selectedService?.durationMin ?? 60)).isAtSameMomentAs(end)) {
-        final slotEnd = cursor.add(Duration(minutes: _selectedService?.durationMin ?? 60));
-        final overlaps = dayAppointments.any((a) => 
-          a.startsAt.isBefore(slotEnd) && a.endsAt.isAfter(cursor)
-        );
+      var cursor = DateTime(date.year, date.month, date.day, wh.startTime.hour,
+          wh.startTime.minute);
+      final end = DateTime(
+          date.year, date.month, date.day, wh.endTime.hour, wh.endTime.minute);
+
+      while (cursor
+              .add(Duration(minutes: _selectedService?.durationMin ?? 60))
+              .isBefore(end) ||
+          cursor
+              .add(Duration(minutes: _selectedService?.durationMin ?? 60))
+              .isAtSameMomentAs(end)) {
+        final slotEnd =
+            cursor.add(Duration(minutes: _selectedService?.durationMin ?? 60));
+        final overlaps = dayAppointments.any(
+            (a) => a.startsAt.isBefore(slotEnd) && a.endsAt.isAfter(cursor));
         if (!overlaps) slots.add(cursor);
         cursor = cursor.add(const Duration(minutes: 15)); // step 15 min
       }
@@ -84,7 +101,8 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
 
   void _nextStep() {
     if (_step < 2) {
-      _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+      _pageController.nextPage(
+          duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
     } else {
       _createAppointment();
     }
@@ -92,13 +110,16 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
 
   void _prevStep() {
     if (_step > 0) {
-      _pageController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+      _pageController.previousPage(
+          duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
     }
   }
 
   Future<void> _createAppointment() async {
-    if (_selectedClient == null || _selectedService == null || _selectedSlot == null) return;
-    
+    if (_selectedClient == null ||
+        _selectedService == null ||
+        _selectedSlot == null) return;
+
     setState(() => _loading = true);
     try {
       final api = ApiClient();
@@ -106,19 +127,23 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
         'client_id': _selectedClient!.id,
         'service_id': _selectedService!.id,
         'starts_at': _selectedSlot!.toIso8601String(),
-        'ends_at': _selectedSlot!.add(Duration(minutes: _selectedService!.durationMin)).toIso8601String(),
+        'ends_at': _selectedSlot!
+            .add(Duration(minutes: _selectedService!.durationMin))
+            .toIso8601String(),
         'source': 'app',
       });
       if (mounted) {
         context.go('/agenda');
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Horário marcado!'), backgroundColor: Colors.green),
+          const SnackBar(
+              content: Text('Horário marcado!'), backgroundColor: Colors.green),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Falha: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+              content: Text('Falha: $e'), backgroundColor: AppColors.error),
         );
       }
     }
@@ -127,12 +152,20 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_loading)
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(['Escolhe o cliente', 'Escolhe o serviço', 'Escolhe o horário'][_step]),
-        leading: _step > 0 ? IconButton(icon: const Icon(Icons.arrow_back), onPressed: _prevStep) : null,
+        title: Text([
+          'Escolhe o cliente',
+          'Escolhe o serviço',
+          'Escolhe o horário'
+        ][_step]),
+        leading: _step > 0
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back), onPressed: _prevStep)
+            : null,
       ),
       body: PageView(
         controller: _pageController,
@@ -144,25 +177,32 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
           _buildSlotStep(),
         ],
       ),
-      bottomNavigationBar: _loading ? null : SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: FilledButton(
-            onPressed: _canProceed() ? _nextStep : null,
-            child: Text(_step == 2 ? 'Confirmar agendamento' : 'Continuar'),
-          ),
-        ),
-      ),
+      bottomNavigationBar: _loading
+          ? null
+          : SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: FilledButton(
+                  onPressed: _canProceed() ? _nextStep : null,
+                  child:
+                      Text(_step == 2 ? 'Confirmar agendamento' : 'Continuar'),
+                ),
+              ),
+            ),
     );
   }
 
   bool _canProceed() {
     switch (_step) {
-      case 0: return _selectedClient != null;
-      case 1: return _selectedService != null;
-      case 2: return _selectedSlot != null;
-      default: return false;
+      case 0:
+        return _selectedClient != null;
+      case 1:
+        return _selectedService != null;
+      case 2:
+        return _selectedSlot != null;
+      default:
+        return false;
     }
   }
 
@@ -192,11 +232,14 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                 child: ListTile(
                   leading: CircleAvatar(
                     backgroundColor: AppColors.primary,
-                    child: Text(c.name[0].toUpperCase(), style: const TextStyle(color: Colors.white)),
+                    child: Text(c.name[0].toUpperCase(),
+                        style: const TextStyle(color: Colors.white)),
                   ),
                   title: Text(c.name),
                   subtitle: Text(c.phoneE164),
-                  trailing: selected ? const Icon(Icons.check_circle, color: AppColors.primary) : null,
+                  trailing: selected
+                      ? const Icon(Icons.check_circle, color: AppColors.primary)
+                      : null,
                   onTap: () => setState(() => _selectedClient = c),
                 ),
               );
@@ -224,8 +267,11 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
               child: Icon(Icons.content_cut, color: Colors.white),
             ),
             title: Text(s.name),
-            subtitle: Text('${s.durationMin} min • ${priceFmt.format(s.priceCents / 100)}'),
-            trailing: selected ? const Icon(Icons.check_circle, color: AppColors.primary) : null,
+            subtitle: Text(
+                '${s.durationMin} min • ${priceFmt.format(s.priceCents / 100)}'),
+            trailing: selected
+                ? const Icon(Icons.check_circle, color: AppColors.primary)
+                : null,
             onTap: () => setState(() => _selectedService = s),
           ),
         );
@@ -247,9 +293,16 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              IconButton(icon: const Icon(Icons.chevron_left), onPressed: () => setState(() => _selectedDate = _selectedDate.subtract(const Duration(days: 1)))),
-              Text(dateFmt.format(_selectedDate).capitalize(), style: Theme.of(context).textTheme.titleMedium),
-              IconButton(icon: const Icon(Icons.chevron_right), onPressed: () => setState(() => _selectedDate = _selectedDate.add(const Duration(days: 1)))),
+              IconButton(
+                  icon: const Icon(Icons.chevron_left),
+                  onPressed: () => setState(() => _selectedDate =
+                      _selectedDate.subtract(const Duration(days: 1)))),
+              Text(dateFmt.format(_selectedDate).capitalize(),
+                  style: Theme.of(context).textTheme.titleMedium),
+              IconButton(
+                  icon: const Icon(Icons.chevron_right),
+                  onPressed: () => setState(() => _selectedDate =
+                      _selectedDate.add(const Duration(days: 1)))),
             ],
           ),
         ),
@@ -261,9 +314,14 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                 children: [
                   const Icon(Icons.block, size: 64, color: AppColors.neutral),
                   const SizedBox(height: 16),
-                  Text('Sem horários livres neste dia', style: Theme.of(context).textTheme.titleMedium),
+                  Text('Sem horários livres neste dia',
+                      style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 8),
-                  Text('Tenta outro dia ou ajusta teus horários de trabalho', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.neutral)),
+                  Text('Tenta outro dia ou ajusta teus horários de trabalho',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(color: AppColors.neutral)),
                 ],
               ),
             ),
@@ -289,7 +347,10 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                     decoration: BoxDecoration(
                       color: selected ? AppColors.primary : AppColors.pinkSoft,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: selected ? AppColors.primary : Colors.transparent, width: 2),
+                      border: Border.all(
+                          color:
+                              selected ? AppColors.primary : Colors.transparent,
+                          width: 2),
                     ),
                     child: Center(
                       child: Text(
@@ -316,14 +377,18 @@ class Client {
   final String phoneE164;
   final String? email;
 
-  Client({required this.id, required this.name, required this.phoneE164, this.email});
+  Client(
+      {required this.id,
+      required this.name,
+      required this.phoneE164,
+      this.email});
 
   factory Client.fromJson(Map<String, dynamic> j) => Client(
-    id: j['id'],
-    name: j['name'],
-    phoneE164: j['phone_e164'] ?? j['phoneE164'] ?? '',
-    email: j['email'],
-  );
+        id: j['id'],
+        name: j['name'],
+        phoneE164: j['phone_e164'] ?? j['phoneE164'] ?? '',
+        email: j['email'],
+      );
 }
 
 class Service {
@@ -332,14 +397,18 @@ class Service {
   final int durationMin;
   final int priceCents;
 
-  Service({required this.id, required this.name, required this.durationMin, required this.priceCents});
+  Service(
+      {required this.id,
+      required this.name,
+      required this.durationMin,
+      required this.priceCents});
 
   factory Service.fromJson(Map<String, dynamic> j) => Service(
-    id: j['id'],
-    name: j['name'],
-    durationMin: j['duration_min'] ?? j['durationMin'],
-    priceCents: j['price_cents'] ?? j['priceCents'],
-  );
+        id: j['id'],
+        name: j['name'],
+        durationMin: j['duration_min'] ?? j['durationMin'],
+        priceCents: j['price_cents'] ?? j['priceCents'],
+      );
 }
 
 class WorkingHour {
@@ -347,13 +416,18 @@ class WorkingHour {
   final TimeOfDay startTime;
   final TimeOfDay endTime;
 
-  WorkingHour({required this.weekday, required this.startTime, required this.endTime});
+  WorkingHour(
+      {required this.weekday, required this.startTime, required this.endTime});
 
   factory WorkingHour.fromJson(Map<String, dynamic> j) => WorkingHour(
-    weekday: j['weekday'],
-    startTime: TimeOfDay(hour: int.parse(j['start_time']?.split(':')[0] ?? '0'), minute: int.parse(j['start_time']?.split(':')[1] ?? '0')),
-    endTime: TimeOfDay(hour: int.parse(j['end_time']?.split(':')[0] ?? '0'), minute: int.parse(j['end_time']?.split(':')[1] ?? '0')),
-  );
+        weekday: j['weekday'],
+        startTime: TimeOfDay(
+            hour: int.parse(j['start_time']?.split(':')[0] ?? '0'),
+            minute: int.parse(j['start_time']?.split(':')[1] ?? '0')),
+        endTime: TimeOfDay(
+            hour: int.parse(j['end_time']?.split(':')[0] ?? '0'),
+            minute: int.parse(j['end_time']?.split(':')[1] ?? '0')),
+      );
 }
 
 class Appointment {
@@ -362,16 +436,21 @@ class Appointment {
   final DateTime endsAt;
   final String status;
 
-  Appointment({required this.id, required this.startsAt, required this.endsAt, required this.status});
+  Appointment(
+      {required this.id,
+      required this.startsAt,
+      required this.endsAt,
+      required this.status});
 
   factory Appointment.fromJson(Map<String, dynamic> j) => Appointment(
-    id: j['id'],
-    startsAt: DateTime.parse(j['starts_at'] ?? j['startsAt']),
-    endsAt: DateTime.parse(j['ends_at'] ?? j['endsAt']),
-    status: j['status'] ?? 'pending',
-  );
+        id: j['id'],
+        startsAt: DateTime.parse(j['starts_at'] ?? j['startsAt']),
+        endsAt: DateTime.parse(j['ends_at'] ?? j['endsAt']),
+        status: j['status'] ?? 'pending',
+      );
 }
 
 extension StringExtension on String {
-  String capitalize() => isEmpty ? this : '${this[0].toUpperCase()}${substring(1)}';
+  String capitalize() =>
+      isEmpty ? this : '${this[0].toUpperCase()}${substring(1)}';
 }

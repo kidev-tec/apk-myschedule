@@ -27,13 +27,15 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     setState(() => _loading = true);
     try {
       final api = ApiClient();
-      final start = DateTime(_focusedDay.year, _focusedDay.month, _focusedDay.day);
+      final start =
+          DateTime(_focusedDay.year, _focusedDay.month, _focusedDay.day);
       final end = start.add(const Duration(days: 1));
       final resp = await api.dio.get('/appointments', queryParameters: {
         'starts_at_gte': start.toIso8601String(),
         'starts_at_lt': end.toIso8601String(),
       });
-      _appointments = (resp.data as List).map((j) => Appointment.fromJson(j)).toList();
+      _appointments =
+          (resp.data as List).map((j) => Appointment.fromJson(j)).toList();
     } catch (_) {
       // offline / erro silencioso
     }
@@ -41,19 +43,19 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   }
 
   void _prevDay() => setState(() {
-    _focusedDay = _focusedDay.subtract(const Duration(days: 1));
-    _loadAppointments();
-  });
+        _focusedDay = _focusedDay.subtract(const Duration(days: 1));
+        _loadAppointments();
+      });
 
   void _nextDay() => setState(() {
-    _focusedDay = _focusedDay.add(const Duration(days: 1));
-    _loadAppointments();
-  });
+        _focusedDay = _focusedDay.add(const Duration(days: 1));
+        _loadAppointments();
+      });
 
   void _today() => setState(() {
-    _focusedDay = DateTime.now();
-    _loadAppointments();
-  });
+        _focusedDay = DateTime.now();
+        _loadAppointments();
+      });
 
   /// Visão mensal: bottom sheet com grid do mês, marca dias com agendamentos
   /// e permite pular pro dia tocado. Carrega o mês inteiro numa query.
@@ -68,7 +70,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         'starts_at_gte': monthStart.toIso8601String(),
         'starts_at_lt': monthEnd.toIso8601String(),
       });
-      final all = (resp.data as List).map((j) => Appointment.fromJson(j)).toList();
+      final all =
+          (resp.data as List).map((j) => Appointment.fromJson(j)).toList();
       for (final a in all) {
         final d = DateTime(a.startsAt.year, a.startsAt.month, a.startsAt.day);
         (byDay[d] ??= []).add(a);
@@ -107,7 +110,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             Text('Minha Agenda', style: Theme.of(context).textTheme.titleLarge),
             Text(
               dateFmt.format(_focusedDay).capitalize(),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w400),
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(fontWeight: FontWeight.w400),
             ),
           ],
         ),
@@ -131,7 +137,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
               : ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: _appointments.length,
-                  itemBuilder: (_, i) => _buildAppointmentCard(_appointments[i], timeFmt),
+                  itemBuilder: (_, i) =>
+                      _buildAppointmentCard(_appointments[i], timeFmt),
                 ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push('/booking'),
@@ -152,7 +159,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.event_available, size: 80, color: AppColors.pinkMid),
+            const Icon(Icons.event_available,
+                size: 80, color: AppColors.pinkMid),
             const SizedBox(height: 16),
             Text(
               'Nada agendado pra hoje',
@@ -162,7 +170,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             const SizedBox(height: 8),
             Text(
               'Toque em "Marcar horário" pra começar',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.neutral),
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: AppColors.neutral),
               textAlign: TextAlign.center,
             ),
           ],
@@ -185,11 +196,15 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           child: Center(
             child: Text(
               timeFmt.format(a.startsAt),
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.primary),
+              style: Theme.of(context)
+                  .textTheme
+                  .labelLarge
+                  ?.copyWith(color: AppColors.primary),
             ),
           ),
         ),
-        title: Text(a.clientName, style: Theme.of(context).textTheme.titleMedium),
+        title:
+            Text(a.clientName, style: Theme.of(context).textTheme.titleMedium),
         subtitle: Text('${a.serviceName} • ${_statusLabel(a.status)}'),
         trailing: PopupMenuButton<String>(
           onSelected: (v) => _handleAppointmentAction(v, a),
@@ -214,16 +229,23 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             IconButton.filled(
               onPressed: _prevDay,
               icon: const Icon(Icons.chevron_left),
-              style: IconButton.styleFrom(backgroundColor: AppColors.pinkSoft, foregroundColor: AppColors.primary),
+              style: IconButton.styleFrom(
+                  backgroundColor: AppColors.pinkSoft,
+                  foregroundColor: AppColors.primary),
             ),
             Text(
               DateFormat('dd/MM').format(_focusedDay),
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600),
             ),
             IconButton.filled(
               onPressed: _nextDay,
               icon: const Icon(Icons.chevron_right),
-              style: IconButton.styleFrom(backgroundColor: AppColors.pinkSoft, foregroundColor: AppColors.primary),
+              style: IconButton.styleFrom(
+                  backgroundColor: AppColors.pinkSoft,
+                  foregroundColor: AppColors.primary),
             ),
           ],
         ),
@@ -233,12 +255,18 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
 
   String _statusLabel(String status) {
     switch (status) {
-      case 'pending': return 'Pendente';
-      case 'confirmed': return 'Confirmado';
-      case 'done': return 'Concluído';
-      case 'canceled': return 'Cancelado';
-      case 'noshow': return 'Não compareceu';
-      default: return status;
+      case 'pending':
+        return 'Pendente';
+      case 'confirmed':
+        return 'Confirmado';
+      case 'done':
+        return 'Concluído';
+      case 'canceled':
+        return 'Cancelado';
+      case 'noshow':
+        return 'Não compareceu';
+      default:
+        return status;
     }
   }
 
@@ -265,13 +293,13 @@ class Appointment {
   });
 
   factory Appointment.fromJson(Map<String, dynamic> j) => Appointment(
-    id: j['id'],
-    clientName: j['client_name'] ?? j['clientName'] ?? '',
-    serviceName: j['service_name'] ?? j['serviceName'] ?? '',
-    startsAt: DateTime.parse(j['starts_at'] ?? j['startsAt']),
-    endsAt: DateTime.parse(j['ends_at'] ?? j['endsAt']),
-    status: j['status'] ?? 'pending',
-  );
+        id: j['id'],
+        clientName: j['client_name'] ?? j['clientName'] ?? '',
+        serviceName: j['service_name'] ?? j['serviceName'] ?? '',
+        startsAt: DateTime.parse(j['starts_at'] ?? j['startsAt']),
+        endsAt: DateTime.parse(j['ends_at'] ?? j['endsAt']),
+        status: j['status'] ?? 'pending',
+      );
 }
 
 /// Calendário mensal em bottom sheet: dias com eventos têm bolinha na cor
@@ -292,7 +320,8 @@ class _MonthPicker extends StatefulWidget {
 }
 
 class _MonthPickerState extends State<_MonthPicker> {
-  late DateTime _month = DateTime(widget.initialMonth.year, widget.initialMonth.month, 1);
+  late DateTime _month =
+      DateTime(widget.initialMonth.year, widget.initialMonth.month, 1);
   static const _weekdays = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'];
 
   void _shiftMonth(int delta) =>
@@ -305,7 +334,8 @@ class _MonthPickerState extends State<_MonthPicker> {
     final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
     final today = DateTime.now();
     final today0 = DateTime(today.year, today.month, today.day);
-    final sel0 = DateTime(widget.selectedDay.year, widget.selectedDay.month, widget.selectedDay.day);
+    final sel0 = DateTime(widget.selectedDay.year, widget.selectedDay.month,
+        widget.selectedDay.day);
 
     return SafeArea(
       child: Padding(
@@ -316,10 +346,17 @@ class _MonthPickerState extends State<_MonthPicker> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                IconButton(icon: const Icon(Icons.chevron_left), onPressed: () => _shiftMonth(-1)),
+                IconButton(
+                    icon: const Icon(Icons.chevron_left),
+                    onPressed: () => _shiftMonth(-1)),
                 Text(monthFmt.format(_month).capitalize(),
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                IconButton(icon: const Icon(Icons.chevron_right), onPressed: () => _shiftMonth(1)),
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w600)),
+                IconButton(
+                    icon: const Icon(Icons.chevron_right),
+                    onPressed: () => _shiftMonth(1)),
               ],
             ),
             const SizedBox(height: 8),
@@ -327,7 +364,11 @@ class _MonthPickerState extends State<_MonthPicker> {
               children: _weekdays
                   .map((w) => Expanded(
                         child: Center(
-                          child: Text(w, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+                          child: Text(w,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(fontWeight: FontWeight.w600)),
                         ),
                       ))
                   .toList(),
@@ -341,7 +382,8 @@ class _MonthPickerState extends State<_MonthPicker> {
                     return const Expanded(child: SizedBox(height: 44));
                   }
                   final day = DateTime(_month.year, _month.month, dayNum);
-                  final hasEvents = (widget.eventsByDay[day]?.isNotEmpty ?? false);
+                  final hasEvents =
+                      (widget.eventsByDay[day]?.isNotEmpty ?? false);
                   final isToday = day == today0;
                   final isSelected = day == sel0;
                   return Expanded(
@@ -362,13 +404,19 @@ class _MonthPickerState extends State<_MonthPicker> {
                                 color: isSelected
                                     ? AppColors.primary
                                     : isToday
-                                        ? AppColors.primary.withValues(alpha: 0.15)
+                                        ? AppColors.primary
+                                            .withValues(alpha: 0.15)
                                         : null,
                               ),
                               child: Text(
                                 '$dayNum',
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                      fontWeight: isToday || isSelected ? FontWeight.w700 : FontWeight.w400,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      fontWeight: isToday || isSelected
+                                          ? FontWeight.w700
+                                          : FontWeight.w400,
                                       color: isSelected ? Colors.white : null,
                                     ),
                               ),
@@ -379,7 +427,9 @@ class _MonthPickerState extends State<_MonthPicker> {
                               height: 5,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: hasEvents ? AppColors.primary : Colors.transparent,
+                                color: hasEvents
+                                    ? AppColors.primary
+                                    : Colors.transparent,
                               ),
                             ),
                           ],
@@ -398,5 +448,6 @@ class _MonthPickerState extends State<_MonthPicker> {
 }
 
 extension StringExtension on String {
-  String capitalize() => isEmpty ? this : '${this[0].toUpperCase()}${substring(1)}';
+  String capitalize() =>
+      isEmpty ? this : '${this[0].toUpperCase()}${substring(1)}';
 }

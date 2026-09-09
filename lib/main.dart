@@ -18,24 +18,24 @@ import 'theme/app_theme.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authControllerProvider);
-  
+
   return GoRouter(
     initialLocation: '/login',
     redirect: (context, state) {
       final isAuthenticated = authState.isAuthenticated;
       final isAuthRoute = state.matchedLocation == '/login';
       final isOnboardingRoute = state.matchedLocation == '/onboarding';
-      
+
       // Se não autenticado e não está em rota de auth -> login
       if (!isAuthenticated && !isAuthRoute && !isOnboardingRoute) {
         return '/login';
       }
-      
+
       // Se autenticado e está em login -> onboarding ou agenda
       if (isAuthenticated && isAuthRoute) {
         return '/onboarding';
       }
-      
+
       return null;
     },
     routes: [
@@ -67,7 +67,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: ':id/edit',
-            builder: (_, state) => ClientFormPage(clientId: state.pathParameters['id']),
+            builder: (_, state) =>
+                ClientFormPage(clientId: state.pathParameters['id']),
           ),
         ],
       ),
@@ -81,7 +82,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: ':id/edit',
-            builder: (_, state) => ServiceFormPage(serviceId: state.pathParameters['id']),
+            builder: (_, state) =>
+                ServiceFormPage(serviceId: state.pathParameters['id']),
           ),
         ],
       ),
@@ -101,10 +103,14 @@ void main() async {
   // em release, substituir pelas credenciais reais do projeto)
   await Firebase.initializeApp(
     options: const FirebaseOptions(
-      apiKey: String.fromEnvironment('FIREBASE_API_KEY', defaultValue: 'AIzaSyBG9haJTEiv4r9slt2R92_0TZPMtJAlrRg'),
-      appId: String.fromEnvironment('FIREBASE_APP_ID', defaultValue: '1:581069825659:android:5b35631cb1d25900a0e4de'),
-      messagingSenderId: String.fromEnvironment('FIREBASE_SENDER_ID', defaultValue: '581069825659'),
-      projectId: String.fromEnvironment('FIREBASE_PROJECT_ID', defaultValue: 'minha-agenda-6665a'),
+      apiKey: String.fromEnvironment('FIREBASE_API_KEY',
+          defaultValue: 'AIzaSyBG9haJTEiv4r9slt2R92_0TZPMtJAlrRg'),
+      appId: String.fromEnvironment('FIREBASE_APP_ID',
+          defaultValue: '1:581069825659:android:5b35631cb1d25900a0e4de'),
+      messagingSenderId: String.fromEnvironment('FIREBASE_SENDER_ID',
+          defaultValue: '581069825659'),
+      projectId: String.fromEnvironment('FIREBASE_PROJECT_ID',
+          defaultValue: 'minha-agenda-6665a'),
     ),
   );
 
@@ -118,22 +124,22 @@ class MinhaAgendaApp extends ConsumerWidget {
   const MinhaAgendaApp({super.key});
 
   @override
-    Widget build(BuildContext context, WidgetRef ref) {
-      final router = ref.watch(routerProvider);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
 
-      return MaterialApp.router(
-        title: 'Minha Agenda',
-        debugShowCheckedModeBanner: false,
-        theme: buildAppTheme(),
-        darkTheme: buildAppTheme().copyWith(brightness: Brightness.dark),
-        themeMode: ThemeMode.system,
-        routerConfig: router,
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        supportedLocales: const [Locale('pt', 'BR')],
-      );
-    }
+    return MaterialApp.router(
+      title: 'Minha Agenda',
+      debugShowCheckedModeBanner: false,
+      theme: buildAppTheme(),
+      darkTheme: buildAppTheme().copyWith(brightness: Brightness.dark),
+      themeMode: ThemeMode.system,
+      routerConfig: router,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('pt', 'BR')],
+    );
+  }
 }

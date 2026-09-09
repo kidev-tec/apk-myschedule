@@ -16,7 +16,8 @@ class AuthState {
     this.error,
   });
 
-  AuthState copyWith({User? user, String? idToken, bool? isLoading, String? error}) {
+  AuthState copyWith(
+      {User? user, String? idToken, bool? isLoading, String? error}) {
     return AuthState(
       user: user ?? this.user,
       idToken: idToken ?? this.idToken,
@@ -44,9 +45,9 @@ class AuthController extends StateNotifier<AuthState> {
           // getIdToken() usa cache se estiver fresco — getIdToken(true)
           // força refresh na rede e pendura o state se a rede oscilar.
           final token = await user.getIdToken().timeout(
-                const Duration(seconds: 20),
-                onTimeout: () => throw Exception('getIdToken timeout'),
-              ) ??
+                    const Duration(seconds: 20),
+                    onTimeout: () => throw Exception('getIdToken timeout'),
+                  ) ??
               '';
           await _api.storeTokens(token, ''); // refresh handled by Firebase
           state = state.copyWith(user: user, idToken: token, isLoading: false);
@@ -55,7 +56,8 @@ class AuthController extends StateNotifier<AuthState> {
           // (não deixa o botão pendurado em loading eterno).
           state = state.copyWith(
             isLoading: false,
-            error: 'Falha de rede ao validar sessão. Verifica o Wi-Fi e tenta de novo.',
+            error:
+                'Falha de rede ao validar sessão. Verifica o Wi-Fi e tenta de novo.',
           );
           await _auth.signOut();
         }
@@ -79,7 +81,8 @@ class AuthController extends StateNotifier<AuthState> {
   Future<void> createAccount(String email, String password) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      await _auth.createUserWithEmailAndPassword(email: email, password: password);
+      await _auth.createUserWithEmailAndPassword(
+          email: email, password: password);
       await _auth.currentUser?.sendEmailVerification();
     } on FirebaseAuthException catch (e) {
       state = state.copyWith(isLoading: false, error: _friendlyError(e.code));
@@ -95,14 +98,16 @@ class AuthController extends StateNotifier<AuthState> {
         state = state.copyWith(isLoading: false);
         return; // user cancelled
       }
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
       await _auth.signInWithCredential(credential);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: 'Falha no login com Google. Tenta de novo.');
+      state = state.copyWith(
+          isLoading: false, error: 'Falha no login com Google. Tenta de novo.');
       rethrow;
     }
   }
@@ -123,18 +128,25 @@ class AuthController extends StateNotifier<AuthState> {
 
   String _friendlyError(String code) {
     switch (code) {
-      case 'weak-password': return 'Senha muito curta. Mínimo 8 caracteres.';
-      case 'email-already-in-use': return 'Este e-mail já tem conta. Faz login ou recupera a senha.';
-      case 'invalid-email': return 'E-mail inválido.';
+      case 'weak-password':
+        return 'Senha muito curta. Mínimo 8 caracteres.';
+      case 'email-already-in-use':
+        return 'Este e-mail já tem conta. Faz login ou recupera a senha.';
+      case 'invalid-email':
+        return 'E-mail inválido.';
       case 'user-not-found':
       case 'wrong-password':
-      case 'invalid-credential': return 'E-mail ou senha incorretos.';
-      case 'network-request-failed': return 'Sem internet. Verifica a conexão.';
-      default: return 'Erro ao acessar a conta. Tenta de novo.';
+      case 'invalid-credential':
+        return 'E-mail ou senha incorretos.';
+      case 'network-request-failed':
+        return 'Sem internet. Verifica a conexão.';
+      default:
+        return 'Erro ao acessar a conta. Tenta de novo.';
     }
   }
 }
 
-final authControllerProvider = StateNotifierProvider<AuthController, AuthState>((ref) {
+final authControllerProvider =
+    StateNotifierProvider<AuthController, AuthState>((ref) {
   return AuthController();
 });

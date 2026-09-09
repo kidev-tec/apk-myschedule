@@ -144,8 +144,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           return false;
         }
         final dur = int.tryParse(_serviceDurationController.text);
-        if (dur == null || dur < 15 || dur > 480 || dur % 15 != 0) {
-          _showError('Duração entre 15 e 480 minutos, de 15 em 15');
+        if (dur == null || dur < 5 || dur > 600 || dur % 5 != 0) {
+          _showError('Duração entre 5 e 600 minutos, de 5 em 5');
           return false;
         }
         final price =

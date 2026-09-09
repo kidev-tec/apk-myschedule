@@ -38,13 +38,17 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
         title: const Text('Excluir serviço?'),
         content: const Text('\${s.name} será arquivado.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Excluir')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Excluir')),
         ],
       ),
     );
     if (confirm != true) return;
-    
+
     try {
       final api = ApiClient();
       await api.dio.delete('/services/\${s.id}');
@@ -71,11 +75,17 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.content_cut_outlined, size: 64, color: AppColors.neutral),
+                      const Icon(Icons.content_cut_outlined,
+                          size: 64, color: AppColors.neutral),
                       const SizedBox(height: 16),
-                      Text('Nenhum serviço ainda', style: Theme.of(context).textTheme.titleMedium),
+                      Text('Nenhum serviço ainda',
+                          style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 8),
-                      Text('Toque em + pra criar o primeiro', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.neutral)),
+                      Text('Toque em + pra criar o primeiro',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(color: AppColors.neutral)),
                     ],
                   ),
                 )
@@ -92,15 +102,19 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
                           child: Icon(Icons.content_cut, color: Colors.white),
                         ),
                         title: Text(s.name),
-                        subtitle: const Text('\${s.durationMin} min • \${priceFmt.format(s.priceCents / 100)}'),
+                        subtitle: const Text(
+                            '\${s.durationMin} min • \${priceFmt.format(s.priceCents / 100)}'),
                         trailing: PopupMenuButton<String>(
                           onSelected: (v) {
-                            if (v == 'edit') context.push('/services/\${s.id}/edit');
+                            if (v == 'edit')
+                              context.push('/services/\${s.id}/edit');
                             if (v == 'delete') _deleteService(s);
                           },
                           itemBuilder: (_) => [
-                            const PopupMenuItem(value: 'edit', child: Text('Editar')),
-                            const PopupMenuItem(value: 'delete', child: Text('Excluir')),
+                            const PopupMenuItem(
+                                value: 'edit', child: Text('Editar')),
+                            const PopupMenuItem(
+                                value: 'delete', child: Text('Excluir')),
                           ],
                         ),
                       ),
@@ -121,12 +135,16 @@ class Service {
   final int durationMin;
   final int priceCents;
 
-  Service({required this.id, required this.name, required this.durationMin, required this.priceCents});
+  Service(
+      {required this.id,
+      required this.name,
+      required this.durationMin,
+      required this.priceCents});
 
   factory Service.fromJson(Map<String, dynamic> j) => Service(
-    id: j['id'],
-    name: j['name'],
-    durationMin: j['duration_min'] ?? j['durationMin'],
-    priceCents: j['price_cents'] ?? j['priceCents'],
-  );
+        id: j['id'],
+        name: j['name'],
+        durationMin: j['duration_min'] ?? j['durationMin'],
+        priceCents: j['price_cents'] ?? j['priceCents'],
+      );
 }

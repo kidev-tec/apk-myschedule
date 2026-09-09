@@ -35,10 +35,10 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
   List<Client> get _filteredClients {
     final q = _searchController.text.toLowerCase().trim();
     if (q.isEmpty) return _clients;
-    return _clients.where((c) => 
-      c.name.toLowerCase().contains(q) || 
-      c.phoneE164.contains(q)
-    ).toList();
+    return _clients
+        .where(
+            (c) => c.name.toLowerCase().contains(q) || c.phoneE164.contains(q))
+        .toList();
   }
 
   Future<void> _deleteClient(Client c) async {
@@ -48,13 +48,17 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
         title: const Text('Excluir cliente?'),
         content: Text('${c.name} será arquivado (pode recuperar depois).'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Excluir')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Excluir')),
         ],
       ),
     );
     if (confirm != true) return;
-    
+
     try {
       final api = ApiClient();
       await api.dio.delete('/clients/\${c.id}');
@@ -96,11 +100,17 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.people_outline, size: 64, color: AppColors.neutral),
+                    const Icon(Icons.people_outline,
+                        size: 64, color: AppColors.neutral),
                     const SizedBox(height: 16),
-                    Text('Nenhum cliente ainda', style: Theme.of(context).textTheme.titleMedium),
+                    Text('Nenhum cliente ainda',
+                        style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),
-                    Text('Toque em + pra adicionar o primeiro', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.neutral)),
+                    Text('Toque em + pra adicionar o primeiro',
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(color: AppColors.neutral)),
                   ],
                 ),
               ),
@@ -117,18 +127,22 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
                     child: ListTile(
                       leading: CircleAvatar(
                         backgroundColor: AppColors.primary,
-                        child: Text(c.name[0].toUpperCase(), style: const TextStyle(color: Colors.white)),
+                        child: Text(c.name[0].toUpperCase(),
+                            style: const TextStyle(color: Colors.white)),
                       ),
                       title: Text(c.name),
                       subtitle: Text(c.phoneE164),
                       trailing: PopupMenuButton<String>(
                         onSelected: (v) {
-                          if (v == 'edit') context.push('/clients/\${c.id}/edit');
+                          if (v == 'edit')
+                            context.push('/clients/\${c.id}/edit');
                           if (v == 'delete') _deleteClient(c);
                         },
                         itemBuilder: (_) => [
-                          const PopupMenuItem(value: 'edit', child: Text('Editar')),
-                          const PopupMenuItem(value: 'delete', child: Text('Excluir')),
+                          const PopupMenuItem(
+                              value: 'edit', child: Text('Editar')),
+                          const PopupMenuItem(
+                              value: 'delete', child: Text('Excluir')),
                         ],
                       ),
                     ),
@@ -153,13 +167,18 @@ class Client {
   final String? email;
   final DateTime? birthday;
 
-  Client({required this.id, required this.name, required this.phoneE164, this.email, this.birthday});
+  Client(
+      {required this.id,
+      required this.name,
+      required this.phoneE164,
+      this.email,
+      this.birthday});
 
   factory Client.fromJson(Map<String, dynamic> j) => Client(
-    id: j['id'],
-    name: j['name'],
-    phoneE164: j['phone_e164'] ?? j['phoneE164'] ?? '',
-    email: j['email'],
-    birthday: j['birthday'] != null ? DateTime.parse(j['birthday']) : null,
-  );
+        id: j['id'],
+        name: j['name'],
+        phoneE164: j['phone_e164'] ?? j['phoneE164'] ?? '',
+        email: j['email'],
+        birthday: j['birthday'] != null ? DateTime.parse(j['birthday']) : null,
+      );
 }

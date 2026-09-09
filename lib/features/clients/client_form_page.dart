@@ -40,7 +40,8 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
       _emailController.text = data['email'] ?? '';
       if (data['birthday'] != null) {
         final dt = DateTime.parse(data['birthday']);
-        _birthdayController.text = '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+        _birthdayController.text =
+            '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
       }
     } catch (_) {}
     if (mounted) setState(() => _loading = false);
@@ -54,15 +55,18 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
     if (_birthdayController.text.isNotEmpty) {
       final parts = _birthdayController.text.split('/');
       if (parts.length == 3) {
-        birthday = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+        birthday = DateTime(
+            int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
       }
     }
 
     final data = {
       'name': _nameController.text.trim(),
       'phone_e164': _phoneController.text.trim(),
-      if (_emailController.text.trim().isNotEmpty) 'email': _emailController.text.trim(),
-      if (birthday != null) 'birthday': birthday.toIso8601String().split('T')[0],
+      if (_emailController.text.trim().isNotEmpty)
+        'email': _emailController.text.trim(),
+      if (birthday != null)
+        'birthday': birthday.toIso8601String().split('T')[0],
     };
 
     try {
@@ -76,7 +80,8 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Falha: \$e'), backgroundColor: AppColors.error),
+          const SnackBar(
+              content: Text('Falha: \$e'), backgroundColor: AppColors.error),
         );
       }
     }
@@ -92,7 +97,8 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
       lastDate: now,
     );
     if (picked != null) {
-      _birthdayController.text = '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
+      _birthdayController.text =
+          '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
       setState(() {});
     }
   }
@@ -100,7 +106,8 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_isEditing ? 'Editar cliente' : 'Novo cliente')),
+      appBar:
+          AppBar(title: Text(_isEditing ? 'Editar cliente' : 'Novo cliente')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : Form(
@@ -114,7 +121,9 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
                       labelText: 'Nome *',
                       prefixIcon: Icon(Icons.person_outline),
                     ),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Nome é obrigatório' : null,
+                    validator: (v) => v == null || v.trim().isEmpty
+                        ? 'Nome é obrigatório'
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -125,7 +134,9 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
                       hintText: '(11) 99999-9999',
                       prefixIcon: Icon(Icons.phone_outlined),
                     ),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Telefone é obrigatório' : null,
+                    validator: (v) => v == null || v.trim().isEmpty
+                        ? 'Telefone é obrigatório'
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -152,8 +163,12 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
                   FilledButton(
                     onPressed: _loading ? null : _save,
                     child: _loading
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                        : Text(_isEditing ? 'Salvar alterações' : 'Criar cliente'),
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : Text(
+                            _isEditing ? 'Salvar alterações' : 'Criar cliente'),
                   ),
                 ],
               ),
