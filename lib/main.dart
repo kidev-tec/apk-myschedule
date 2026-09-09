@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/auth/auth_controller.dart';
 import 'features/auth/login_page.dart';
+import 'core/storage/onboarding_store.dart';
 import 'features/onboarding/onboarding_page.dart';
 import 'features/agenda/agenda_page.dart';
 import 'features/agenda/booking_wizard.dart';
@@ -21,7 +22,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     initialLocation: '/login',
-    redirect: (context, state) {
+    redirect: (context, state) async {
       final isAuthenticated = authState.isAuthenticated;
       final isAuthRoute = state.matchedLocation == '/login';
       final isOnboardingRoute = state.matchedLocation == '/onboarding';
@@ -31,9 +32,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         return '/login';
       }
 
-      // Se autenticado e está em login -> onboarding ou agenda
+      // Se autenticado e está em login -> onboarding (1ª vez) ou agenda
       if (isAuthenticated && isAuthRoute) {
-        return '/onboarding';
+        // Onboarding só na PRIMEIRA vez — flag persistida sobrevive a restart
+        final done = await OnboardingStore.isComplete();
+        return done ? '/agenda' : '/onboarding';
       }
 
       return null;

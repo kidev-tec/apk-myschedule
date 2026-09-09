@@ -32,8 +32,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           DateTime(_focusedDay.year, _focusedDay.month, _focusedDay.day);
       final end = start.add(const Duration(days: 1));
       final resp = await api.dio.get('/appointments', queryParameters: {
-        'starts_at_gte': start.toIso8601String(),
-        'starts_at_lt': end.toIso8601String(),
+        'from': start.toIso8601String(),
+        'to': end.toIso8601String(),
       });
       _appointments =
           (resp.data as List).map((j) => Appointment.fromJson(j)).toList();
@@ -68,8 +68,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     try {
       final api = ApiClient();
       final resp = await api.dio.get('/appointments', queryParameters: {
-        'starts_at_gte': monthStart.toIso8601String(),
-        'starts_at_lt': monthEnd.toIso8601String(),
+        'from': monthStart.toIso8601String(),
+        'to': monthEnd.toIso8601String(),
       });
       final all =
           (resp.data as List).map((j) => Appointment.fromJson(j)).toList();

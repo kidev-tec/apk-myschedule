@@ -43,8 +43,11 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
         api.dio.get('/services'),
         api.dio.get('/working-hours'),
         api.dio.get('/appointments', queryParameters: {
-          'starts_at_gte': DateTime.now()
+          'from': DateTime.now()
               .subtract(const Duration(days: 30))
+              .toIso8601String(),
+          'to': DateTime.now()
+              .add(const Duration(days: 90))
               .toIso8601String(),
         }),
       ]);
