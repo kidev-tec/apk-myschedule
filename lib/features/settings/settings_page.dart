@@ -186,7 +186,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Configurações')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        // padding explícito em ListView SOBRESCREVE o MediaQuery.padding —
+        // por isso os últimos itens ficavam atrás da barra de gestos mesmo
+        // com o builder global. Somo o bottom real aqui.
+        padding: EdgeInsets.fromLTRB(16, 16, 16,
+            16 + MediaQuery.of(context).padding.bottom),
         children: [
           // Assinatura (RF-14)
           if (_me != null)
