@@ -169,6 +169,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
   }
 
+  /// Inicial do avatar — tolerante a nome/email vazios ou whitespace.
+  /// ('' ?? fallback NÃO cai no fallback pois '' não é null; ''[0] estoura
+  /// RangeError: Valid value range is empty: 0 — o crash que víamos.)
+  String _initial(dynamic user) {
+    final raw = (user?.displayName ?? '').trim().isNotEmpty
+        ? user!.displayName!.trim()
+        : (user?.email ?? '').trim();
+    return raw.isNotEmpty ? raw[0].toUpperCase() : 'U';
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
@@ -218,8 +228,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   leading: CircleAvatar(
                     backgroundColor: AppColors.primary,
                     child: Text(
-                        (auth.user?.displayName ?? auth.user?.email ?? 'U')[0]
-                            .toUpperCase(),
+                        _initial(auth.user),
                         style: const TextStyle(color: Colors.white)),
                   ),
                   title: Text(
