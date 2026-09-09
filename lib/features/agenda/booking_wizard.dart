@@ -51,15 +51,23 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
               .toIso8601String(),
         }),
       ]);
-      _clients =
-          (results[0].data as List).map((j) => Client.fromJson(j)).toList();
-      _services =
-          (results[1].data as List).map((j) => Service.fromJson(j)).toList();
-      _workingHours = (results[2].data as List)
-          .map((j) => WorkingHour.fromJson(j))
+      List<dynamic> listOf(dynamic data, [String? key]) {
+        if (data is List) return data;
+        if (data is Map<String, dynamic>) return data[key] as List? ?? [];
+        return [];
+      }
+
+      _clients = listOf(results[0].data)
+          .map((j) => Client.fromJson(j as Map<String, dynamic>))
           .toList();
-      _existingAppointments = (results[3].data as List)
-          .map((j) => Appointment.fromJson(j))
+      _services = listOf(results[1].data)
+          .map((j) => Service.fromJson(j as Map<String, dynamic>))
+          .toList();
+      _workingHours = listOf(results[2].data)
+          .map((j) => WorkingHour.fromJson(j as Map<String, dynamic>))
+          .toList();
+      _existingAppointments = listOf(results[3].data, 'appointments')
+          .map((j) => Appointment.fromJson(j as Map<String, dynamic>))
           .toList();
     } catch (_) {}
     if (mounted) setState(() => _loading = false);

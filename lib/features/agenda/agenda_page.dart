@@ -74,8 +74,12 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         'from': monthStart.toIso8601String(),
         'to': monthEnd.toIso8601String(),
       });
-      final all =
-          (resp.data as List).map((j) => Appointment.fromJson(j)).toList();
+      final rawList = resp.data is List
+          ? resp.data as List
+          : (resp.data as Map<String, dynamic>)['appointments'] as List? ?? [];
+      final all = rawList
+          .map((j) => Appointment.fromJson(j as Map<String, dynamic>))
+          .toList();
       for (final a in all) {
         final d = DateTime(a.startsAt.year, a.startsAt.month, a.startsAt.day);
         (byDay[d] ??= []).add(a);
