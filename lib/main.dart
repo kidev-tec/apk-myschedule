@@ -133,6 +133,17 @@ class MinhaAgendaApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'Minha Agenda',
       debugShowCheckedModeBanner: false,
+      // Conteúdo nunca fica atrás da barra de gestos (home/voltar) nem da
+      // status bar — vale pra todas as telas que não usam SafeArea própria.
+      builder: (context, child) {
+        final mq = MediaQuery.of(context);
+        return MediaQuery(
+          data: mq.copyWith(
+            padding: mq.padding.copyWith(bottom: mq.padding.bottom + 8),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       theme: buildAppTheme(),
       darkTheme: buildAppTheme().copyWith(brightness: Brightness.dark),
       themeMode: ThemeMode.system,
