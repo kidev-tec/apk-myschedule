@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/segment/segment_preset.dart';
 
 /// Tema Rubi — tokens extraídos do site oficial da Oficina da Beleza
 /// (ver .planning/tokens.json no repo de planejamento).
@@ -26,11 +27,17 @@ class AppTypography {
 
   static TextTheme get textTheme => const TextTheme(
         displayLarge: TextStyle(
-            fontFamily: displayFamily, fontSize: 32, fontWeight: FontWeight.w400),
+            fontFamily: displayFamily,
+            fontSize: 32,
+            fontWeight: FontWeight.w400),
         headlineMedium: TextStyle(
-            fontFamily: displayFamily, fontSize: 24, fontWeight: FontWeight.w400),
+            fontFamily: displayFamily,
+            fontSize: 24,
+            fontWeight: FontWeight.w400),
         titleLarge: TextStyle(
-            fontFamily: displayFamily, fontSize: 20, fontWeight: FontWeight.w500),
+            fontFamily: displayFamily,
+            fontSize: 20,
+            fontWeight: FontWeight.w500),
         bodyMedium: TextStyle(fontFamily: bodyFamily, fontSize: 14),
         bodySmall: TextStyle(fontFamily: bodyFamily, fontSize: 12),
         labelLarge: TextStyle(
@@ -38,13 +45,14 @@ class AppTypography {
       );
 }
 
-ThemeData buildAppTheme() {
+ThemeData buildAppTheme([SegmentPreset? preset]) {
+  final p = preset ?? SegmentPresets.beauty;
   final base = ThemeData(
     useMaterial3: true,
     colorScheme: ColorScheme.fromSeed(
-      seedColor: AppColors.primary,
-      primary: AppColors.primary,
-      secondary: AppColors.pinkMid,
+      seedColor: p.primary,
+      primary: p.primary,
+      secondary: p.secondary,
       surface: AppColors.surface,
       error: AppColors.error,
     ),

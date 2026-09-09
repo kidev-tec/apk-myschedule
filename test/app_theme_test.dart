@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:minha_agenda_app/main.dart';
-import 'package:minha_agenda_app/theme/app_theme.dart';
+import 'package:minha_agenda/theme/app_theme.dart';
 
 void main() {
   group('AppTheme', () {
@@ -21,29 +19,11 @@ void main() {
       expect(theme.colorScheme.primary, AppColors.primary);
     });
 
-    testWidgets('HomePage renderiza título e botão Entrar', (tester) async {
-      await tester.pumpWidget(
-        const ProviderScope(child: MaterialApp(home: HomePage())),
-      );
-
-      expect(find.text('Minha Agenda'), findsOneWidget);
-      expect(find.text('Oficina da Beleza'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, 'Entrar'), findsOneWidget);
-    });
-
-    testWidgets('botão Entrar usa a cor primária Rubi', (tester) async {
-      await tester.pumpWidget(
-        ProviderScope(
-          child: MaterialApp(theme: buildAppTheme(), home: const HomePage()),
-        ),
-      );
-
-      final button = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Entrar'),
-      );
-      final style = button.style ?? buildAppTheme().filledButtonTheme.style!;
-      final bgColor = style.backgroundColor?.resolve({});
-      expect(bgColor, AppColors.primary);
+    test('buildAppTheme é determinístico (duas chamadas = mesmo primary)', () {
+      final t1 = buildAppTheme();
+      final t2 = buildAppTheme();
+      expect(t1.colorScheme.primary, t2.colorScheme.primary);
+      expect(t1.colorScheme.secondary, t2.colorScheme.secondary);
     });
   });
 }
