@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
+import '../../core/api/api_config.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../theme/app_theme.dart';
 
@@ -16,6 +18,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _gcalConnected = false;
   bool _loadingGcal = false;
   Map<String, dynamic>? _me;
+  String? _slug;
+
+  /// Link público do negócio. Em dev usa o host da API; o path /p/<slug> é
+  /// servido pela própria API (RF-07).
+  String? get _publicUrl {
+    if (_slug == null) return null;
+    final base = ApiConfig.baseUrl.replaceAll(RegExp(r'/v1/?$'), '');
+    return '$base/p/$_slug';
+  }
 
   @override
   void initState() {
@@ -28,8 +39,23 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     try {
       final api = ApiClient();
       final resp = await api.dio.get('/me');
-      if (mounted) setState(() => _me = Map<String, dynamic>.from(resp.data));
+      if (!mounted) return;
+      setState(() {
+        _me = Map<String, dynamic>.from(resp.data);
+        _slug = resp.data['slug'] as String?;
+      });
     } catch (_) {}
+  }
+
+  Future<void> _sharePublicLink() async {
+    if (_publicUrl == null) return;
+    await Clipboard.setData(ClipboardData(text: _publicUrl!));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Link copiado! Cola no teu WhatsApp ou Instagram')),
+      );
+    }
   }
 
   String get _subscriptionLabel {
@@ -160,6 +186,26 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     Icon(Icons.workspace_premium, color: _subscriptionColor),
                 title: Text(_subscriptionLabel),
                 subtitle: Text(_me?['name'] as String? ?? ''),
+              ),
+            ),
+          const SizedBox(height: 8),
+
+          // Link público de agendamento (RF-07)
+          if (_me != null && _publicUrl != null)
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.public, color: AppColors.primary),
+                title: const Text('Teu link de agendamento'),
+                subtitle: Text(
+                  _publicUrl!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.share),
+                  tooltip: 'Compartilhar link',
+                  onPressed: _sharePublicLink,
+                ),
               ),
             ),
           const SizedBox(height: 8),
