@@ -134,8 +134,9 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
                       subtitle: Text(c.phoneE164),
                       trailing: PopupMenuButton<String>(
                         onSelected: (v) {
-                          if (v == 'edit')
+                          if (v == 'edit') {
                             context.push('/clients/\${c.id}/edit');
+                          }
                           if (v == 'delete') _deleteClient(c);
                         },
                         itemBuilder: (_) => [

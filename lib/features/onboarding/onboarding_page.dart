@@ -410,15 +410,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   }
 
   Widget _buildDayRow(int weekday) {
-    const names = [
-      'Domingo',
-      'Segunda',
-      'Terça',
-      'Quarta',
-      'Quinta',
-      'Sexta',
-      'Sábado'
-    ];
+    const names = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
     final enabled = (_workingHours[weekday] ?? []).isNotEmpty;
 
     return Padding(
@@ -426,26 +418,21 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       child: Row(
         children: [
           SizedBox(
-            width: 90,
-            child: Row(
-              children: [
-                Switch(
-                  value: enabled,
-                  activeThumbColor: AppColors.primary,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  onChanged: (_) => _toggleDay(weekday),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    names[weekday],
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color:
-                              enabled ? AppColors.neutral : AppColors.pinkMid,
-                        ),
+            width: 48,
+            child: Switch(
+              value: enabled,
+              activeThumbColor: AppColors.primary,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              onChanged: (_) => _toggleDay(weekday),
+            ),
+          ),
+          SizedBox(
+            width: 40,
+            child: Text(
+              names[weekday],
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: enabled ? AppColors.neutral : AppColors.pinkMid,
                   ),
-                ),
-              ],
             ),
           ),
           Expanded(
@@ -480,9 +467,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                         ),
                     ],
                   )
-                : const Text(
-                    'Fechado',
-                    style: TextStyle(color: AppColors.pinkMid),
+                : const Center(
+                    child: Text(
+                      'Fechado',
+                      style: TextStyle(color: AppColors.pinkMid),
+                    ),
                   ),
           ),
         ],

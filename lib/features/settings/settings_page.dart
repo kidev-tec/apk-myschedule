@@ -15,11 +15,52 @@ class SettingsPage extends ConsumerStatefulWidget {
 class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _gcalConnected = false;
   bool _loadingGcal = false;
+  Map<String, dynamic>? _me;
 
   @override
   void initState() {
     super.initState();
     _checkGcalStatus();
+    _loadMe();
+  }
+
+  Future<void> _loadMe() async {
+    try {
+      final api = ApiClient();
+      final resp = await api.dio.get('/me');
+      if (mounted) setState(() => _me = Map<String, dynamic>.from(resp.data));
+    } catch (_) {}
+  }
+
+  String get _subscriptionLabel {
+    final status = _me?['subscription_status'] as String? ?? 'trial';
+    final trialEnds = _me?['trial_ends_at'] as String?;
+    switch (status) {
+      case 'active':
+        return 'Assinatura ativa';
+      case 'canceled':
+        return 'Assinatura cancelada';
+      case 'past_due':
+        return 'Pagamento pendente';
+      default: // trial
+        if (trialEnds == null) return 'Período de teste';
+        final end = DateTime.tryParse(trialEnds);
+        if (end == null) return 'Período de teste';
+        final days = end.difference(DateTime.now()).inDays;
+        return days >= 0
+            ? "Teste: $days dia${days == 1 ? '' : 's'} restantes"
+            : 'Teste encerrado';
+    }
+  }
+
+  Color get _subscriptionColor {
+    final status = _me?['subscription_status'] as String? ?? 'trial';
+    if (status == 'active') return Colors.green;
+    if (status == 'trial') {
+      final end = DateTime.tryParse(_me?['trial_ends_at'] as String? ?? '');
+      if (end == null || end.isAfter(DateTime.now())) return AppColors.primary;
+    }
+    return AppColors.error;
   }
 
   Future<void> _checkGcalStatus() async {
@@ -111,6 +152,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // Assinatura (RF-14)
+          if (_me != null)
+            Card(
+              child: ListTile(
+                leading:
+                    Icon(Icons.workspace_premium, color: _subscriptionColor),
+                title: Text(_subscriptionLabel),
+                subtitle: Text(_me?['name'] as String? ?? ''),
+              ),
+            ),
+          const SizedBox(height: 8),
+
           // Account section
           Card(
             child: Column(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
+import '../../core/api/paywall_flag.dart';
 import '../../theme/app_theme.dart';
 
 class AgendaPage extends ConsumerStatefulWidget {
@@ -132,14 +133,48 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _appointments.isEmpty
-              ? _buildEmptyState(context)
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _appointments.length,
-                  itemBuilder: (_, i) =>
-                      _buildAppointmentCard(_appointments[i], timeFmt),
+          : Column(
+              children: [
+                // Banner de paywall (RF-14): aparece quando a API devolve 402
+                ValueListenableBuilder<String?>(
+                  valueListenable: PaywallFlag.lastMessage,
+                  builder: (_, msg, __) => msg == null
+                      ? const SizedBox.shrink()
+                      : Material(
+                          color: AppColors.error,
+                          child: SafeArea(
+                            top: false,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 10),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.lock_outline,
+                                      color: Colors.white, size: 20),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(msg,
+                                        style: const TextStyle(
+                                            color: Colors.white, fontSize: 13)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
                 ),
+                Expanded(
+                  child: _appointments.isEmpty
+                      ? _buildEmptyState(context)
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: _appointments.length,
+                          itemBuilder: (_, i) =>
+                              _buildAppointmentCard(_appointments[i], timeFmt),
+                        ),
+                ),
+              ],
+            ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push('/booking'),
         icon: const Icon(Icons.add),

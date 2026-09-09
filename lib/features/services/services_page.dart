@@ -106,8 +106,9 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
                             '\${s.durationMin} min • \${priceFmt.format(s.priceCents / 100)}'),
                         trailing: PopupMenuButton<String>(
                           onSelected: (v) {
-                            if (v == 'edit')
+                            if (v == 'edit') {
                               context.push('/services/\${s.id}/edit');
+                            }
                             if (v == 'delete') _deleteService(s);
                           },
                           itemBuilder: (_) => [

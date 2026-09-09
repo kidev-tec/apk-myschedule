@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'api_config.dart';
+import 'paywall_flag.dart';
 
 class ApiClient {
   final Dio _dio;
@@ -34,6 +35,11 @@ class ApiClient {
             final retry = await _dio.fetch(error.requestOptions);
             return handler.resolve(retry);
           }
+        }
+        // 402 → paywall: trial vencido/assinatura cancelada (RF-14)
+        if (error.response?.statusCode == 402) {
+          PaywallFlag.hit('Período de teste encerrado. Renove a assinatura '
+              'pra continuar agendando.');
         }
         handler.next(error);
       },

@@ -118,7 +118,9 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
   Future<void> _createAppointment() async {
     if (_selectedClient == null ||
         _selectedService == null ||
-        _selectedSlot == null) return;
+        _selectedSlot == null) {
+      return;
+    }
 
     setState(() => _loading = true);
     try {
@@ -152,8 +154,9 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading)
+    if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
     return Scaffold(
       appBar: AppBar(
