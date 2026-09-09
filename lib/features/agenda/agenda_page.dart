@@ -35,8 +35,11 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         'from': start.toIso8601String(),
         'to': end.toIso8601String(),
       });
+      final list = resp.data is List
+          ? resp.data as List
+          : (resp.data as Map<String, dynamic>)['appointments'] as List? ?? [];
       _appointments =
-          (resp.data as List).map((j) => Appointment.fromJson(j)).toList();
+          list.map((j) => Appointment.fromJson(j as Map<String, dynamic>)).toList();
     } catch (_) {
       // offline / erro silencioso
     }
@@ -128,6 +131,11 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             icon: const Icon(Icons.calendar_month),
             tooltip: 'Agenda completa (mês)',
             onPressed: _openMonthView,
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Configurações',
+            onPressed: () => context.push('/settings'),
           ),
         ],
       ),
