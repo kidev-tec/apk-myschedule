@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/paywall_flag.dart';
@@ -376,6 +377,36 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     }
   }
 
+  /// Ao cancelar, abre o WhatsApp do cliente com mensagem pronta.
+  /// O cliente não tem app — WhatsApp é o canal onde ele já está.
+  Future<void> _notifyCancelOnWhatsapp(Appointment a) async {
+    final when = DateFormat('dd/MM \"às\" HH:mm', 'pt_BR').format(a.startsAt);
+    final msg = Uri.encodeComponent(
+        'Oi ${a.clientName}! Tive que remanejar teu horário de $when. '
+        'Me chama pra combinarmos outro horário! 🙂');
+    final phone = a.clientPhone.replaceAll(RegExp(r'[^0-9]'), '');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Avisar o cliente?'),
+        content: Text(
+            'Vou abrir teu WhatsApp com uma mensagem pronta pra ${a.clientName} avisando do cancelamento de $when.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Não precisa')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Abrir WhatsApp')),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await launchUrl(Uri.parse('https://wa.me/$phone?text=$msg'),
+          mode: LaunchMode.externalApplication);
+    }
+  }
+
   Future<void> _handleAppointmentAction(String action, Appointment a) async {
     final api = ApiClient();
     try {
@@ -383,6 +414,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         case 'cancel':
           await api.dio.patch('/appointments/${a.id}',
               data: {'status': 'canceled'});
+          // fora da caixa: avisa o cliente pelo WhatsApp que ele já tem
+          if (mounted && a.clientPhone.isNotEmpty) {
+            await _notifyCancelOnWhatsapp(a);
+          }
           break;
         case 'done':
           await api.dio.patch('/appointments/${a.id}',
@@ -417,6 +452,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
 class Appointment {
   final String id;
   final String clientName;
+  final String clientPhone;
   final String serviceName;
   final DateTime startsAt;
   final DateTime endsAt;
@@ -425,6 +461,7 @@ class Appointment {
   Appointment({
     required this.id,
     required this.clientName,
+    required this.clientPhone,
     required this.serviceName,
     required this.startsAt,
     required this.endsAt,
@@ -434,6 +471,7 @@ class Appointment {
   factory Appointment.fromJson(Map<String, dynamic> j) => Appointment(
         id: j['id'],
         clientName: j['client_name'] ?? j['clientName'] ?? '',
+        clientPhone: j['client_phone'] ?? j['clientPhone'] ?? '',
         serviceName: j['service_name'] ?? j['serviceName'] ?? '',
         startsAt: DateTime.parse(j['starts_at'] ?? j['startsAt']),
         endsAt: DateTime.parse(j['ends_at'] ?? j['endsAt']),
