@@ -473,8 +473,8 @@ class Appointment {
         clientName: j['client_name'] ?? j['clientName'] ?? '',
         clientPhone: j['client_phone'] ?? j['clientPhone'] ?? '',
         serviceName: j['service_name'] ?? j['serviceName'] ?? '',
-        startsAt: DateTime.parse(j['starts_at'] ?? j['startsAt']),
-        endsAt: DateTime.parse(j['ends_at'] ?? j['endsAt']),
+        startsAt: DateTime.parse(j['starts_at'] ?? j['startsAt']).toLocal(),
+        endsAt: DateTime.parse(j['ends_at'] ?? j['endsAt']).toLocal(),
         status: j['status'] ?? 'pending',
       );
 }

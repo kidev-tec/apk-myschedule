@@ -460,8 +460,8 @@ class Appointment {
 
   factory Appointment.fromJson(Map<String, dynamic> j) => Appointment(
         id: j['id'],
-        startsAt: DateTime.parse(j['starts_at'] ?? j['startsAt']),
-        endsAt: DateTime.parse(j['ends_at'] ?? j['endsAt']),
+        startsAt: DateTime.parse(j['starts_at'] ?? j['startsAt']).toLocal(),
+        endsAt: DateTime.parse(j['ends_at'] ?? j['endsAt']).toLocal(),
         status: j['status'] ?? 'pending',
       );
 }
