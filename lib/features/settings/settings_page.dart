@@ -226,6 +226,23 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           const SizedBox(height: 8),
 
+          // Meu negócio (RF-02): gerenciar serviços a qualquer momento —
+          // não só no onboarding. O onboarding define o segmento; aqui o
+          // prestador mantém o catálogo (criar, editar preço/duração, arquivar).
+          if (_me != null)
+            Card(
+              child: ListTile(
+                leading: Icon(Icons.content_cut,
+                    color: AppColors.primaryOf(context)),
+                title: const Text('Meus serviços'),
+                subtitle:
+                    const Text('Adicionar, editar preço e duração, arquivar'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/services'),
+              ),
+            ),
+          const SizedBox(height: 8),
+
           // Google Calendar (RF-08): espelha agendamentos confirmados na
           // agenda do profissional — lembretes herdados do Calendar dele.
           if (_me != null)
