@@ -46,9 +46,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
           'from': DateTime.now()
               .subtract(const Duration(days: 30))
               .toIso8601String(),
-          'to': DateTime.now()
-              .add(const Duration(days: 90))
-              .toIso8601String(),
+          'to': DateTime.now().add(const Duration(days: 90)).toIso8601String(),
         }),
       ]);
       List<dynamic> listOf(dynamic data, [String? key]) {
@@ -244,17 +242,18 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
               final c = _clients[i];
               final selected = _selectedClient?.id == c.id;
               return Card(
-                color: selected ? AppColors.pinkSoft : null,
+                color: selected ? AppColors.softOf(context) : null,
                 child: ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: AppColors.primaryOf(context),
                     child: Text(c.name[0].toUpperCase(),
                         style: const TextStyle(color: Colors.white)),
                   ),
                   title: Text(c.name),
                   subtitle: Text(c.phoneE164),
                   trailing: selected
-                      ? const Icon(Icons.check_circle, color: AppColors.primary)
+                      ? Icon(Icons.check_circle,
+                          color: AppColors.primaryOf(context))
                       : null,
                   onTap: () => setState(() => _selectedClient = c),
                 ),
@@ -275,18 +274,18 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
         final selected = _selectedService?.id == s.id;
         final priceFmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
         return Card(
-          color: selected ? AppColors.pinkSoft : null,
+          color: selected ? AppColors.softOf(context) : null,
           margin: const EdgeInsets.only(bottom: 12),
           child: ListTile(
-            leading: const CircleAvatar(
-              backgroundColor: AppColors.primary,
+            leading: CircleAvatar(
+              backgroundColor: AppColors.primaryOf(context),
               child: Icon(Icons.content_cut, color: Colors.white),
             ),
             title: Text(s.name),
             subtitle: Text(
                 '${s.durationMin} min • ${priceFmt.format(s.priceCents / 100)}'),
             trailing: selected
-                ? const Icon(Icons.check_circle, color: AppColors.primary)
+                ? Icon(Icons.check_circle, color: AppColors.primaryOf(context))
                 : null,
             onTap: () => setState(() => _selectedService = s),
           ),
@@ -305,7 +304,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
         // Date picker
         Container(
           padding: const EdgeInsets.all(16),
-          color: AppColors.pinkSoft.withValues(alpha: 0.3),
+          color: AppColors.softOf(context).withValues(alpha: 0.3),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -361,18 +360,23 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                   borderRadius: BorderRadius.circular(12),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: selected ? AppColors.primary : AppColors.pinkSoft,
+                      color: selected
+                          ? AppColors.primaryOf(context)
+                          : AppColors.softOf(context),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                          color:
-                              selected ? AppColors.primary : Colors.transparent,
+                          color: selected
+                              ? AppColors.primaryOf(context)
+                              : Colors.transparent,
                           width: 2),
                     ),
                     child: Center(
                       child: Text(
                         timeFmt.format(slot),
                         style: TextStyle(
-                          color: selected ? Colors.white : AppColors.primary,
+                          color: selected
+                              ? Colors.white
+                              : AppColors.primaryOf(context),
                           fontWeight: FontWeight.w600,
                         ),
                       ),

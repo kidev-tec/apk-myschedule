@@ -98,7 +98,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       width: 80,
                       height: 80,
                       decoration: BoxDecoration(
-                        color: AppColors.primary,
+                        color: AppColors.primaryOf(context),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: const Icon(Icons.content_cut,

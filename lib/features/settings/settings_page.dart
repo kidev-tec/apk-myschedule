@@ -84,12 +84,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     if (status == 'active') return Colors.green;
     if (status == 'trial') {
       final end = DateTime.tryParse(_me?['trial_ends_at'] as String? ?? '');
-      if (end == null || end.isAfter(DateTime.now())) return AppColors.primary;
+      if (end == null || end.isAfter(DateTime.now()))
+        return AppColors.primaryOf(context);
     }
     return AppColors.error;
   }
-
-
 
   Future<void> _signOut() async {
     final confirm = await showDialog<bool>(
@@ -132,8 +131,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         // padding explícito em ListView SOBRESCREVE o MediaQuery.padding —
         // por isso os últimos itens ficavam atrás da barra de gestos mesmo
         // com o builder global. Somo o bottom real aqui.
-        padding: EdgeInsets.fromLTRB(16, 16, 16,
-            16 + MediaQuery.of(context).padding.bottom),
+        padding: EdgeInsets.fromLTRB(
+            16, 16, 16, 16 + MediaQuery.of(context).padding.bottom),
         children: [
           // Assinatura (RF-14)
           if (_me != null)
@@ -156,7 +155,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     SegmentPreset.byId(
                             _me?['business_type'] as String? ?? 'beauty')
                         .icon,
-                    color: AppColors.primary),
+                    color: AppColors.primaryOf(context)),
                 title: const Text('Segmento'),
                 subtitle: Text(SegmentPreset.byId(
                         _me?['business_type'] as String? ?? 'beauty')
@@ -169,7 +168,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           if (_me != null && _publicUrl != null)
             Card(
               child: ListTile(
-                leading: const Icon(Icons.public, color: AppColors.primary),
+                leading:
+                    Icon(Icons.public, color: AppColors.primaryOf(context)),
                 title: const Text('Teu link de agendamento'),
                 subtitle: Text(
                   _publicUrl!,
@@ -191,9 +191,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               children: [
                 ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: AppColors.primary,
-                    child: Text(
-                        _initial(auth.user),
+                    backgroundColor: AppColors.primaryOf(context),
+                    child: Text(_initial(auth.user),
                         style: const TextStyle(color: Colors.white)),
                   ),
                   title: Text(

@@ -20,8 +20,7 @@ import 'features/settings/settings_page.dart';
 import 'theme/app_theme.dart';
 
 /// Segmento ativo do negócio (persistido; null = beauty default).
-final segmentPresetProvider =
-    StateProvider<SegmentPreset?>((ref) => null);
+final segmentPresetProvider = StateProvider<SegmentPreset?>((ref) => null);
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authControllerProvider);
@@ -51,17 +50,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (isAuthenticated && !segmentLoaded) {
         segmentLoaded = true;
         // fire-and-forget: tema default até chegar
-        ApiClient()
-            .dio
-            .get('/me')
-            .then((r) {
-              final id = r.data['business_type'] as String?;
-              if (id != null) {
-                ref.read(segmentPresetProvider.notifier).state =
-                    SegmentPreset.byId(id);
-              }
-            })
-            .catchError((_) {});
+        ApiClient().dio.get('/me').then((r) {
+          final id = r.data['business_type'] as String?;
+          if (id != null) {
+            ref.read(segmentPresetProvider.notifier).state =
+                SegmentPreset.byId(id);
+          }
+        }).catchError((_) {});
       }
 
       return null;
@@ -170,8 +165,8 @@ class MinhaAgendaApp extends ConsumerWidget {
         );
       },
       theme: buildAppTheme(ref.watch(segmentPresetProvider)),
-      darkTheme:
-          buildAppTheme(ref.watch(segmentPresetProvider)).copyWith(brightness: Brightness.dark),
+      darkTheme: buildAppTheme(ref.watch(segmentPresetProvider))
+          .copyWith(brightness: Brightness.dark),
       themeMode: ThemeMode.system,
       routerConfig: router,
       localizationsDelegates: const [

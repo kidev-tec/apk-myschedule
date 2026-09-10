@@ -101,8 +101,8 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
                       child: ListTile(
-                        leading: const CircleAvatar(
-                          backgroundColor: AppColors.primary,
+                        leading: CircleAvatar(
+                          backgroundColor: AppColors.primaryOf(context),
                           child: Icon(Icons.content_cut, color: Colors.white),
                         ),
                         title: Text(s.name),

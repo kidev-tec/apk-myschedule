@@ -62,8 +62,9 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       final list = resp.data is List
           ? resp.data as List
           : (resp.data as Map<String, dynamic>)['appointments'] as List? ?? [];
-      _appointments =
-          list.map((j) => Appointment.fromJson(j as Map<String, dynamic>)).toList();
+      _appointments = list
+          .map((j) => Appointment.fromJson(j as Map<String, dynamic>))
+          .toList();
     } catch (e) {
       debugPrint('[agenda] falha ao carregar: $e');
     }
@@ -192,8 +193,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                                       width: 20,
                                       height: 20,
                                       child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white))
+                                          strokeWidth: 2, color: Colors.white))
                                   : TextButton(
                                       onPressed: _doUpdate,
                                       child: const Text('Atualizar',
@@ -249,7 +249,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         onPressed: () => context.push('/booking'),
         icon: const Icon(Icons.add),
         label: const Text('Marcar horário'),
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.primaryOf(context),
         foregroundColor: Colors.white,
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
@@ -264,8 +264,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.event_available,
-                size: 80, color: AppColors.pinkMid),
+            Icon(Icons.event_available,
+                size: 80, color: AppColors.midOf(context)),
             const SizedBox(height: 16),
             Text(
               'Nada agendado pra hoje',
@@ -295,7 +295,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: AppColors.pinkSoft,
+            color: AppColors.softOf(context),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Center(
@@ -304,7 +304,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
               style: Theme.of(context)
                   .textTheme
                   .labelLarge
-                  ?.copyWith(color: AppColors.primary),
+                  ?.copyWith(color: AppColors.primaryOf(context)),
             ),
           ),
         ),
@@ -337,8 +337,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
               onPressed: _prevDay,
               icon: const Icon(Icons.chevron_left),
               style: IconButton.styleFrom(
-                  backgroundColor: AppColors.pinkSoft,
-                  foregroundColor: AppColors.primary),
+                  backgroundColor: AppColors.softOf(context),
+                  foregroundColor: AppColors.primaryOf(context)),
             ),
             Text(
               DateFormat('dd/MM').format(_focusedDay),
@@ -351,8 +351,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
               onPressed: _nextDay,
               icon: const Icon(Icons.chevron_right),
               style: IconButton.styleFrom(
-                  backgroundColor: AppColors.pinkSoft,
-                  foregroundColor: AppColors.primary),
+                  backgroundColor: AppColors.softOf(context),
+                  foregroundColor: AppColors.primaryOf(context)),
             ),
           ],
         ),
@@ -412,26 +412,26 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     try {
       switch (action) {
         case 'cancel':
-          await api.dio.patch('/appointments/${a.id}',
-              data: {'status': 'canceled'});
+          await api.dio
+              .patch('/appointments/${a.id}', data: {'status': 'canceled'});
           // fora da caixa: avisa o cliente pelo WhatsApp que ele já tem
           if (mounted && a.clientPhone.isNotEmpty) {
             await _notifyCancelOnWhatsapp(a);
           }
           break;
         case 'done':
-          await api.dio.patch('/appointments/${a.id}',
-              data: {'status': 'done'});
+          await api.dio
+              .patch('/appointments/${a.id}', data: {'status': 'done'});
           break;
         case 'confirm':
-          await api.dio.patch('/appointments/${a.id}',
-              data: {'status': 'confirmed'});
+          await api.dio
+              .patch('/appointments/${a.id}', data: {'status': 'confirmed'});
           break;
         case 'edit':
           // remarcar: abre o wizard reaproveitando cliente+serviço
           if (!mounted) return;
-          final changed = await context
-              .push<bool>('/booking', extra: {'reschedule': a});
+          final changed =
+              await context.push<bool>('/booking', extra: {'reschedule': a});
           if (changed != true) {
             await _loadAppointments();
           }
@@ -579,9 +579,9 @@ class _MonthPickerState extends State<_MonthPicker> {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: isSelected
-                                    ? AppColors.primary
+                                    ? AppColors.primaryOf(context)
                                     : isToday
-                                        ? AppColors.primary
+                                        ? AppColors.primaryOf(context)
                                             .withValues(alpha: 0.15)
                                         : null,
                               ),
@@ -605,7 +605,7 @@ class _MonthPickerState extends State<_MonthPicker> {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: hasEvents
-                                    ? AppColors.primary
+                                    ? AppColors.primaryOf(context)
                                     : Colors.transparent,
                               ),
                             ),

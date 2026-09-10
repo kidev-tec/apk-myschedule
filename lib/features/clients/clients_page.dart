@@ -130,7 +130,7 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
                     margin: const EdgeInsets.only(bottom: 8),
                     child: ListTile(
                       leading: CircleAvatar(
-                        backgroundColor: AppColors.primary,
+                        backgroundColor: AppColors.primaryOf(context),
                         child: Text(c.name[0].toUpperCase(),
                             style: const TextStyle(color: Colors.white)),
                       ),

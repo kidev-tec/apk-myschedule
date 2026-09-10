@@ -21,7 +21,8 @@ class UpdateInfo {
     required this.apkUrl,
   });
 
-  bool get hasUpdate => _versionToInt(remoteVersion) > _versionToInt(currentVersion);
+  bool get hasUpdate =>
+      _versionToInt(remoteVersion) > _versionToInt(currentVersion);
 
   static int _versionToInt(String v) {
     final parts = v.split('.').map((p) => int.tryParse(p) ?? 0).toList();
@@ -51,7 +52,9 @@ class UpdateService {
   /// Consulta a API. Retorna info se houver update, null se igual/erro.
   static Future<UpdateInfo?> check() async {
     try {
-      final resp = await Dio(BaseOptions(connectTimeout: ApiConfig.timeout, receiveTimeout: ApiConfig.timeout))
+      final resp = await Dio(BaseOptions(
+              connectTimeout: ApiConfig.timeout,
+              receiveTimeout: ApiConfig.timeout))
           .get('${ApiConfig.baseUrl}/version');
       final info = UpdateInfo(
         currentVersion: _currentVersion,

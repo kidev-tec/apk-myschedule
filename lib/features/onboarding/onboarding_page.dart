@@ -421,7 +421,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             width: 48,
             child: Switch(
               value: enabled,
-              activeThumbColor: AppColors.primary,
+              activeThumbColor: AppColors.primaryOf(context),
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               onChanged: (_) => _toggleDay(weekday),
             ),
@@ -431,7 +431,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             child: Text(
               names[weekday],
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: enabled ? AppColors.neutral : AppColors.pinkMid,
+                    color:
+                        enabled ? AppColors.neutral : AppColors.midOf(context),
                   ),
             ),
           ),
@@ -467,10 +468,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                         ),
                     ],
                   )
-                : const Center(
+                : Center(
                     child: Text(
                       'Fechado',
-                      style: TextStyle(color: AppColors.pinkMid),
+                      style: TextStyle(color: AppColors.midOf(context)),
                     ),
                   ),
           ),

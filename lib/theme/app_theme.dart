@@ -7,7 +7,7 @@ import '../core/segment/segment_preset.dart';
 /// Cor dominante do site: Rubi #B51F4D (5 ocorrências).
 /// Pressed state: Rubi Escuro #9A0835.
 class AppColors {
-  static const Color primary = Color(0xFFB51F4D); // Rubi
+  static const Color primary = Color(0xFFB51F4D); // Rubi (default beauty)
   static const Color primaryPressed = Color(0xFF9A0835); // Rubi Escuro
   static const Color pinkSoft = Color(0xFFF7E3E9); // Rosa Suave
   static const Color pinkMid = Color(0xFFE8A7BC); // Rosa Médio
@@ -16,6 +16,22 @@ class AppColors {
   static const Color surface = Color(0xFFFFFFFF);
   static const Color error = Color(0xFFC62828);
   static const Color success = Color(0xFF2E7D32);
+
+  /// Cores do TEMA ATIVO (respeitam o segmento escolhido).
+  ///
+  /// Usar AppColors.primary direto nos widgets hardcoda o Rubi e ignora o
+  /// segmento — barbearia ficava rosa. Estes getters leem do ColorScheme
+  /// do ThemeData em vigor, que o buildAppTheme(preset) já coloriu.
+  static Color primaryOf(BuildContext context) =>
+      Theme.of(context).colorScheme.primary;
+
+  /// Tom suave (container) derivado do primary ativo — substitui pinkSoft.
+  static Color softOf(BuildContext context) =>
+      Theme.of(context).colorScheme.primary.withValues(alpha: 0.12);
+
+  /// Tom médio derivado do primary ativo — substitui pinkMid.
+  static Color midOf(BuildContext context) =>
+      Theme.of(context).colorScheme.primary.withValues(alpha: 0.45);
 }
 
 /// Tipografia: Marcellus (títulos, serif elegante do site) + Poppins (corpo).
