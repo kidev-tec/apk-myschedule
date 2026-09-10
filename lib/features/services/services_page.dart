@@ -27,7 +27,9 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
       final api = ApiClient();
       final resp = await api.dio.get('/services');
       _services = (resp.data as List).map((j) => Service.fromJson(j)).toList();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[services] erro: $e');
+    }
     if (mounted) setState(() => _loading = false);
   }
 
@@ -53,7 +55,9 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
       final api = ApiClient();
       await api.dio.delete('/services/\${s.id}');
       _loadServices();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[services] erro: $e');
+    }
   }
 
   @override

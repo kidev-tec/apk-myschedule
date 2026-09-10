@@ -6,6 +6,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/auth/auth_controller.dart';
 import 'features/auth/login_page.dart';
+import 'core/api/api_client.dart';
+import 'core/segment/segment_preset.dart';
 import 'core/storage/onboarding_store.dart';
 import 'features/onboarding/onboarding_page.dart';
 import 'features/agenda/agenda_page.dart';
@@ -17,8 +19,14 @@ import 'features/services/service_form_page.dart';
 import 'features/settings/settings_page.dart';
 import 'theme/app_theme.dart';
 
+/// Segmento ativo do negócio (persistido; null = beauty default).
+final segmentPresetProvider =
+    StateProvider<SegmentPreset?>((ref) => null);
+
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authControllerProvider);
+
+  bool segmentLoaded = false;
 
   return GoRouter(
     initialLocation: '/login',
@@ -37,6 +45,23 @@ final routerProvider = Provider<GoRouter>((ref) {
         // Onboarding só na PRIMEIRA vez — flag persistida sobrevive a restart
         final done = await OnboardingStore.isComplete();
         return done ? '/agenda' : '/onboarding';
+      }
+
+      // carrega o segmento do negócio uma vez por sessão (tema global)
+      if (isAuthenticated && !segmentLoaded) {
+        segmentLoaded = true;
+        // fire-and-forget: tema default até chegar
+        ApiClient()
+            .dio
+            .get('/me')
+            .then((r) {
+              final id = r.data['business_type'] as String?;
+              if (id != null) {
+                ref.read(segmentPresetProvider.notifier).state =
+                    SegmentPreset.byId(id);
+              }
+            })
+            .catchError((_) {});
       }
 
       return null;
@@ -144,8 +169,9 @@ class MinhaAgendaApp extends ConsumerWidget {
           child: child ?? const SizedBox.shrink(),
         );
       },
-      theme: buildAppTheme(),
-      darkTheme: buildAppTheme().copyWith(brightness: Brightness.dark),
+      theme: buildAppTheme(ref.watch(segmentPresetProvider)),
+      darkTheme:
+          buildAppTheme(ref.watch(segmentPresetProvider)).copyWith(brightness: Brightness.dark),
       themeMode: ThemeMode.system,
       routerConfig: router,
       localizationsDelegates: const [

@@ -69,7 +69,9 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
       _existingAppointments = listOf(results[3].data, 'appointments')
           .map((j) => Appointment.fromJson(j as Map<String, dynamic>))
           .toList();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[wizard] falha ao carregar dados: $e');
+    }
     if (mounted) setState(() => _loading = false);
   }
 

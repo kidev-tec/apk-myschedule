@@ -43,7 +43,9 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
         _birthdayController.text =
             '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[client_form] erro: $e');
+    }
     if (mounted) setState(() => _loading = false);
   }
 

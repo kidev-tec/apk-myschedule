@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_config.dart';
+import '../../core/segment/segment_preset.dart';
+import '../../main.dart' show segmentPresetProvider;
 import '../../core/auth/auth_controller.dart';
 import '../../theme/app_theme.dart';
 
@@ -44,7 +46,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         _me = Map<String, dynamic>.from(resp.data);
         _slug = resp.data['slug'] as String?;
       });
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[settings] erro: $e');
+    }
   }
 
   Future<void> _sharePublicLink() async {
@@ -55,6 +59,57 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         const SnackBar(
             content: Text('Link copiado! Cola no teu WhatsApp ou Instagram')),
       );
+    }
+  }
+
+  Future<void> _changeSegment() async {
+    final current = _me?['business_type'] as String?;
+    final picked = await showModalBottomSheet<SegmentPreset>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text('Teu segmento',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            const Text('Muda as cores e os serviços sugeridos do app',
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 12),
+            ...SegmentPreset.all.map(
+              (s) => ListTile(
+                leading: Icon(s.icon, color: AppColors.primary),
+                title: Text(s.label),
+                trailing: current == s.id
+                    ? const Icon(Icons.check, color: AppColors.primary)
+                    : null,
+                onTap: () => Navigator.pop(context, s),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || picked.id == current) return;
+    try {
+      final api = ApiClient();
+      await api.dio.patch('/me', data: {'business_type': picked.id});
+      if (!mounted) return;
+      setState(() => _me?['business_type'] = picked.id);
+      // tema global reage na hora
+      ProviderScope.containerOf(context)
+          .read(segmentPresetProvider.notifier)
+          .state = picked;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Segmento alterado pra ${picked.label}')));
+    } catch (e) {
+      debugPrint('[settings] falha ao trocar segmento: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Não consegui trocar o segmento'),
+            backgroundColor: AppColors.error));
+      }
     }
   }
 
@@ -94,7 +149,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       final api = ApiClient();
       final resp = await api.dio.get('/settings/google-calendar/status');
       setState(() => _gcalConnected = resp.data['connected'] ?? false);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[settings] erro: $e');
+    }
   }
 
   Future<void> _connectGcal() async {
@@ -145,7 +202,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       final api = ApiClient();
       await api.dio.delete('/settings/google-calendar');
       setState(() => _gcalConnected = false);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[settings] erro: $e');
+    }
   }
 
   Future<void> _signOut() async {
@@ -200,6 +259,25 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     Icon(Icons.workspace_premium, color: _subscriptionColor),
                 title: Text(_subscriptionLabel),
                 subtitle: Text(_me?['name'] as String? ?? ''),
+              ),
+            ),
+          const SizedBox(height: 8),
+
+          // Segmento do negócio (troca tema na hora)
+          if (_me != null)
+            Card(
+              child: ListTile(
+                leading: Icon(
+                    SegmentPreset.byId(
+                            _me?['business_type'] as String? ?? 'beauty')
+                        .icon,
+                    color: AppColors.primary),
+                title: const Text('Teu segmento'),
+                subtitle: Text(SegmentPreset.byId(
+                        _me?['business_type'] as String? ?? 'beauty')
+                    .label),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _changeSegment,
               ),
             ),
           const SizedBox(height: 8),

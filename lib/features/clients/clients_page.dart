@@ -28,7 +28,9 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
       final api = ApiClient();
       final resp = await api.dio.get('/clients');
       _clients = (resp.data as List).map((j) => Client.fromJson(j)).toList();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[clients_page] erro: $e');
+    }
     if (mounted) setState(() => _loading = false);
   }
 
@@ -63,7 +65,9 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
       final api = ApiClient();
       await api.dio.delete('/clients/\${c.id}');
       _loadClients();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[clients_page] erro: $e');
+    }
   }
 
   @override

@@ -63,8 +63,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           : (resp.data as Map<String, dynamic>)['appointments'] as List? ?? [];
       _appointments =
           list.map((j) => Appointment.fromJson(j as Map<String, dynamic>)).toList();
-    } catch (_) {
-      // offline / erro silencioso
+    } catch (e) {
+      debugPrint('[agenda] falha ao carregar: $e');
     }
     if (mounted) setState(() => _loading = false);
   }
@@ -107,8 +107,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         final d = DateTime(a.startsAt.year, a.startsAt.month, a.startsAt.day);
         (byDay[d] ??= []).add(a);
       }
-    } catch (_) {
-      // offline: mostra o calendário mesmo sem marcações
+    } catch (e) {
+      debugPrint('[agenda] falha na view mensal: $e');
     }
     if (mounted) setState(() => _loading = false);
 

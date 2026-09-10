@@ -41,7 +41,9 @@ class _ServiceFormPageState extends ConsumerState<ServiceFormPage> {
       _priceController.text = (cents is num ? cents / 100 : 0.0)
           .toStringAsFixed(2)
           .replaceAll('.', ',');
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[service_form] erro: $e');
+    }
     if (mounted) setState(() => _loading = false);
   }
 
