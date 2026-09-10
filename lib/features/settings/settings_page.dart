@@ -17,8 +17,6 @@ class SettingsPage extends ConsumerStatefulWidget {
 }
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
-  bool _gcalConnected = false;
-  bool _loadingGcal = false;
   Map<String, dynamic>? _me;
   String? _slug;
 
@@ -33,7 +31,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   void initState() {
     super.initState();
-    _checkGcalStatus();
     _loadMe();
   }
 
@@ -144,68 +141,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     return AppColors.error;
   }
 
-  Future<void> _checkGcalStatus() async {
-    try {
-      final api = ApiClient();
-      final resp = await api.dio.get('/settings/google-calendar/status');
-      setState(() => _gcalConnected = resp.data['connected'] ?? false);
-    } catch (e) {
-      debugPrint('[settings] erro: $e');
-    }
-  }
 
-  Future<void> _connectGcal() async {
-    setState(() => _loadingGcal = true);
-    try {
-      final api = ApiClient();
-      final resp = await api.dio.post('/settings/google-calendar/connect');
-      final authUrl = resp.data['auth_url'];
-      // Launch browser for OAuth
-      // For now just show the URL
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('Conectar Google Calendar'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Abre este link no navegador e autoriza o acesso:'),
-                const SizedBox(height: 12),
-                SelectableText(authUrl,
-                    style:
-                        const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-              ],
-            ),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Copiei, vou lá')),
-            ],
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Falha: \$e'), backgroundColor: AppColors.error),
-        );
-      }
-    }
-    if (mounted) setState(() => _loadingGcal = false);
-  }
-
-  Future<void> _disconnectGcal() async {
-    try {
-      final api = ApiClient();
-      await api.dio.delete('/settings/google-calendar');
-      setState(() => _gcalConnected = false);
-    } catch (e) {
-      debugPrint('[settings] erro: $e');
-    }
-  }
 
   Future<void> _signOut() async {
     final confirm = await showDialog<bool>(
@@ -324,50 +260,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   title: const Text('Sair da conta',
                       style: TextStyle(color: AppColors.error)),
                   onTap: _signOut,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // Google Calendar section
-          Text('Google Calendar',
-              style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Text('Espelha teus agendamentos no Calendar — 2 toques',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: AppColors.neutral)),
-          const SizedBox(height: 16),
-          Card(
-            child: Column(
-              children: [
-                ListTile(
-                  leading: Icon(
-                    _gcalConnected ? Icons.check_circle : Icons.cloud_off,
-                    color: _gcalConnected ? Colors.green : AppColors.neutral,
-                  ),
-                  title: Text(_gcalConnected ? 'Conectado' : 'Desconectado'),
-                  subtitle: Text(_gcalConnected
-                      ? 'Agendamentos sincronizados automaticamente'
-                      : 'Toque em conectar pra autorizar (OAuth 2 toques)'),
-                  trailing: _loadingGcal
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : FilledButton(
-                          onPressed:
-                              _gcalConnected ? _disconnectGcal : _connectGcal,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: _gcalConnected
-                                ? AppColors.error
-                                : AppColors.primary,
-                          ),
-                          child:
-                              Text(_gcalConnected ? 'Desconectar' : 'Conectar'),
-                        ),
                 ),
               ],
             ),

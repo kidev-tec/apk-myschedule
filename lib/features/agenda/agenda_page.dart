@@ -313,6 +313,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         trailing: PopupMenuButton<String>(
           onSelected: (v) => _handleAppointmentAction(v, a),
           itemBuilder: (_) => [
+            if (a.status == 'pending')
+              const PopupMenuItem(value: 'confirm', child: Text('Confirmar')),
             const PopupMenuItem(value: 'edit', child: Text('Remarcar')),
             const PopupMenuItem(value: 'done', child: Text('Concluir')),
             const PopupMenuItem(value: 'cancel', child: Text('Cancelar')),
@@ -374,8 +376,41 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     }
   }
 
-  void _handleAppointmentAction(String action, Appointment a) {
-    // TODO: implementar ações
+  Future<void> _handleAppointmentAction(String action, Appointment a) async {
+    final api = ApiClient();
+    try {
+      switch (action) {
+        case 'cancel':
+          await api.dio.patch('/appointments/${a.id}',
+              data: {'status': 'canceled'});
+          break;
+        case 'done':
+          await api.dio.patch('/appointments/${a.id}',
+              data: {'status': 'done'});
+          break;
+        case 'confirm':
+          await api.dio.patch('/appointments/${a.id}',
+              data: {'status': 'confirmed'});
+          break;
+        case 'edit':
+          // remarcar: abre o wizard reaproveitando cliente+serviço
+          if (!mounted) return;
+          final changed = await context
+              .push<bool>('/booking', extra: {'reschedule': a});
+          if (changed != true) {
+            await _loadAppointments();
+          }
+          return;
+      }
+      if (mounted) await _loadAppointments();
+    } catch (e) {
+      debugPrint('[agenda] falha em $action: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Não consegui $action: $e'),
+            backgroundColor: AppColors.error));
+      }
+    }
   }
 }
 
