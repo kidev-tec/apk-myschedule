@@ -9,7 +9,10 @@ import '../../core/update/update_service.dart';
 import '../../theme/app_theme.dart';
 
 class AgendaPage extends ConsumerStatefulWidget {
-  const AgendaPage({super.key});
+  const AgendaPage({super.key, this.onCheckUpdate});
+
+  /// Checagem de update pós-frame (injetável; testes passam noop).
+  final Future<void> Function()? onCheckUpdate;
 
   @override
   ConsumerState<AgendaPage> createState() => _AgendaPageState();
@@ -42,9 +45,9 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   @override
   void initState() {
     super.initState();
-    UpdateService.check().then((info) {
-      if (info != null && mounted) _updateBanner.value = true;
-    });
+    (widget.onCheckUpdate ?? () => UpdateService.check().then((info) {
+          if (info != null && mounted) _updateBanner.value = true;
+        }))();
     _loadAppointments();
   }
 

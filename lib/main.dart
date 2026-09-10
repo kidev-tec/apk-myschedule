@@ -17,6 +17,7 @@ import 'features/clients/client_form_page.dart';
 import 'features/services/services_page.dart';
 import 'features/services/service_form_page.dart';
 import 'features/settings/settings_page.dart';
+import 'features/terms/terms_page.dart';
 import 'theme/app_theme.dart';
 
 /// Segmento ativo do negócio (persistido; null = beauty default).
@@ -62,6 +63,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      GoRoute(
+        path: '/terms',
+        builder: (_, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return TermsPage(isPrivacy: extra?['isPrivacy'] == true);
+        },
+      ),
       GoRoute(
         path: '/login',
         builder: (_, __) => const LoginPage(),

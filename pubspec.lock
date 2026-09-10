@@ -145,6 +145,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.1.0"
+  cli_config:
+    dependency: transitive
+    description:
+      name: cli_config
+      sha256: ac20a183a07002b700f0c25e61b7ee46b23c309d76ab7b7640a028f18e4d99ec
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.0"
   cli_util:
     dependency: transitive
     description:
@@ -193,6 +201,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.1.2"
+  coverage:
+    dependency: "direct dev"
+    description:
+      name: coverage
+      sha256: "956a3de0725ca232ad353565a8290d3357592bf4250f6f298a185e2d949c5d3d"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.15.1"
   crypto:
     dependency: transitive
     description:
@@ -363,6 +379,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_markdown:
+    dependency: "direct main"
+    description:
+      name: flutter_markdown
+      sha256: "08fb8315236099ff8e90cb87bb2b935e0a724a3af1623000a9cec930468e0f27"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.7.7+1"
   flutter_riverpod:
     dependency: "direct main"
     description:
@@ -541,6 +565,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.6.0"
+  http_mock_adapter:
+    dependency: "direct dev"
+    description:
+      name: http_mock_adapter
+      sha256: "46399c78bd4a0af071978edd8c502d7aeeed73b5fb9860bca86b5ed647a63c1b"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.6.1"
   http_multi_server:
     dependency: transitive
     description:
@@ -645,6 +677,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.0"
+  logger:
+    dependency: transitive
+    description:
+      name: logger
+      sha256: "2a0dc097e7b01d942475bdd552356db2d0f768b05540bd4b2b53f1840f2239a7"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.8.0"
   logging:
     dependency: transitive
     description:
@@ -653,6 +693,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.3.0"
+  markdown:
+    dependency: transitive
+    description:
+      name: markdown
+      sha256: ee85086ad7698b42522c6ad42fe195f1b9898e4d974a1af4576c1a3a176cada9
+      url: "https://pub.dev"
+    source: hosted
+    version: "7.3.1"
   matcher:
     dependency: transitive
     description:
@@ -685,6 +733,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.0"
+  mockito:
+    dependency: transitive
+    description:
+      name: mockito
+      sha256: "6841eed20a7befac0ce07df8116c8b8233ed1f4486a7647c7fc5a02ae6163917"
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.4.4"
+  network_image_mock:
+    dependency: "direct dev"
+    description:
+      name: network_image_mock
+      sha256: "855cdd01d42440e0cffee0d6c2370909fc31b3bcba308a59829f24f64be42db7"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.1"
   objective_c:
     dependency: transitive
     description:
@@ -890,6 +954,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.5.0"
+  source_maps:
+    dependency: transitive
+    description:
+      name: source_maps
+      sha256: "14c2945847669b44089bb1222f66873d7ff7103c58911917f2a63c5a62327898"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.10.14"
   source_span:
     dependency: transitive
     description:

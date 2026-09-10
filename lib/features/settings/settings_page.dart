@@ -226,16 +226,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ListTile(
                   leading: const Icon(Icons.privacy_tip_outlined),
                   title: const Text('Política de privacidade'),
-                  onTap: () {
-                    // TODO
-                  },
+                  onTap: () => context
+                      .push('/terms', extra: {'isPrivacy': true}),
                 ),
                 ListTile(
                   leading: const Icon(Icons.description_outlined),
                   title: const Text('Termos de uso'),
-                  onTap: () {
-                    // TODO
-                  },
+                  onTap: () => context.push('/terms'),
                 ),
               ],
             ),
