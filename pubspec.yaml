@@ -22,6 +22,8 @@ dependencies:
   google_sign_in: ^6.2.1
   intl: ^0.20.2
   equatable: ^2.0.5
+  path_provider: ^2.1.6
+  open_filex: ^4.7.0
 
 dev_dependencies:
   flutter_test:

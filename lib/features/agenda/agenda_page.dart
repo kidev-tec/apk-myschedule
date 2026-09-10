@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/paywall_flag.dart';
+import '../../core/update/update_service.dart';
 import '../../theme/app_theme.dart';
 
 class AgendaPage extends ConsumerStatefulWidget {
@@ -18,9 +19,31 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   List<Appointment> _appointments = [];
   bool _loading = true;
 
+  final ValueNotifier<bool> _updateBanner = ValueNotifier(false);
+  bool _downloading = false;
+
+  Future<void> _doUpdate() async {
+    final info = UpdateService.lastCheck;
+    if (info == null || _downloading) return;
+    setState(() => _downloading = true);
+    try {
+      await UpdateService.downloadAndInstall(info);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Falha ao atualizar: $e'),
+            backgroundColor: AppColors.error));
+      }
+    }
+    if (mounted) setState(() => _downloading = false);
+  }
+
   @override
   void initState() {
     super.initState();
+    UpdateService.check().then((info) {
+      if (info != null && mounted) _updateBanner.value = true;
+    });
     _loadAppointments();
   }
 
@@ -147,6 +170,40 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
+                // Banner de atualização (updater): nova versão disponível
+                ValueListenableBuilder<bool>(
+                  valueListenable: _updateBanner,
+                  builder: (_, show, __) => !show
+                      ? const SizedBox.shrink()
+                      : Material(
+                          color: Colors.deepOrange,
+                          child: SafeArea(
+                            top: false,
+                            child: ListTile(
+                              dense: true,
+                              leading: const Icon(Icons.system_update,
+                                  color: Colors.white),
+                              title: const Text('Nova versão disponível',
+                                  style: TextStyle(
+                                      color: Colors.white, fontSize: 14)),
+                              trailing: _downloading
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white))
+                                  : TextButton(
+                                      onPressed: _doUpdate,
+                                      child: const Text('Atualizar',
+                                          style: TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold)),
+                                    ),
+                            ),
+                          ),
+                        ),
+                ),
                 // Banner de paywall (RF-14): aparece quando a API devolve 402
                 ValueListenableBuilder<String?>(
                   valueListenable: PaywallFlag.lastMessage,
