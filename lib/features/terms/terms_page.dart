@@ -155,13 +155,18 @@ Encarregado (DPO): suporte da Minha Agenda via WhatsApp.
       appBar: AppBar(
         title: Text(isPrivacy ? 'Política de Privacidade' : 'Termos de Uso'),
       ),
-      body: Markdown(
-        data: isPrivacy ? _privacy : _terms,
-        padding: const EdgeInsets.all(16),
-        selectable: true,
-        styleSheet: MarkdownStyleSheet(
-          h2: Theme.of(context).textTheme.titleLarge,
-          p: Theme.of(context).textTheme.bodyMedium,
+      // SafeArea + padding inferior: o fim do documento NUNCA fica atrás
+      // da barra de gestos (home/voltar) — nada escondido na rolagem.
+      body: SafeArea(
+        child: Markdown(
+          data: isPrivacy ? _privacy : _terms,
+          padding: EdgeInsets.fromLTRB(
+              16, 16, 16, 16 + MediaQuery.of(context).padding.bottom),
+          selectable: true,
+          styleSheet: MarkdownStyleSheet(
+            h2: Theme.of(context).textTheme.titleLarge,
+            p: Theme.of(context).textTheme.bodyMedium,
+          ),
         ),
       ),
     );
