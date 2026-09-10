@@ -7,6 +7,7 @@ import '../../core/api/api_config.dart';
 import '../../core/segment/segment_preset.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../theme/app_theme.dart';
+import 'gcal_service.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -18,6 +19,9 @@ class SettingsPage extends ConsumerStatefulWidget {
 class _SettingsPageState extends ConsumerState<SettingsPage> {
   Map<String, dynamic>? _me;
   String? _slug;
+  bool? _gcalConnected; // null = verificando
+  bool _gcalBusy = false;
+  final _gcal = GCalService();
 
   /// Link público do negócio. Em dev usa o host da API; o path /p/<slug> é
   /// servido pela própria API (RF-07).
@@ -31,6 +35,64 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   void initState() {
     super.initState();
     _loadMe();
+    _loadGCalStatus();
+  }
+
+  Future<void> _loadGCalStatus() async {
+    final connected = await _gcal.isConnected();
+    if (!mounted) return;
+    setState(() => _gcalConnected = connected);
+  }
+
+  /// Conecta (abre consent Google) ou desconecta, com diálogo de confirmação
+  /// no disconnect — leigo não pode cortar a integração sem entender o efeito.
+  Future<void> _toggleGCal() async {
+    if (_gcalConnected == true) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Desconectar o Google Calendar?'),
+          content: const Text(
+              'Os agendamentos novos não vão mais aparecer na tua agenda Google. '
+              'Os que já entraram, continuam lá.'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Manter conectado')),
+            FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Desconectar')),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+    setState(() => _gcalBusy = true);
+    try {
+      if (_gcalConnected == true) {
+        await _gcal.disconnect();
+        if (!mounted) return;
+        setState(() => _gcalConnected = false);
+      } else {
+        final ok = await _gcal.startConnect();
+        if (!mounted) return;
+        if (!ok) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Não consegui abrir o navegador. Tenta de novo')));
+        }
+        // Ao voltar do browser, o usuário reabre Configurações e o status
+        // recarrega (initState). Refresh leve ao retomar:
+        _loadGCalStatus();
+      }
+    } catch (e) {
+      debugPrint('[settings] gcal toggle: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Deu erro na conexão. Tenta de novo')));
+      }
+    } finally {
+      if (mounted) setState(() => _gcalBusy = false);
+    }
   }
 
   Future<void> _loadMe() async {
@@ -160,6 +222,34 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 subtitle: Text(SegmentPreset.byId(
                         _me?['business_type'] as String? ?? 'beauty')
                     .label),
+              ),
+            ),
+          const SizedBox(height: 8),
+
+          // Google Calendar (RF-08): espelha agendamentos confirmados na
+          // agenda do profissional — lembretes herdados do Calendar dele.
+          if (_me != null)
+            Card(
+              child: ListTile(
+                leading: Icon(Icons.event_available,
+                    color: _gcalConnected == true
+                        ? Colors.green
+                        : AppColors.primaryOf(context)),
+                title: const Text('Google Calendar'),
+                subtitle: Text(_gcalConnected == null
+                    ? 'Verificando…'
+                    : _gcalConnected == true
+                        ? 'Conectado — agendamentos confirmados vão pra tua agenda'
+                        : 'Conectar pra ver agendamentos na tua agenda Google'),
+                trailing: _gcalBusy
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : Icon(_gcalConnected == true
+                        ? Icons.link_off
+                        : Icons.chevron_right),
+                onTap: _gcalBusy ? null : _toggleGCal,
               ),
             ),
           const SizedBox(height: 8),
