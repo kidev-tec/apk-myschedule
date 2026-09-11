@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -70,6 +71,17 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     setState(() => _finishing = true);
     try {
       final api = ApiClient();
+
+      // 0. Garante provisionamento (user+business no Postgres).
+      // O sync no login é fire-and-forget com catch silencioso — se falhou
+      // (crash "ref after disposed" no A15), /me responde 404 e TODO o
+      // onboarding falha. Retry idempotente aqui fecha essa lacuna.
+      try {
+        await api.dio.patch('/me', data: {'business_type': _segment.id});
+      } on DioException catch (e) {
+        if (e.response?.statusCode != 404) rethrow;
+        await api.dio.post('/auth/sync', data: {'name': _businessNameController.text.trim()});
+      }
 
       // 1. Perfil do negócio
       await api.dio.patch('/me', data: {
