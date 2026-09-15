@@ -243,6 +243,32 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           const SizedBox(height: 8),
 
+          if (_me != null)
+            Card(
+              child: ListTile(
+                leading: Icon(Icons.schedule,
+                    color: AppColors.primaryOf(context)),
+                title: const Text('Horário de funcionamento'),
+                subtitle: const Text('Quando tu atende, dia a dia'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/working-hours'),
+              ),
+            ),
+          const SizedBox(height: 8),
+
+          if (_me != null)
+            Card(
+              child: ListTile(
+                leading: Icon(Icons.schedule,
+                    color: AppColors.primaryOf(context)),
+                title: const Text('Horário de funcionamento'),
+                subtitle: const Text('Quando tu atende, dia a dia'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/working-hours'),
+              ),
+            ),
+          const SizedBox(height: 8),
+
           // Google Calendar (RF-08): espelha agendamentos confirmados na
           // agenda do profissional — lembretes herdados do Calendar dele.
           if (_me != null)
