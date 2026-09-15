@@ -34,6 +34,12 @@ class AuthController extends StateNotifier<AuthState> {
   final GoogleSignIn _googleSignIn = GoogleSignIn();
   final ApiClient _api = ApiClient();
 
+  /// Construtor pra testes: pula o listener de authStateChanges (que toca
+  /// Firebase nativo — impossível em testes unit/widget). Estado inicial
+  /// injetado. Só expõe o state, métodos reais não são chamados nos tests.
+  AuthController.forTest({AuthState? initial})
+      : super(initial ?? const AuthState());
+
   AuthController() : super(const AuthState()) {
     _initAuthListener();
   }

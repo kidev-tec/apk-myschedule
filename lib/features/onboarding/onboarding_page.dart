@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
+import 'onboarding_provisioning.dart';
 import '../../core/segment/segment_preset.dart';
 import '../../core/storage/onboarding_store.dart';
 import '../../theme/app_theme.dart';
@@ -70,6 +71,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     setState(() => _finishing = true);
     try {
       final api = ApiClient();
+
+      // 0. Garante provisionamento (user+business no Postgres) — ver
+      // onboarding_provisioning.dart. Testado em onboarding_provisioning_test.dart.
+      await ensureProvisioned(api.dio, segmentId: _segment.id);
 
       // 1. Perfil do negócio
       await api.dio.patch('/me', data: {
@@ -426,8 +431,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               onChanged: (_) => _toggleDay(weekday),
             ),
           ),
+          const SizedBox(width: 12),
           SizedBox(
-            width: 40,
+            width: 44,
             child: Text(
               names[weekday],
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
@@ -436,6 +442,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   ),
             ),
           ),
+          const SizedBox(width: 12),
           Expanded(
             child: enabled
                 ? Column(

@@ -66,13 +66,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final router = GoRouter.of(context);
     final notifier = ref.read(authControllerProvider.notifier);
     await notifier.signInWithGoogle();
-    // ref NÃO pode ser usado pós-await (widget pode ter sido desmontado —
-    // crash "Cannot use ref after disposed" visto no A15). Captura tudo antes.
-    if (!router.routerDelegate.mounted) return;
-    final auth = notifier.state;
+    // ref/context NÃO podem ser usados pós-await (widget pode ter sido
+    // desmontado — crash "Cannot use ref after disposed" visto no A15).
+    // Captura tudo antes; usa os handles capturados depois.
+    if (!context.mounted) return;
+    final auth = ref.read(authControllerProvider);
     if (auth.isAuthenticated) {
       await notifier.syncWithBackend();
-      if (!router.routerDelegate.mounted) return;
+      if (!context.mounted) return;
       router.go(
           await OnboardingStore.isComplete() ? '/agenda' : '/onboarding');
     }
