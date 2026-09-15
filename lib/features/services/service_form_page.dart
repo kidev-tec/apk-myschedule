@@ -32,7 +32,7 @@ class _ServiceFormPageState extends ConsumerState<ServiceFormPage> {
     setState(() => _loading = true);
     try {
       final api = ApiClient();
-      final resp = await api.dio.get('/services/\${widget.serviceId}');
+      final resp = await api.dio.get('/services/${widget.serviceId}');
       final data = resp.data;
       _nameController.text = data['name'] ?? '';
       _durationController.text =
@@ -64,7 +64,7 @@ class _ServiceFormPageState extends ConsumerState<ServiceFormPage> {
     try {
       final api = ApiClient();
       if (_isEditing) {
-        await api.dio.patch('/services/\${widget.serviceId}', data: data);
+        await api.dio.patch('/services/${widget.serviceId}', data: data);
       } else {
         await api.dio.post('/services', data: data);
       }
@@ -72,8 +72,8 @@ class _ServiceFormPageState extends ConsumerState<ServiceFormPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Falha: \$e'), backgroundColor: AppColors.error),
+          SnackBar(
+              content: Text('Falha: $e'), backgroundColor: AppColors.error),
         );
       }
     }
