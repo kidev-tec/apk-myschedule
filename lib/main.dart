@@ -18,6 +18,7 @@ import 'features/clients/client_form_page.dart';
 import 'features/services/services_page.dart';
 import 'features/services/service_form_page.dart';
 import 'features/settings/settings_page.dart';
+import 'features/settings/working_hours_page.dart';
 import 'features/settings/push_init_service.dart';
 import 'features/terms/terms_page.dart';
 import 'theme/app_theme.dart';
@@ -55,6 +56,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         // fire-and-forget: tema default até chegar
         ApiClient().dio.get('/me').then((r) {
           final id = r.data['business_type'] as String?;
+          debugPrint('[tema] GET /me → business_type=$id');
           if (id != null) {
             ref.read(segmentPresetProvider.notifier).state =
                 SegmentPreset.byId(id);
@@ -104,6 +106,10 @@ final routerProvider = Provider<GoRouter>((ref) {
                 ClientFormPage(clientId: state.pathParameters['id']),
           ),
         ],
+      ),
+      GoRoute(
+        path: '/working-hours',
+        builder: (_, __) => const WorkingHoursPage(),
       ),
       GoRoute(
         path: '/services',

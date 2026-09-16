@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -106,6 +107,20 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
 
       // Marca onboarding completo
       await OnboardingStore.markComplete();
+    } on DioException catch (e) {
+      if (mounted) {
+        // Erros de validação do servidor têm mensagem humana — mostra direto
+        // (ex: 409 "Já existe um estabelecimento com esse nome neste segmento").
+        final serverMsg = e.response?.data is Map
+            ? (e.response?.data['error'] as String?)
+            : null;
+        final msg = serverMsg ?? 'Não consegui salvar tudo. Tenta de novo.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), backgroundColor: AppColors.error),
+        );
+      }
+      if (mounted) setState(() => _finishing = false);
+      return;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

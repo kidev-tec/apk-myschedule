@@ -29,9 +29,6 @@ dependencies:
   url_launcher: ^6.3.2
   flutter_markdown: ^0.7.7+1
 
-dependency_overrides:
-  firebase_core_platform_interface: 6.0.3
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -54,3 +51,9 @@ flutter:
     - family: Marcellus
       fonts:
         - asset: assets/fonts/Marcellus-Regular.ttf
+
+dependency_overrides:
+  # firebase_core 3.15 resolve platform_interface ^5.4.1 → 5.4.2, que gera canais
+  # pigeon SEM prefixo e o plugin nativo não escuta → channel-error no initializeApp
+  # (splashscreen eterna). 6.0.3 corrige. Ver sessão 15/09/2026.
+  firebase_core_platform_interface: 6.0.3
