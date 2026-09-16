@@ -249,14 +249,29 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                 ),
               ],
             ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/booking'),
-        icon: const Icon(Icons.add),
-        label: const Text('Marcar horário'),
-        backgroundColor: AppColors.primaryOf(context),
-        foregroundColor: Colors.white,
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // RF-A01: bloquear horário (compromisso externo)
+          FloatingActionButton.small(
+            heroTag: 'btn-block',
+            onPressed: _showBlockSheet,
+            tooltip: 'Bloquear horário',
+            backgroundColor:
+                Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: const Icon(Icons.lock_outline),
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton.extended(
+            heroTag: 'btn-book',
+            onPressed: () => context.push('/booking'),
+            icon: const Icon(Icons.add),
+            label: const Text('Marcar horário'),
+            backgroundColor: AppColors.primaryOf(context),
+            foregroundColor: Colors.white,
+          ),
+        ],
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       bottomNavigationBar: _buildDayNavigator(),
     );
   }
@@ -312,19 +327,39 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             ),
           ),
         ),
-        title:
-            Text(a.clientName, style: Theme.of(context).textTheme.titleMedium),
-        subtitle: Text('${a.serviceName} • ${_statusLabel(a.status)}'),
-        trailing: PopupMenuButton<String>(
-          onSelected: (v) => _handleAppointmentAction(v, a),
-          itemBuilder: (_) => [
-            if (a.status == 'pending')
-              const PopupMenuItem(value: 'confirm', child: Text('Confirmar')),
-            const PopupMenuItem(value: 'edit', child: Text('Remarcar')),
-            const PopupMenuItem(value: 'done', child: Text('Concluir')),
-            const PopupMenuItem(value: 'cancel', child: Text('Cancelar')),
-          ],
-        ),
+        title: Text(
+            a.isBlock ? (a.canceledReason ?? 'Bloqueado') : a.clientName,
+            style: Theme.of(context).textTheme.titleMedium),
+        subtitle: Text(
+            a.isBlock
+                ? '🔒 Bloqueado • ${_statusLabel(a.status)}'
+                : '${a.serviceName} • ${_statusLabel(a.status)}',
+            style: a.isBlock
+                ? const TextStyle(fontStyle: FontStyle.italic)
+                : null),
+        trailing: a.isBlock
+            ? PopupMenuButton<String>(
+                onSelected: (v) => _handleAppointmentAction(v, a),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                      value: 'cancel', child: Text('Liberar horário')),
+                ],
+              )
+            : PopupMenuButton<String>(
+                onSelected: (v) => _handleAppointmentAction(v, a),
+                itemBuilder: (_) => [
+                  if (a.status == 'pending')
+                    const PopupMenuItem(
+                        value: 'confirm', child: Text('Confirmar')),
+                  if (a.status == 'pending')
+                    const PopupMenuItem(
+                        value: 'askConfirm',
+                        child: Text('Pedir confirmação no WhatsApp')),
+                  const PopupMenuItem(value: 'edit', child: Text('Remarcar')),
+                  const PopupMenuItem(value: 'done', child: Text('Concluir')),
+                  const PopupMenuItem(value: 'cancel', child: Text('Cancelar')),
+                ],
+              ),
       ),
     );
   }
@@ -411,6 +446,247 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     }
   }
 
+  /// RF-B01: pede confirmação do cliente — abre o WhatsApp com mensagem pronta
+  /// contendo data/hora + link pessoal de confirmação (token HMAC do agendamento).
+  Future<void> _askConfirmationOnWhatsapp(Appointment a) async {
+    final when = DateFormat('dd/MM "às" HH:mm', 'pt_BR').format(a.startsAt);
+    final link = await _confirmationLink(a);
+    final msg = Uri.encodeComponent(
+        'Oi ${a.clientName}! Confirmando teu horário de $when. '
+        'Pode confirmar tua presença aqui? $link 🙂');
+    final phone = a.clientPhone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (!mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Pedir confirmação?'),
+        content: Text(
+            'Vou abrir teu WhatsApp com uma mensagem pra ${a.clientName} confirmar se vem em $when.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Agora não')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Abrir WhatsApp')),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await launchUrl(Uri.parse('https://wa.me/$phone?text=$msg'),
+          mode: LaunchMode.externalApplication);
+    }
+  }
+
+  /// Link público de confirmação: /p/<slug>/confirm/<id>?token=HMAC.
+  /// O slug/token são gerados pela API no endpoint dedicado (RF-B01).
+  Future<String> _confirmationLink(Appointment a) async {
+    try {
+      final api = ApiClient();
+      final res = await api.dio.get('/appointments/${a.id}/confirm-link');
+      return (res.data as Map<String, dynamic>)['link'] as String? ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /// RF-C01: após remarcar, oferece avisar o cliente com a NOVA data/hora.
+  Future<void> _notifyRescheduledOnWhatsapp(Appointment a) async {
+    final api = ApiClient();
+    // busca o agendamento remarcado pra pegar a nova data/hora
+    String whenText = 'o novo horário';
+    try {
+      final res = await api.dio.get('/appointments/${a.id}');
+      final j = (res.data as Map<String, dynamic>)['appointment']
+          as Map<String, dynamic>?;
+      if (j?['starts_at'] != null) {
+        final newStart = DateTime.parse(j!['starts_at'] as String).toLocal();
+        whenText = DateFormat('dd/MM "às" HH:mm', 'pt_BR').format(newStart);
+      }
+    } catch (_) {
+      // segue com texto genérico
+    }
+    if (!mounted) return;
+    final msg = Uri.encodeComponent(
+        'Oi ${a.clientName}! Remarquei teu horário pra $whenText. '
+        'Confirma se esse novo horário funciona pra você? 🙂');
+    final phone = a.clientPhone.replaceAll(RegExp(r'[^0-9]'), '');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Avisar o cliente?'),
+        content: Text(
+            'Vou abrir teu WhatsApp com uma mensagem pro ${a.clientName} com o novo horário ($whenText).'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Não precisa')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Abrir WhatsApp')),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await launchUrl(Uri.parse('https://wa.me/$phone?text=$msg'),
+          mode: LaunchMode.externalApplication);
+    }
+  }
+
+  /// RF-A01..A03: sheet de bloqueio de horário. Cria appointment
+  /// source='block' ocupando o intervalo escolhido do dia focado.
+  Future<void> _showBlockSheet() async {
+    final api = ApiClient();
+    final day = _focusedDay;
+    TimeOfDay start = const TimeOfDay(hour: 12, minute: 0);
+    TimeOfDay end = const TimeOfDay(hour: 13, minute: 0);
+    final reasonCtrl = TextEditingController();
+
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 20,
+          // barra de gestos + teclado (padrão do commit 888d475)
+          bottom: MediaQuery.of(ctx).viewInsets.bottom +
+              MediaQuery.of(ctx).padding.bottom +
+              24,
+        ),
+        child: StatefulBuilder(
+          builder: (ctx, setSheet) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Bloquear horário',
+                  style: Theme.of(ctx).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text(
+                  '${DateFormat('EEEE, d \'de\' MMMM', 'pt_BR').format(day)} — clientes não verão este intervalo.',
+                  style: Theme.of(ctx).textTheme.bodySmall),
+              const SizedBox(height: 16),
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () async {
+                      final t = await showTimePicker(
+                          context: ctx, initialTime: start);
+                      if (t != null) setSheet(() => start = t);
+                    },
+                    child: Text('Início ${start.format(ctx)}'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () async {
+                      final t =
+                          await showTimePicker(context: ctx, initialTime: end);
+                      if (t != null) setSheet(() => end = t);
+                    },
+                    child: Text('Fim ${end.format(ctx)}'),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 12),
+              TextField(
+                controller: reasonCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Motivo (opcional, só você vê)',
+                  hintText: 'ex.: dentista',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                icon: const Icon(Icons.lock_outline),
+                label: const Text('Bloquear'),
+                onPressed: () {
+                  if (start.hour * 60 + start.minute >=
+                      end.hour * 60 + end.minute) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                        content: Text('O fim deve ser depois do início')));
+                    return;
+                  }
+                  Navigator.pop(ctx, true);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    try {
+      // find-or-create do par cliente/serviço técnico do bloqueio
+      final blockIds = await _ensureBlockClientAndService(api);
+      final startDt =
+          DateTime(day.year, day.month, day.day, start.hour, start.minute);
+      final endDt =
+          DateTime(day.year, day.month, day.day, end.hour, end.minute);
+      await api.dio.post('/appointments', data: {
+        'clientId': blockIds['clientId'],
+        'serviceId': blockIds['serviceId'],
+        'startsAt': startDt.toIso8601String(),
+        'endsAt': endDt.toIso8601String(),
+        'source': 'block',
+        if (reasonCtrl.text.trim().isNotEmpty)
+          'canceledReason': reasonCtrl.text.trim(),
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Horário bloqueado 🔒')));
+        await _loadAppointments();
+      }
+    } catch (e) {
+      debugPrint('[agenda] falha ao bloquear: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Não consegui bloquear: $e'),
+            backgroundColor: AppColors.error));
+      }
+    }
+  }
+
+  /// RF-A: o schema exige clientId+serviceId; bloqueio usa par técnico
+  /// reutilizável (cliente '— bloqueio —', serviço 'Bloqueio', preço 0).
+  Future<Map<String, String>> _ensureBlockClientAndService(
+      ApiClient api) async {
+    final clientsRes = await api.dio.get('/clients');
+    final clients = (clientsRes.data['clients'] as List? ?? []);
+    final existingClient = clients.firstWhere(
+      (c) => (c is Map) && c['name'] == '— bloqueio —',
+      orElse: () => null,
+    );
+    String clientId;
+    if (existingClient != null) {
+      clientId = existingClient['id'] as String;
+    } else {
+      final created =
+          await api.dio.post('/clients', data: {'name': '— bloqueio —'});
+      clientId = (created.data['client'] as Map)['id'] as String;
+    }
+
+    final servicesRes = await api.dio.get('/services');
+    final services = (servicesRes.data['services'] as List? ?? []);
+    final existingService = services.firstWhere(
+      (s) => (s is Map) && s['name'] == 'Bloqueio',
+      orElse: () => null,
+    );
+    String serviceId;
+    if (existingService != null) {
+      serviceId = existingService['id'] as String;
+    } else {
+      final created = await api.dio.post('/services',
+          data: {'name': 'Bloqueio', 'duration_min': 60, 'price_cents': 0});
+      serviceId = (created.data['service'] as Map)['id'] as String;
+    }
+    return {'clientId': clientId, 'serviceId': serviceId};
+  }
+
   Future<void> _handleAppointmentAction(String action, Appointment a) async {
     final api = ApiClient();
     try {
@@ -419,7 +695,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           await api.dio
               .patch('/appointments/${a.id}', data: {'status': 'canceled'});
           // fora da caixa: avisa o cliente pelo WhatsApp que ele já tem
-          if (mounted && a.clientPhone.isNotEmpty) {
+          if (mounted && a.clientPhone.isNotEmpty && !a.isBlock) {
             await _notifyCancelOnWhatsapp(a);
           }
           break;
@@ -431,12 +707,20 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           await api.dio
               .patch('/appointments/${a.id}', data: {'status': 'confirmed'});
           break;
+        case 'askConfirm':
+          await _askConfirmationOnWhatsapp(a);
+          return;
         case 'edit':
           // remarcar: abre o wizard reaproveitando cliente+serviço
           if (!mounted) return;
           final changed =
               await context.push<bool>('/booking', extra: {'reschedule': a});
-          if (changed != true) {
+          if (changed == true) {
+            // RF-C01: remarcou — oferece avisar o cliente no WhatsApp
+            if (mounted && a.clientPhone.isNotEmpty) {
+              await _notifyRescheduledOnWhatsapp(a);
+            }
+          } else {
             await _loadAppointments();
           }
           return;
@@ -461,6 +745,12 @@ class Appointment {
   final DateTime startsAt;
   final DateTime endsAt;
   final String status;
+  // RF-A: 'app' | 'public_link' | 'block' — block = bloqueio de horário
+  final String source;
+  // RF-A02: motivo do bloqueio (mesma coluna de canceled_reason)
+  final String? canceledReason;
+
+  bool get isBlock => source == 'block';
 
   Appointment({
     required this.id,
@@ -470,6 +760,8 @@ class Appointment {
     required this.startsAt,
     required this.endsAt,
     required this.status,
+    this.source = 'app',
+    this.canceledReason,
   });
 
   factory Appointment.fromJson(Map<String, dynamic> j) => Appointment(
@@ -480,6 +772,8 @@ class Appointment {
         startsAt: DateTime.parse(j['starts_at'] ?? j['startsAt']).toLocal(),
         endsAt: DateTime.parse(j['ends_at'] ?? j['endsAt']).toLocal(),
         status: j['status'] ?? 'pending',
+        source: j['source'] ?? 'app',
+        canceledReason: j['canceled_reason'] ?? j['canceledReason'],
       );
 }
 
