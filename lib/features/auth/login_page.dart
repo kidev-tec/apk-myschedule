@@ -74,8 +74,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     if (auth.isAuthenticated) {
       await notifier.syncWithBackend();
       if (!context.mounted) return;
-      router.go(
-          await OnboardingStore.isComplete() ? '/agenda' : '/onboarding');
+      router.go(await OnboardingStore.isComplete() ? '/agenda' : '/onboarding');
     }
   }
 

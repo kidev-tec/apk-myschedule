@@ -15,8 +15,7 @@ class GCalService {
     try {
       final resp = await _api.dio.get('/gcal/status');
       final data = resp.data;
-      final connected =
-          data is Map ? data['connected'] == true : false;
+      final connected = data is Map ? data['connected'] == true : false;
       return connected;
     } catch (e) {
       debugPrint('[gcal] status erro: $e');

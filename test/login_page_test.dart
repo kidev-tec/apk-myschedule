@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minha_agenda/core/auth/auth_controller.dart';
 import 'package:minha_agenda/features/auth/login_page.dart';
+
 /// Widget tests da LoginPage.
 ///
 /// O AuthController real toca Firebase/GoogleSignIn no constructor, então
@@ -17,8 +18,8 @@ class _FakeAuthController extends AuthController {
 Widget _wrap({AuthState? authState}) {
   return ProviderScope(
     overrides: [
-      authControllerProvider
-          .overrideWith((ref) => _FakeAuthController(authState ?? const AuthState())),
+      authControllerProvider.overrideWith(
+          (ref) => _FakeAuthController(authState ?? const AuthState())),
     ],
     child: const MaterialApp(home: LoginPage()),
   );
@@ -66,17 +67,14 @@ void main() {
   testWidgets('senha curta → SnackBar pedindo 8 caracteres', (tester) async {
     await tester.pumpWidget(_wrap());
 
-    await tester.enterText(
-        find.widgetWithText(TextField, 'E-mail'), 'a@b.com');
-    await tester.enterText(
-        find.widgetWithText(TextField, 'Senha'), 'curta12');
+    await tester.enterText(find.widgetWithText(TextField, 'E-mail'), 'a@b.com');
+    await tester.enterText(find.widgetWithText(TextField, 'Senha'), 'curta12');
     await tester.ensureVisible(find.text('Entrar'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Entrar'));
     await tester.pump();
 
-    expect(
-        find.text('Senha deve ter pelo menos 8 caracteres'), findsOneWidget);
+    expect(find.text('Senha deve ter pelo menos 8 caracteres'), findsOneWidget);
   });
 
   testWidgets('toggle login ↔ criar conta muda copy da tela', (tester) async {
@@ -92,7 +90,8 @@ void main() {
     expect(find.text('Bem-vinda de volta'), findsNothing);
     // botão principal vira "Criar conta" e o toggle vira "Entrar"
     expect(find.text('Criar conta'), findsOneWidget);
-    expect(find.text('Entrar'), findsOneWidget); // só o toggle (botão virou criar)
+    expect(
+        find.text('Entrar'), findsOneWidget); // só o toggle (botão virou criar)
   });
 
   testWidgets('auth.error do provider aparece na tela', (tester) async {
@@ -117,19 +116,20 @@ void main() {
   testWidgets('toggle olho muda obscureText da senha', (tester) async {
     await tester.pumpWidget(_wrap());
 
-    final senhaField = tester.widget<TextField>(
-        find.widgetWithText(TextField, 'Senha'));
+    final senhaField =
+        tester.widget<TextField>(find.widgetWithText(TextField, 'Senha'));
     expect(senhaField.obscureText, isTrue);
 
     // toca no ícone do olho (suffixIcon)
     await tester.tap(find.byIcon(Icons.visibility));
     await tester.pump();
 
-    final depois = tester.widget<TextField>(
-        find.widgetWithText(TextField, 'Senha'));
+    final depois =
+        tester.widget<TextField>(find.widgetWithText(TextField, 'Senha'));
     expect(depois.obscureText, isFalse);
   });
 }
+
 /// Platform Firebase mínima: só registra o app DEFAULT. Qualquer chamada
 /// de método real retorna vazio — suficiente pra instanciar o controller.
 class _FakeFirebasePlatform extends FirebasePlatform {

@@ -44,7 +44,8 @@ void main() {
       expect(a.status, 'confirmed');
     });
 
-    test('FUSO: ISO com Z é convertido pra horário local (bug 12:00↔09:00)', () {
+    test('FUSO: ISO com Z é convertido pra horário local (bug 12:00↔09:00)',
+        () {
       final a = Appointment.fromJson({
         ...baseJson,
         'starts_at': '2026-09-10T12:00:00.000Z', // 09:00 em America/Sao_Paulo

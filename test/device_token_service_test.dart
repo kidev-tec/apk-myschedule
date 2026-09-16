@@ -36,16 +36,18 @@ void main() {
 
   test('register com 500 devolve false sem crashar', () async {
     final dio = Dio(BaseOptions())
-      ..httpClientAdapter = FakeAdapter(
-          (o) => ResponseBody.fromString('{"e":"x"}', 500));
+      ..httpClientAdapter =
+          FakeAdapter((o) => ResponseBody.fromString('{"e":"x"}', 500));
     final svc = DeviceTokenService(dio: dio);
     expect(await svc.register('T'), isFalse);
   });
 
   test('register com exceção de rede devolve false sem crashar', () async {
-    final dio = Dio(BaseOptions())..httpClientAdapter = FakeAdapter((o) {
-      throw DioException(requestOptions: o, type: DioExceptionType.connectionError);
-    });
+    final dio = Dio(BaseOptions())
+      ..httpClientAdapter = FakeAdapter((o) {
+        throw DioException(
+            requestOptions: o, type: DioExceptionType.connectionError);
+      });
     final svc = DeviceTokenService(dio: dio);
     expect(await svc.register('T'), isFalse);
   });

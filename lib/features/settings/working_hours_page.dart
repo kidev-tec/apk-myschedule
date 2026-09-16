@@ -196,21 +196,23 @@ class _WorkingHoursPageState extends ConsumerState<WorkingHoursPage> {
                                         children: [
                                           Expanded(
                                             child: OutlinedButton(
-                                              onPressed: () =>
-                                                  _pickTime(weekday, range, true),
-                                              child: Text(_fmt(range.startMinute)),
+                                              onPressed: () => _pickTime(
+                                                  weekday, range, true),
+                                              child:
+                                                  Text(_fmt(range.startMinute)),
                                             ),
                                           ),
                                           const Padding(
-                                            padding:
-                                                EdgeInsets.symmetric(horizontal: 8),
+                                            padding: EdgeInsets.symmetric(
+                                                horizontal: 8),
                                             child: Text('às'),
                                           ),
                                           Expanded(
                                             child: OutlinedButton(
                                               onPressed: () => _pickTime(
                                                   weekday, range, false),
-                                              child: Text(_fmt(range.endMinute)),
+                                              child:
+                                                  Text(_fmt(range.endMinute)),
                                             ),
                                           ),
                                         ],

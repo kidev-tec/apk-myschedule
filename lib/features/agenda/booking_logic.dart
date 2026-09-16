@@ -28,8 +28,8 @@ List<DateTime> generateSlots({
       .toList();
 
   for (final wh in dayHours) {
-    var cursor = DateTime(
-        date.year, date.month, date.day, wh.startTime.hour, wh.startTime.minute);
+    var cursor = DateTime(date.year, date.month, date.day, wh.startTime.hour,
+        wh.startTime.minute);
     final end = DateTime(
         date.year, date.month, date.day, wh.endTime.hour, wh.endTime.minute);
 

@@ -47,8 +47,7 @@ void main() {
     expect(find.byIcon(Icons.add), findsWidgets); // appbar + FAB
   });
 
-  testWidgets('ServicesPage: API falha → empty state com CTA',
-      (tester) async {
+  testWidgets('ServicesPage: API falha → empty state com CTA', (tester) async {
     await tester.pumpWidget(_wrap(const ServicesPage()));
     await tester.pump();
     await tester.pumpAndSettle();

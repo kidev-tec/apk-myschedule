@@ -96,8 +96,8 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
                   ),
                 )
               : ListView.builder(
-                  padding: EdgeInsets.fromLTRB(16, 16, 16,
-                      16 + MediaQuery.of(context).padding.bottom),
+                  padding: EdgeInsets.fromLTRB(
+                      16, 16, 16, 16 + MediaQuery.of(context).padding.bottom),
                   itemCount: _services.length,
                   itemBuilder: (_, i) {
                     final s = _services[i];
@@ -106,12 +106,12 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
                       child: ListTile(
                         leading: CircleAvatar(
                           backgroundColor: AppColors.primaryOf(context),
-                          child: const Icon(Icons.content_cut, color: Colors.white),
+                          child: const Icon(Icons.content_cut,
+                              color: Colors.white),
                         ),
                         title: Text(s.name),
                         subtitle: Text(
                             '${s.durationMin} min • ${priceFmt.format(s.priceCents / 100)}'),
-
                         trailing: PopupMenuButton<String>(
                           onSelected: (v) {
                             if (v == 'edit') {
