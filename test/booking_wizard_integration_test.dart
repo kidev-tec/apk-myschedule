@@ -56,26 +56,39 @@ void main() {
 
     final dio = Dio(BaseOptions(baseUrl: 'http://mock.local'));
     adapter = DioAdapter(dio: dio);
-    adapter.onGet('/clients', (s) => s.reply(200, [
-          {'id': 'c1', 'name': 'Ana', 'phone_e164': '+5514999990001'},
-          {'id': 'c2', 'name': 'Beto', 'phone_e164': '+5514999990002'},
-        ]));
-    adapter.onGet('/services', (s) => s.reply(200, [
-          {'id': 's1', 'name': 'Corte', 'duration_min': 60, 'price_cents': 5000},
-        ]));
-    adapter.onGet('/working-hours', (s) => s.reply(200, [
-          {'weekday': 1, 'start_time': '09:00', 'end_time': '12:00'},
-        ]));
-    adapter.onGet('/appointments', (s) => s.reply(200, {
-          'appointments': [
-            {
-              'id': 'a1',
-              'starts_at': '2026-09-14T09:00:00.000Z',
-              'ends_at': '2026-09-14T10:00:00.000Z',
-              'status': 'confirmed',
-            },
-          ],
-        }));
+    adapter.onGet(
+        '/clients',
+        (s) => s.reply(200, [
+              {'id': 'c1', 'name': 'Ana', 'phone_e164': '+5514999990001'},
+              {'id': 'c2', 'name': 'Beto', 'phone_e164': '+5514999990002'},
+            ]));
+    adapter.onGet(
+        '/services',
+        (s) => s.reply(200, [
+              {
+                'id': 's1',
+                'name': 'Corte',
+                'duration_min': 60,
+                'price_cents': 5000
+              },
+            ]));
+    adapter.onGet(
+        '/working-hours',
+        (s) => s.reply(200, [
+              {'weekday': 1, 'start_time': '09:00', 'end_time': '12:00'},
+            ]));
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [
+                {
+                  'id': 'a1',
+                  'starts_at': '2026-09-14T09:00:00.000Z',
+                  'ends_at': '2026-09-14T10:00:00.000Z',
+                  'status': 'confirmed',
+                },
+              ],
+            }));
     adapter.onPost('/appointments', (s) => s.reply(201, {'id': 'new-1'}),
         data: Matchers.any);
 
@@ -102,8 +115,8 @@ void main() {
     expect(find.text('Ana'), findsOneWidget);
     expect(find.text('Beto'), findsOneWidget);
     // botão desabilitado antes da seleção
-    final btn1 = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Continuar'));
+    final btn1 = tester
+        .widget<FilledButton>(find.widgetWithText(FilledButton, 'Continuar'));
     expect(btn1.onPressed, isNull);
 
     await tester.tap(find.text('Ana'));
@@ -119,12 +132,18 @@ void main() {
     await tester.tap(find.text('Continuar'));
     await tester.pumpAndSettle();
 
-    // Step 3: slots — hoje (sexta) não tem working hour (fixture = segunda).
-    // Navega a data 3x com o chevron até segunda-feira 14/09.
+    // Step 3: slots — o dia corrente pode não ter working hour (fixture =
+    // segunda). Navega com o chevron até a PRÓXIMA segunda (dinâmico:
+    // teste data-dependent com "3 cliques" quebrava quando o calendário andou).
     expect(find.text('Escolhe o horário'), findsOneWidget);
-    // estado vazio visível (sem slots hoje) — valida o empty state do step
-    expect(find.text('Sem horários livres neste dia'), findsOneWidget);
-    for (var i = 0; i < 3; i++) {
+    final today = DateTime.now();
+    final daysToMonday = (DateTime.monday - today.weekday) % 7;
+    final taps = daysToMonday == 0 ? 7 : daysToMonday;
+    if (today.weekday != DateTime.monday) {
+      // estado vazio visível (sem slots hoje) — valida o empty state do step
+      expect(find.text('Sem horários livres neste dia'), findsOneWidget);
+    }
+    for (var i = 0; i < taps; i++) {
       await tester.tap(find.byIcon(Icons.chevron_right));
       await tester.pumpAndSettle();
     }
@@ -155,9 +174,12 @@ void main() {
 
   testWidgets('fluxo: POST falha → SnackBar de erro, sem sucesso',
       (tester) async {
-    adapter.onPost('/appointments', (s) => s.reply(409, {
-          'error': 'slot já reservado',
-        }), data: Matchers.any);
+    adapter.onPost(
+        '/appointments',
+        (s) => s.reply(409, {
+              'error': 'slot já reservado',
+            }),
+        data: Matchers.any);
 
     await tester.pumpWidget(_wrapWithApi(api));
     await tester.pump();
@@ -174,9 +196,14 @@ void main() {
     await tester.tap(find.text('Continuar'));
     await tester.pumpAndSettle();
 
-    // navega a data até segunda (hoje sexta não tem slots)
-    expect(find.text('Sem horários livres neste dia'), findsOneWidget);
-    for (var i = 0; i < 3; i++) {
+    // navega a data até a próxima segunda (dinâmico, não data-fixo)
+    final today2 = DateTime.now();
+    final days2 = (DateTime.monday - today2.weekday) % 7;
+    final taps2 = days2 == 0 ? 7 : days2;
+    if (today2.weekday != DateTime.monday) {
+      expect(find.text('Sem horários livres neste dia'), findsOneWidget);
+    }
+    for (var i = 0; i < taps2; i++) {
       await tester.tap(find.byIcon(Icons.chevron_right));
       await tester.pumpAndSettle();
     }

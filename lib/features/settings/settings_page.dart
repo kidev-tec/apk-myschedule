@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'logo_service.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_config.dart';
 import '../../core/segment/segment_preset.dart';
@@ -21,7 +25,52 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   String? _slug;
   bool? _gcalConnected; // null = verificando
   bool _gcalBusy = false;
+  bool _logoBusy = false;
   final _gcal = GCalService();
+  final _logoService = LogoService();
+
+  /// Avatar com a logo atual (se houver) ou ícone padrão.
+  Widget _logoLeading() {
+    final logoUrl = _me?['logo_url'] as String?;
+    if (logoUrl != null && logoUrl.isNotEmpty) {
+      return CircleAvatar(
+        backgroundColor: AppColors.primaryOf(context),
+        backgroundImage: NetworkImage(LogoService.absoluteUrl(logoUrl)),
+      );
+    }
+    return Icon(Icons.storefront, color: AppColors.primaryOf(context));
+  }
+
+  /// Abre o seletor, valida e envia a logo. Mensagens sempre humanas.
+  Future<void> _pickAndUploadLogo() async {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 85,
+    );
+    if (picked == null) return;
+    final mime = picked.mimeType ??
+        (picked.name.toLowerCase().endsWith('.png')
+            ? 'image/png'
+            : 'image/jpeg');
+    setState(() => _logoBusy = true);
+    try {
+      final result = await _logoService.upload(File(picked.path), mime);
+      if (!mounted) return;
+      if (result.logoUrl != null) {
+        await _loadMe();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Logo atualizada!')));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result.errorMessage ?? 'Não deu. Tenta de novo')));
+      }
+    } finally {
+      if (mounted) setState(() => _logoBusy = false);
+    }
+  }
 
   /// Link público do negócio. Em dev usa o host da API; o path /p/<slug> é
   /// servido pela própria API (RF-07).
@@ -227,6 +276,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           const SizedBox(height: 8),
 
+          // Logo do estabelecimento (upload próprio, servido pela API)
+          if (_me != null)
+            Card(
+              child: ListTile(
+                leading: _logoLeading(),
+                title: const Text('Logo do estabelecimento'),
+                subtitle: const Text('Aparece no teu link de agendamento'),
+                trailing: _logoBusy
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.chevron_right),
+                onTap: _logoBusy ? null : _pickAndUploadLogo,
+              ),
+            ),
+          const SizedBox(height: 8),
+
           // Meu negócio (RF-02): gerenciar serviços a qualquer momento —
           // não só no onboarding. O onboarding define o segmento; aqui o
           // prestador mantém o catálogo (criar, editar preço/duração, arquivar).
@@ -247,21 +314,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           if (_me != null)
             Card(
               child: ListTile(
-                leading: Icon(Icons.schedule,
-                    color: AppColors.primaryOf(context)),
-                title: const Text('Horário de funcionamento'),
-                subtitle: const Text('Quando tu atende, dia a dia'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.push('/working-hours'),
-              ),
-            ),
-          const SizedBox(height: 8),
-
-          if (_me != null)
-            Card(
-              child: ListTile(
-                leading: Icon(Icons.schedule,
-                    color: AppColors.primaryOf(context)),
+                leading:
+                    Icon(Icons.schedule, color: AppColors.primaryOf(context)),
                 title: const Text('Horário de funcionamento'),
                 subtitle: const Text('Quando tu atende, dia a dia'),
                 trailing: const Icon(Icons.chevron_right),
@@ -360,8 +414,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ListTile(
                   leading: const Icon(Icons.privacy_tip_outlined),
                   title: const Text('Política de privacidade'),
-                  onTap: () => context
-                      .push('/terms', extra: {'isPrivacy': true}),
+                  onTap: () =>
+                      context.push('/terms', extra: {'isPrivacy': true}),
                 ),
                 ListTile(
                   leading: const Icon(Icons.description_outlined),
