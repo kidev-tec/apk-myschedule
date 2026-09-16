@@ -550,7 +550,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           left: 20,
           right: 20,
           top: 20,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          // barra de gestos + teclado (padrão do commit 888d475)
+          bottom: MediaQuery.of(ctx).viewInsets.bottom +
+              MediaQuery.of(ctx).padding.bottom +
+              24,
         ),
         child: StatefulBuilder(
           builder: (ctx, setSheet) => Column(

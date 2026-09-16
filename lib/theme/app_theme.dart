@@ -89,25 +89,30 @@ ThemeData buildAppTheme([SegmentPreset? preset]) {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: AppColors.primary,
+        backgroundColor: p.primary,
         foregroundColor: Colors.white,
-        // Pressed → Rubi Escuro #9A0835 (site oficial)
-        // Overlay darkening nativo do Material 3 cobre; cor explícita
-        // no pressedState via WidgetStateProperty quando necessário.
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: p.primary,
+        side: BorderSide(color: p.primary),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: AppColors.pinkSoft.withValues(alpha: 0.3),
+      fillColor: p.primary.withValues(alpha: 0.08),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.pinkMid),
+        borderSide: BorderSide(color: p.primary.withValues(alpha: 0.4)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.primary, width: 2),
+        borderSide: BorderSide(color: p.primary, width: 2),
       ),
     ),
   );
