@@ -257,7 +257,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             heroTag: 'btn-block',
             onPressed: _showBlockSheet,
             tooltip: 'Bloquear horário',
-            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+            backgroundColor:
+                Theme.of(context).colorScheme.surfaceContainerHighest,
             child: const Icon(Icons.lock_outline),
           ),
           const SizedBox(height: 12),
@@ -326,9 +327,9 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             ),
           ),
         ),
-        title:
-            Text(a.isBlock ? (a.canceledReason ?? 'Bloqueado') : a.clientName,
-                style: Theme.of(context).textTheme.titleMedium),
+        title: Text(
+            a.isBlock ? (a.canceledReason ?? 'Bloqueado') : a.clientName,
+            style: Theme.of(context).textTheme.titleMedium),
         subtitle: Text(
             a.isBlock
                 ? '🔒 Bloqueado • ${_statusLabel(a.status)}'
@@ -340,7 +341,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             ? PopupMenuButton<String>(
                 onSelected: (v) => _handleAppointmentAction(v, a),
                 itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'cancel', child: Text('Liberar horário')),
+                  PopupMenuItem(
+                      value: 'cancel', child: Text('Liberar horário')),
                 ],
               )
             : PopupMenuButton<String>(
@@ -577,8 +579,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () async {
-                      final t = await showTimePicker(
-                          context: ctx, initialTime: end);
+                      final t =
+                          await showTimePicker(context: ctx, initialTime: end);
                       if (t != null) setSheet(() => end = t);
                     },
                     child: Text('Fim ${end.format(ctx)}'),
@@ -618,8 +620,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     try {
       // find-or-create do par cliente/serviço técnico do bloqueio
       final blockIds = await _ensureBlockClientAndService(api);
-      final startDt = DateTime(
-          day.year, day.month, day.day, start.hour, start.minute);
+      final startDt =
+          DateTime(day.year, day.month, day.day, start.hour, start.minute);
       final endDt =
           DateTime(day.year, day.month, day.day, end.hour, end.minute);
       await api.dio.post('/appointments', data: {
@@ -632,8 +634,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           'canceledReason': reasonCtrl.text.trim(),
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Horário bloqueado 🔒')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Horário bloqueado 🔒')));
         await _loadAppointments();
       }
     } catch (e) {
@@ -675,8 +677,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     if (existingService != null) {
       serviceId = existingService['id'] as String;
     } else {
-      final created = await api.dio
-          .post('/services', data: {'name': 'Bloqueio', 'duration_min': 60, 'price_cents': 0});
+      final created = await api.dio.post('/services',
+          data: {'name': 'Bloqueio', 'duration_min': 60, 'price_cents': 0});
       serviceId = (created.data['service'] as Map)['id'] as String;
     }
     return {'clientId': clientId, 'serviceId': serviceId};
