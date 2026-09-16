@@ -7,13 +7,16 @@ class ApiClient {
   final Dio _dio;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  ApiClient()
+  /// [adapter] permite injetar um mock (http_mock_adapter) nos testes.
+  /// Em prod, não passar nada — usa o network real.
+  ApiClient({HttpClientAdapter? adapter})
       : _dio = Dio(BaseOptions(
           baseUrl: ApiConfig.baseUrl,
           connectTimeout: ApiConfig.timeout,
           receiveTimeout: ApiConfig.timeout,
           headers: {'Content-Type': 'application/json'},
         )) {
+    if (adapter != null) _dio.httpClientAdapter = adapter;
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
         final token = await _storage.read(key: 'access_token');
