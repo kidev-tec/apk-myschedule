@@ -97,6 +97,11 @@ jobs:
           distribution: 'temurin'
           java-version: ${{ env.JAVA_VERSION }}
           cache: 'gradle'
+      - name: Sanitize Gradle properties for CI
+        run: |
+          sed -i -E '/org\.gradle\.java\.home=/d;/android\.aapt2FromMavenOverride=/d' android/gradle.properties
+      - name: Dummy google-services.json (CI)
+        run: test -f android/app/google-services.json || cp android/app/google-services.ci.json android/app/google-services.json
       - name: Get Dependencies
         run: flutter pub get
       - name: Generate Code
