@@ -146,8 +146,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     if (status == 'active') return Colors.green;
     if (status == 'trial') {
       final end = DateTime.tryParse(_me?['trial_ends_at'] as String? ?? '');
-      if (end == null || end.isAfter(DateTime.now()))
+      if (end == null || end.isAfter(DateTime.now())) {
         return AppColors.primaryOf(context);
+      }
     }
     return AppColors.error;
   }
@@ -239,6 +240,32 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     const Text('Adicionar, editar preço e duração, arquivar'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => context.push('/services'),
+              ),
+            ),
+          const SizedBox(height: 8),
+
+          if (_me != null)
+            Card(
+              child: ListTile(
+                leading: Icon(Icons.schedule,
+                    color: AppColors.primaryOf(context)),
+                title: const Text('Horário de funcionamento'),
+                subtitle: const Text('Quando tu atende, dia a dia'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/working-hours'),
+              ),
+            ),
+          const SizedBox(height: 8),
+
+          if (_me != null)
+            Card(
+              child: ListTile(
+                leading: Icon(Icons.schedule,
+                    color: AppColors.primaryOf(context)),
+                title: const Text('Horário de funcionamento'),
+                subtitle: const Text('Quando tu atende, dia a dia'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/working-hours'),
               ),
             ),
           const SizedBox(height: 8),
