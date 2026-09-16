@@ -324,7 +324,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           const SizedBox(height: 8),
 
-
           // Google Calendar (RF-08): espelha agendamentos confirmados na
           // agenda do profissional — lembretes herdados do Calendar dele.
           if (_me != null)
