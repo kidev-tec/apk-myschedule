@@ -46,13 +46,15 @@ void main() {
 
     test('FUSO: ISO com Z é convertido pra horário local (bug 12:00↔09:00)',
         () {
+      const iso = '2026-09-10T12:00:00.000Z';
       final a = Appointment.fromJson({
         ...baseJson,
-        'starts_at': '2026-09-10T12:00:00.000Z', // 09:00 em America/Sao_Paulo
+        'starts_at': iso, // 09:00 em America/Sao_Paulo; 12:00 em UTC (CI)
       });
+      final expected = DateTime.parse(iso).toLocal();
       // toLocal() garante que a exibição usa o fuso do usuário
       expect(a.startsAt.isUtc, isFalse);
-      expect(a.startsAt.hour, 9); // no fuso -03:00 da máquina de teste
+      expect(a.startsAt, expected);
     });
 
     test('campos ausentes não crasham (fallback vazio)', () {
