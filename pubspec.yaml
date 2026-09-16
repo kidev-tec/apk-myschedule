@@ -24,9 +24,10 @@ dependencies:
   google_sign_in: ^6.2.1
   intl: ^0.20.2
   equatable: ^2.0.5
-  path_provider: ^2.1.6
+  path_provider: ^2.1.5
   open_filex: ^4.7.0
-  url_launcher: ^6.3.2
+  # 6.3.2 exige Dart ^3.6; CI ainda usa Flutter 3.24.3 (Dart 3.5.3)
+  url_launcher: '>=6.3.0 <6.3.2'
   flutter_markdown: ^0.7.7+1
 
 dev_dependencies:

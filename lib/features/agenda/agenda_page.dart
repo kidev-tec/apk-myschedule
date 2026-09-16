@@ -45,9 +45,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   @override
   void initState() {
     super.initState();
-    (widget.onCheckUpdate ?? () => UpdateService.check().then((info) {
-          if (info != null && mounted) _updateBanner.value = true;
-        }))();
+    (widget.onCheckUpdate ??
+        () => UpdateService.check().then((info) {
+              if (info != null && mounted) _updateBanner.value = true;
+            }))();
     _loadAppointments();
   }
 

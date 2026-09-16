@@ -20,7 +20,8 @@ void main() {
     return WorkingHour(weekday: weekday, startTime: t(start), endTime: t(end));
   }
 
-  Appointment appt(String startIso, String endIso, [String status = 'confirmed']) {
+  Appointment appt(String startIso, String endIso,
+      [String status = 'confirmed']) {
     return Appointment(
       id: 'a-${startIso.hashCode}',
       startsAt: DateTime.parse(startIso).toLocal(),
@@ -109,7 +110,8 @@ void main() {
         date: segunda,
         workingHours: [wh(1, '09:00', '12:00')],
         appointments: [
-          appt('2026-09-14T09:00:00.000', '2026-09-14T10:00:00.000', 'cancelled'),
+          appt('2026-09-14T09:00:00.000', '2026-09-14T10:00:00.000',
+              'cancelled'),
         ],
         durationMin: 60,
       );
@@ -128,7 +130,8 @@ void main() {
       expect(slots.length, 9);
     });
 
-    test('contorno: appt que só toca na borda (fim == início do slot) libera', () {
+    test('contorno: appt que só toca na borda (fim == início do slot) libera',
+        () {
       // appt 09:00-10:00. Slot das 10:00: appt.endsAt (10:00).isAfter(10:00) = false → sem overlap
       final slots = generateSlots(
         date: segunda,

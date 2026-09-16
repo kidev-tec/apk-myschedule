@@ -85,8 +85,8 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
       body: Column(
         children: [
           Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16,
-              16 + MediaQuery.of(context).padding.bottom),
+            padding: EdgeInsets.fromLTRB(
+                16, 16, 16, 16 + MediaQuery.of(context).padding.bottom),
             child: TextField(
               controller: _searchController,
               decoration: const InputDecoration(

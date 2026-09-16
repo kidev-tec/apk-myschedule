@@ -26,8 +26,7 @@ void main() {
       mocker.close();
     });
 
-    test('fluxo de recuperação: /me 404 → /auth/sync → re-PATCH /me',
-        () async {
+    test('fluxo de recuperação: /me 404 → /auth/sync → re-PATCH /me', () async {
       final dio = Dio(BaseOptions(baseUrl: 'http://api.test'));
       final mocker = DioAdapter(dio: dio);
 
@@ -88,8 +87,7 @@ void main() {
       mocker.close();
     });
 
-    test('propaga falha do /auth/sync quando ele não resolve o 404',
-        () async {
+    test('propaga falha do /auth/sync quando ele não resolve o 404', () async {
       final dio = Dio(BaseOptions(baseUrl: 'http://api.test'));
       final mocker = DioAdapter(dio: dio);
 

@@ -33,7 +33,8 @@ void main() {
   });
 
   File makeFile(int bytes) {
-    final f = File('${tmp.path}/logo.png')..writeAsBytesSync(List.filled(bytes, 1));
+    final f = File('${tmp.path}/logo.png')
+      ..writeAsBytesSync(List.filled(bytes, 1));
     return f;
   }
 
@@ -66,10 +67,10 @@ void main() {
     test('sucesso devolve logoUrl', () async {
       final dio = Dio(BaseOptions())
         ..httpClientAdapter = FakeAdapter((o) => ResponseBody.fromString(
-            '{"logoUrl":"/v1/businesses/x/logo"}', 200,
-            headers: {
-              Headers.contentTypeHeader: [Headers.jsonContentType],
-            }));
+                '{"logoUrl":"/v1/businesses/x/logo"}', 200,
+                headers: {
+                  Headers.contentTypeHeader: [Headers.jsonContentType],
+                }));
       final svc = LogoService(dio: dio);
       final r = await svc.upload(makeFile(100), 'image/png');
       expect(r.logoUrl, '/v1/businesses/x/logo');
@@ -78,10 +79,11 @@ void main() {
 
     test('arquivo grande não chama a API', () async {
       var called = false;
-      final dio = Dio(BaseOptions())..httpClientAdapter = FakeAdapter((o) {
-        called = true;
-        return ResponseBody.fromString('{}', 200);
-      });
+      final dio = Dio(BaseOptions())
+        ..httpClientAdapter = FakeAdapter((o) {
+          called = true;
+          return ResponseBody.fromString('{}', 200);
+        });
       final svc = LogoService(dio: dio);
       final r = await svc.upload(makeFile(3 * 1024 * 1024), 'image/png');
       expect(called, isFalse);
@@ -91,10 +93,10 @@ void main() {
     test('erro 4xx extrai mensagem humana do body', () async {
       final dio = Dio(BaseOptions())
         ..httpClientAdapter = FakeAdapter((o) => ResponseBody.fromString(
-            '{"error":"Imagem inválida"}', 400,
-            headers: {
-              Headers.contentTypeHeader: [Headers.jsonContentType],
-            }));
+                '{"error":"Imagem inválida"}', 400,
+                headers: {
+                  Headers.contentTypeHeader: [Headers.jsonContentType],
+                }));
       final svc = LogoService(dio: dio);
       final r = await svc.upload(makeFile(100), 'image/png');
       expect(r.errorMessage, 'Imagem inválida');
@@ -111,11 +113,10 @@ void main() {
 
     test('200 sem logoUrl no body = falha', () async {
       final dio = Dio(BaseOptions())
-        ..httpClientAdapter = FakeAdapter((o) => ResponseBody.fromString(
-            '{}', 200,
-            headers: {
-              Headers.contentTypeHeader: [Headers.jsonContentType],
-            }));
+        ..httpClientAdapter =
+            FakeAdapter((o) => ResponseBody.fromString('{}', 200, headers: {
+                  Headers.contentTypeHeader: [Headers.jsonContentType],
+                }));
       final svc = LogoService(dio: dio);
       final r = await svc.upload(makeFile(100), 'image/png');
       expect(r.errorMessage, isNotNull);

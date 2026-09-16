@@ -61,8 +61,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       if (result.logoUrl != null) {
         await _loadMe();
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Logo atualizada!')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Logo atualizada!')));
       } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(result.errorMessage ?? 'Não deu. Tenta de novo')));
@@ -314,21 +314,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           if (_me != null)
             Card(
               child: ListTile(
-                leading: Icon(Icons.schedule,
-                    color: AppColors.primaryOf(context)),
-                title: const Text('Horário de funcionamento'),
-                subtitle: const Text('Quando tu atende, dia a dia'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.push('/working-hours'),
-              ),
-            ),
-          const SizedBox(height: 8),
-
-          if (_me != null)
-            Card(
-              child: ListTile(
-                leading: Icon(Icons.schedule,
-                    color: AppColors.primaryOf(context)),
+                leading:
+                    Icon(Icons.schedule, color: AppColors.primaryOf(context)),
                 title: const Text('Horário de funcionamento'),
                 subtitle: const Text('Quando tu atende, dia a dia'),
                 trailing: const Icon(Icons.chevron_right),
@@ -427,8 +414,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ListTile(
                   leading: const Icon(Icons.privacy_tip_outlined),
                   title: const Text('Política de privacidade'),
-                  onTap: () => context
-                      .push('/terms', extra: {'isPrivacy': true}),
+                  onTap: () =>
+                      context.push('/terms', extra: {'isPrivacy': true}),
                 ),
                 ListTile(
                   leading: const Icon(Icons.description_outlined),
