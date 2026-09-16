@@ -63,24 +63,21 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 
   Future<void> _handleGoogleSignIn() async {
-      final notifier = ref.read(authControllerProvider.notifier);
-      await notifier.signInWithGoogle();
-      // Widget pode ter sido desmontado durante o await — verifica mounted ANTES de usar context
-      if (!mounted) return;
-      // Ler via ref.watch em vez de notifier.state (StateNotifier protege .state fora da classe)
-      final auth = ref.read(authControllerProvider);
-      if (auth.isAuthenticated) {
-        await notifier.syncWithBackend();
-        if (!mounted) return;
-        if (await OnboardingStore.isComplete()) {
-          if (!mounted) return;
-          context.go('/agenda');
-        } else {
-          if (!mounted) return;
-          context.go('/onboarding');
-        }
-      }
+    final router = GoRouter.of(context);
+    final notifier = ref.read(authControllerProvider.notifier);
+    await notifier.signInWithGoogle();
+    // ref/context NÃO podem ser usados pós-await (widget pode ter sido
+    // desmontado — crash "Cannot use ref after disposed" visto no A15).
+    // Captura tudo antes; usa os handles capturados depois.
+    if (!context.mounted) return;
+    final auth = ref.read(authControllerProvider);
+    if (auth.isAuthenticated) {
+      await notifier.syncWithBackend();
+      if (!context.mounted) return;
+      router.go(
+          await OnboardingStore.isComplete() ? '/agenda' : '/onboarding');
     }
+  }
 
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(

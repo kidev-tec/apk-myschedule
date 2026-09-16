@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
 import '../../theme/app_theme.dart';
 
@@ -14,6 +15,7 @@ class ServicesPage extends ConsumerStatefulWidget {
 class _ServicesPageState extends ConsumerState<ServicesPage> {
   List<Service> _services = [];
   bool _loading = true;
+  final priceFmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
 
   @override
   void initState() {
@@ -38,7 +40,7 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Excluir serviço?'),
-        content: const Text('\${s.name} será arquivado.'),
+        content: Text('${s.name} será arquivado.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -53,7 +55,7 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
 
     try {
       final api = ApiClient();
-      await api.dio.delete('/services/\${s.id}');
+      await api.dio.delete('/services/${s.id}');
       _loadServices();
     } catch (e) {
       debugPrint('[services] erro: $e');
@@ -107,12 +109,13 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
                           child: const Icon(Icons.content_cut, color: Colors.white),
                         ),
                         title: Text(s.name),
-                        subtitle: const Text(
-                            '\${s.durationMin} min • \${priceFmt.format(s.priceCents / 100)}'),
+                        subtitle: Text(
+                            '${s.durationMin} min • ${priceFmt.format(s.priceCents / 100)}'),
+
                         trailing: PopupMenuButton<String>(
                           onSelected: (v) {
                             if (v == 'edit') {
-                              context.push('/services/\${s.id}/edit');
+                              context.push('/services/${s.id}/edit');
                             }
                             if (v == 'delete') _deleteService(s);
                           },

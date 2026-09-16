@@ -36,6 +36,7 @@ dev_dependencies:
   custom_lint: ^0.6.4
   riverpod_lint: ^2.3.10
   coverage: ^1.15.1
+  firebase_core_platform_interface: ^5.0.0
   network_image_mock: ^2.1.1
   http_mock_adapter: ^0.6.1
 
@@ -48,3 +49,9 @@ flutter:
     - family: Marcellus
       fonts:
         - asset: assets/fonts/Marcellus-Regular.ttf
+
+dependency_overrides:
+  # firebase_core 3.15 resolve platform_interface ^5.4.1 → 5.4.2, que gera canais
+  # pigeon SEM prefixo e o plugin nativo não escuta → channel-error no initializeApp
+  # (splashscreen eterna). 6.0.3 corrige. Ver sessão 15/09/2026.
+  firebase_core_platform_interface: 6.0.3

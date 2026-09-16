@@ -33,7 +33,7 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
     setState(() => _loading = true);
     try {
       final api = ApiClient();
-      final resp = await api.dio.get('/clients/\${widget.clientId}');
+      final resp = await api.dio.get('/clients/${widget.clientId}');
       final data = resp.data;
       _nameController.text = data['name'];
       _phoneController.text = data['phone_e164'] ?? data['phoneE164'] ?? '';
@@ -74,7 +74,7 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
     try {
       final api = ApiClient();
       if (_isEditing) {
-        await api.dio.patch('/clients/\${widget.clientId}', data: data);
+        await api.dio.patch('/clients/${widget.clientId}', data: data);
       } else {
         await api.dio.post('/clients', data: data);
       }
@@ -82,8 +82,8 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Falha: \$e'), backgroundColor: AppColors.error),
+          SnackBar(
+              content: Text('Falha: $e'), backgroundColor: AppColors.error),
         );
       }
     }

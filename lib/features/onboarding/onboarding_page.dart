@@ -1,7 +1,9 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
+import 'onboarding_provisioning.dart';
 import '../../core/segment/segment_preset.dart';
 import '../../core/storage/onboarding_store.dart';
 import '../../theme/app_theme.dart';
@@ -71,6 +73,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     try {
       final api = ApiClient();
 
+      // 0. Garante provisionamento (user+business no Postgres) — ver
+      // onboarding_provisioning.dart. Testado em onboarding_provisioning_test.dart.
+      await ensureProvisioned(api.dio, segmentId: _segment.id);
+
       // 1. Perfil do negócio
       await api.dio.patch('/me', data: {
         'business_name': _businessNameController.text.trim(),
@@ -101,6 +107,20 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
 
       // Marca onboarding completo
       await OnboardingStore.markComplete();
+    } on DioException catch (e) {
+      if (mounted) {
+        // Erros de validação do servidor têm mensagem humana — mostra direto
+        // (ex: 409 "Já existe um estabelecimento com esse nome neste segmento").
+        final serverMsg = e.response?.data is Map
+            ? (e.response?.data['error'] as String?)
+            : null;
+        final msg = serverMsg ?? 'Não consegui salvar tudo. Tenta de novo.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), backgroundColor: AppColors.error),
+        );
+      }
+      if (mounted) setState(() => _finishing = false);
+      return;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -426,8 +446,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               onChanged: (_) => _toggleDay(weekday),
             ),
           ),
+          const SizedBox(width: 12),
           SizedBox(
-            width: 40,
+            width: 44,
             child: Text(
               names[weekday],
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
@@ -436,6 +457,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   ),
             ),
           ),
+          const SizedBox(width: 12),
           Expanded(
             child: enabled
                 ? Column(

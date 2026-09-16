@@ -4,6 +4,11 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
 import '../../theme/app_theme.dart';
+import 'booking_logic.dart' as logic;
+
+/// Provider do ApiClient — DI pra testes de integração sobrescreverem
+/// a rede com http_mock_adapter. Em prod, resolve pro default (network real).
+final wizardApiProvider = Provider<ApiClient>((ref) => ApiClient());
 
 class BookingWizardPage extends ConsumerStatefulWidget {
   const BookingWizardPage({super.key});
@@ -36,7 +41,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
 
   Future<void> _loadAllData() async {
     setState(() => _loading = true);
-    final api = ApiClient();
+    final api = ref.read(wizardApiProvider);
     try {
       final results = await Future.wait([
         api.dio.get('/clients'),
@@ -74,40 +79,12 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
   }
 
   List<DateTime> _generateSlots(DateTime date) {
-    final weekday = date.weekday % 7; // 0=dom..6=sáb
-    final dayHours = _workingHours.where((h) => h.weekday == weekday).toList();
-    if (dayHours.isEmpty) return [];
-
-    final slots = <DateTime>[];
-    final dayAppointments = _existingAppointments
-        .where((a) =>
-            a.startsAt.year == date.year &&
-            a.startsAt.month == date.month &&
-            a.startsAt.day == date.day)
-        .where((a) => a.status == 'pending' || a.status == 'confirmed')
-        .toList();
-
-    for (final wh in dayHours) {
-      var cursor = DateTime(date.year, date.month, date.day, wh.startTime.hour,
-          wh.startTime.minute);
-      final end = DateTime(
-          date.year, date.month, date.day, wh.endTime.hour, wh.endTime.minute);
-
-      while (cursor
-              .add(Duration(minutes: _selectedService?.durationMin ?? 60))
-              .isBefore(end) ||
-          cursor
-              .add(Duration(minutes: _selectedService?.durationMin ?? 60))
-              .isAtSameMomentAs(end)) {
-        final slotEnd =
-            cursor.add(Duration(minutes: _selectedService?.durationMin ?? 60));
-        final overlaps = dayAppointments.any(
-            (a) => a.startsAt.isBefore(slotEnd) && a.endsAt.isAfter(cursor));
-        if (!overlaps) slots.add(cursor);
-        cursor = cursor.add(const Duration(minutes: 15)); // step 15 min
-      }
-    }
-    return slots;
+    return logic.generateSlots(
+      date: date,
+      workingHours: _workingHours,
+      appointments: _existingAppointments,
+      durationMin: _selectedService?.durationMin ?? 60,
+    );
   }
 
   void _nextStep() {
@@ -135,7 +112,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
 
     setState(() => _loading = true);
     try {
-      final api = ApiClient();
+      final api = ref.read(wizardApiProvider);
       await api.dio.post('/appointments', data: {
         'client_id': _selectedClient!.id,
         'service_id': _selectedService!.id,
