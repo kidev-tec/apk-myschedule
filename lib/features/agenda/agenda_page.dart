@@ -383,7 +383,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   /// Ao cancelar, abre o WhatsApp do cliente com mensagem pronta.
   /// O cliente não tem app — WhatsApp é o canal onde ele já está.
   Future<void> _notifyCancelOnWhatsapp(Appointment a) async {
-    final when = DateFormat('dd/MM \"às\" HH:mm', 'pt_BR').format(a.startsAt);
+    final when = DateFormat('dd/MM "às" HH:mm', 'pt_BR').format(a.startsAt);
     final msg = Uri.encodeComponent(
         'Oi ${a.clientName}! Tive que remanejar teu horário de $when. '
         'Me chama pra combinarmos outro horário! 🙂');
