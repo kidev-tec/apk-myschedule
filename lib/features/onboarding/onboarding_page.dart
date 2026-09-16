@@ -446,8 +446,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               onChanged: (_) => _toggleDay(weekday),
             ),
           ),
+          const SizedBox(width: 12),
           SizedBox(
-            width: 40,
+            width: 44,
             child: Text(
               names[weekday],
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
@@ -456,6 +457,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   ),
             ),
           ),
+          const SizedBox(width: 12),
           Expanded(
             child: enabled
                 ? Column(

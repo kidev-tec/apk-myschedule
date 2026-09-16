@@ -63,7 +63,7 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
 
     try {
       final api = ApiClient();
-      await api.dio.delete('/clients/\${c.id}');
+      await api.dio.delete('/clients/${c.id}');
       _loadClients();
     } catch (e) {
       debugPrint('[clients_page] erro: $e');
@@ -140,7 +140,7 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
                       trailing: PopupMenuButton<String>(
                         onSelected: (v) {
                           if (v == 'edit') {
-                            context.push('/clients/\${c.id}/edit');
+                            context.push('/clients/${c.id}/edit');
                           }
                           if (v == 'delete') _deleteClient(c);
                         },
