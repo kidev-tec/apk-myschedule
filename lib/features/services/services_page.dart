@@ -104,7 +104,7 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
                       child: ListTile(
                         leading: CircleAvatar(
                           backgroundColor: AppColors.primaryOf(context),
-                          child: Icon(Icons.content_cut, color: Colors.white),
+                          child: const Icon(Icons.content_cut, color: Colors.white),
                         ),
                         title: Text(s.name),
                         subtitle: const Text(

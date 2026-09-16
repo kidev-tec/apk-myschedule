@@ -146,8 +146,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     if (status == 'active') return Colors.green;
     if (status == 'trial') {
       final end = DateTime.tryParse(_me?['trial_ends_at'] as String? ?? '');
-      if (end == null || end.isAfter(DateTime.now()))
+      if (end == null || end.isAfter(DateTime.now())) {
         return AppColors.primaryOf(context);
+      }
     }
     return AppColors.error;
   }
