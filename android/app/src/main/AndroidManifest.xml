@@ -3,7 +3,7 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <application
         android:usesCleartextTraffic="true"
-        android:label="Minha Agenda"
+        android:label="AGENVA"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

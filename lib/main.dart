@@ -177,7 +177,7 @@ class MinhaAgendaApp extends ConsumerWidget {
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
-      title: 'Minha Agenda',
+      title: 'AGENVA',
       debugShowCheckedModeBanner: false,
       // Conteúdo nunca fica atrás da barra de gestos (home/voltar) nem da
       // status bar — vale pra todas as telas que não usam SafeArea própria.

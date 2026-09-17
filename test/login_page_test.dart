@@ -37,7 +37,7 @@ void main() {
   testWidgets('renderiza título, campos e botões', (tester) async {
     await tester.pumpWidget(_wrap());
 
-    expect(find.text('Minha Agenda'), findsOneWidget);
+    expect(find.text('AGENVA'), findsOneWidget);
     expect(find.text('E-mail'), findsOneWidget);
     expect(find.text('Senha'), findsOneWidget);
     expect(find.text('Entrar'), findsOneWidget);

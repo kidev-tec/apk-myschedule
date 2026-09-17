@@ -144,7 +144,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text('Minha Agenda', style: Theme.of(context).textTheme.titleLarge),
+            Text('AGENVA', style: Theme.of(context).textTheme.titleLarge),
             Text(
               dateFmt.format(_focusedDay).capitalize(),
               style: Theme.of(context)
