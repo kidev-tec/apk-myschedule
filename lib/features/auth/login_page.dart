@@ -111,7 +111,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           size: 40, color: Colors.white),
                     ),
                     const SizedBox(height: 16),
-                    Text('Minha Agenda',
+                    Text('AGENVA',
                         style: Theme.of(context)
                             .textTheme
                             .headlineMedium

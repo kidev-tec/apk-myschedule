@@ -1,6 +1,6 @@
 {
-    "name": "minha_agenda_app",
-    "short_name": "minha_agenda_app",
+    "name": "AGENVA",
+    "short_name": "AGENVA",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

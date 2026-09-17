@@ -11,13 +11,13 @@ class TermsPage extends StatelessWidget {
   final bool isPrivacy;
 
   static const _terms = '''
-**Termos de Uso — Minha Agenda**
+**Termos de Uso — AGENVA**
 
 *Última atualização: 09/09/2026*
 
 ## 1. O que é o app
 
-O Minha Agenda é uma ferramenta para profissionais autônomos
+O AGENVA é uma ferramenta para profissionais autônomos
 (cabeleireiros, barbeiros, dentistas, veterinários e outros) gerenciarem
 sua agenda de atendimentos e receberem agendamentos de clientes por um
 link público.
@@ -72,11 +72,11 @@ profissional responsável pela sua instalação.
 ''';
 
   static const _privacy = '''
-**Política de Privacidade — Minha Agenda**
+**Política de Privacidade — AGENVA**
 
 *Última atualização: 09/09/2026*
 
-Esta política explica quais dados o Minha Agenda coleta, por que, e
+Esta política explica quais dados o AGENVA coleta, por que, e
 quais são os seus direitos pela **LGPD (Lei 13.709/2018)**.
 
 ## 1. Dados que coletamos
@@ -146,7 +146,7 @@ responsáveis.
 
 ## 9. Contato
 
-Encarregado (DPO): suporte da Minha Agenda via WhatsApp.
+Encarregado (DPO): suporte da AGENVA via WhatsApp.
 ''';
 
   @override
