@@ -66,8 +66,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       final start = _view == _AgendaView.semana
           ? _focusedDay.subtract(Duration(days: _focusedDay.weekday % 7))
           : _focusedDay;
-      final windowStart =
-          DateTime(start.year, start.month, start.day);
+      final windowStart = DateTime(start.year, start.month, start.day);
       final days = _view == _AgendaView.semana ? 7 : 1;
       final end = windowStart.add(Duration(days: days));
       final resp = await api.dio.get('/appointments', queryParameters: {
@@ -799,8 +798,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         case 'edit':
           // remarcar: abre o wizard reaproveitando cliente+serviço
           if (!mounted) return;
-          final changed =
-              await context.push<bool>('/agenda/booking', extra: {'reschedule': a});
+          final changed = await context
+              .push<bool>('/agenda/booking', extra: {'reschedule': a});
           if (changed == true) {
             // RF-C01: remarcou — oferece avisar o cliente no WhatsApp
             if (mounted && a.clientPhone.isNotEmpty) {

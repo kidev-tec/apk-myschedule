@@ -17,8 +17,7 @@ import 'package:minha_agenda/features/agenda/agenda_page.dart';
 Widget _wrap(ApiClient api) {
   final router = GoRouter(initialLocation: '/', routes: [
     GoRoute(
-        path: '/',
-        builder: (_, __) => AgendaPage(onCheckUpdate: () async {})),
+        path: '/', builder: (_, __) => AgendaPage(onCheckUpdate: () async {})),
     GoRoute(
         path: '/settings',
         builder: (_, __) => const Scaffold(body: Text('SETTINGS'))),
@@ -67,8 +66,9 @@ void main() {
               'client_name': 'Ana',
               'client_phone': '+5514999990001',
               'service_name': 'Corte',
-              'starts_at':
-                  DateTime.now().add(const Duration(hours: 2)).toIso8601String(),
+              'starts_at': DateTime.now()
+                  .add(const Duration(hours: 2))
+                  .toIso8601String(),
               'ends_at': DateTime.now()
                   .add(const Duration(hours: 2, minutes: 30))
                   .toIso8601String(),
@@ -125,7 +125,8 @@ void main() {
     expect(find.text('Ana'), findsOneWidget);
   });
 
-  testWidgets('MÊS abre o picker com dias e volta pra visão dia', (tester) async {
+  testWidgets('MÊS abre o picker com dias e volta pra visão dia',
+      (tester) async {
     await pumpPage(tester);
     await tester.tap(find.text('Mês'));
     await tester.pumpAndSettle();

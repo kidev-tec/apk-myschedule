@@ -166,7 +166,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     // cópia de segurança junto (usuário leigo às vezes quer colar depois)
     await Clipboard.setData(ClipboardData(text: _publicUrl!));
     await SharePlus.instance.share(
-      ShareParams(text: 'Agende comigo: $_publicUrl', subject: 'Agendamento online'),
+      ShareParams(
+          text: 'Agende comigo: $_publicUrl', subject: 'Agendamento online'),
     );
   }
 

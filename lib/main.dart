@@ -68,6 +68,13 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(
+        // GoException "no routes for location: /" (18/09): algo navega pra
+        // raiz (não existe tela home). Redirect deixa o router decidir via
+        // redirect() acima (login → onboarding/agenda conforme estado).
+        path: '/',
+        redirect: (_, __) => null,
+      ),
+      GoRoute(
         path: '/terms',
         builder: (_, state) {
           final extra = state.extra as Map<String, dynamic>?;
@@ -158,8 +165,7 @@ void main() async {
       // fallback: inicializa manual (debug sem google-services.json)
       await Firebase.initializeApp(
         options: const FirebaseOptions(
-          apiKey: String.fromEnvironment(
-              'FIREBASE_API_KEY',
+          apiKey: String.fromEnvironment('FIREBASE_API_KEY',
               defaultValue: 'AIzaSy...lrRg'),
           appId: String.fromEnvironment('FIREBASE_APP_ID',
               defaultValue: '1:581069825659:android:5b35631cb1d25900a0e4de'),
