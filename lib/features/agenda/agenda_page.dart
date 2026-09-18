@@ -8,6 +8,9 @@ import '../../core/api/paywall_flag.dart';
 import '../../core/update/update_service.dart';
 import '../../theme/app_theme.dart';
 
+/// B6/DI: provider do ApiClient pra agenda — testes sobrescrevem com mock.
+final agendaApiProvider = Provider<ApiClient>((ref) => ApiClient());
+
 class AgendaPage extends ConsumerStatefulWidget {
   const AgendaPage({super.key, this.onCheckUpdate});
 
@@ -22,6 +25,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   DateTime _focusedDay = DateTime.now();
   List<Appointment> _appointments = [];
   bool _loading = true;
+  // B6: visão corrente — dia (default), semana ou mês (via bottom sheet)
+  _AgendaView _view = _AgendaView.dia;
 
   final ValueNotifier<bool> _updateBanner = ValueNotifier(false);
   bool _downloading = false;
@@ -55,12 +60,18 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   Future<void> _loadAppointments() async {
     setState(() => _loading = true);
     try {
-      final api = ApiClient();
-      final start =
-          DateTime(_focusedDay.year, _focusedDay.month, _focusedDay.day);
-      final end = start.add(const Duration(days: 1));
+      final api = ref.read(agendaApiProvider);
+      // B6: janela conforme a visão — dia = 1 dia; semana = dom..sáb da semana
+      // do dia focado (preserva foco ao alternar visões).
+      final start = _view == _AgendaView.semana
+          ? _focusedDay.subtract(Duration(days: _focusedDay.weekday % 7))
+          : _focusedDay;
+      final windowStart =
+          DateTime(start.year, start.month, start.day);
+      final days = _view == _AgendaView.semana ? 7 : 1;
+      final end = windowStart.add(Duration(days: days));
       final resp = await api.dio.get('/appointments', queryParameters: {
-        'from': start.toIso8601String(),
+        'from': windowStart.toIso8601String(),
         'to': end.toIso8601String(),
       });
       final list = resp.data is List
@@ -75,13 +86,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     if (mounted) setState(() => _loading = false);
   }
 
-  void _prevDay() => setState(() {
-        _focusedDay = _focusedDay.subtract(const Duration(days: 1));
-        _loadAppointments();
-      });
-
-  void _nextDay() => setState(() {
-        _focusedDay = _focusedDay.add(const Duration(days: 1));
+  void _shiftWindow(int days) => setState(() {
+        _focusedDay = _focusedDay.add(Duration(days: days));
         _loadAppointments();
       });
 
@@ -89,6 +95,16 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         _focusedDay = DateTime.now();
         _loadAppointments();
       });
+
+  /// B6: alterna dia/semana preservando a data em foco.
+  void _switchView(_AgendaView v) {
+    if (v == _AgendaView.mes) {
+      _openMonthView();
+      return;
+    }
+    setState(() => _view = v);
+    _loadAppointments();
+  }
 
   /// Visão mensal: bottom sheet com grid do mês, marca dias com agendamentos
   /// e permite pular pro dia tocado. Carrega o mês inteiro numa query.
@@ -98,7 +114,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     final monthEnd = DateTime(_focusedDay.year, _focusedDay.month + 1, 1);
     Map<DateTime, List<Appointment>> byDay = {};
     try {
-      final api = ApiClient();
+      final api = ref.read(agendaApiProvider);
       final resp = await api.dio.get('/appointments', queryParameters: {
         'from': monthStart.toIso8601String(),
         'to': monthEnd.toIso8601String(),
@@ -238,13 +254,46 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                         ),
                 ),
                 Expanded(
-                  child: _appointments.isEmpty
-                      ? _buildEmptyState(context)
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _appointments.length,
-                          itemBuilder: (_, i) =>
-                              _buildAppointmentCard(_appointments[i], timeFmt),
+                  child: _loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : Column(
+                          children: [
+                            // B6: seletor Dia / Semana / Mês (foco preservado)
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              child: SegmentedButton<_AgendaView>(
+                                segments: const [
+                                  ButtonSegment(
+                                      value: _AgendaView.dia,
+                                      label: Text('Dia')),
+                                  ButtonSegment(
+                                      value: _AgendaView.semana,
+                                      label: Text('Semana')),
+                                  ButtonSegment(
+                                      value: _AgendaView.mes,
+                                      label: Text('Mês')),
+                                ],
+                                selected: {_view},
+                                onSelectionChanged: (sel) =>
+                                    _switchView(sel.first),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Expanded(
+                              child: _appointments.isEmpty
+                                  ? _buildEmptyState(context)
+                                  : _view == _AgendaView.semana
+                                      ? _buildWeekList(timeFmt)
+                                      : ListView.builder(
+                                          padding: const EdgeInsets.all(16),
+                                          itemCount: _appointments.length,
+                                          itemBuilder: (_, i) =>
+                                              _buildAppointmentCard(
+                                                  _appointments[i], timeFmt),
+                                        ),
+                            ),
+                          ],
                         ),
                 ),
               ],
@@ -264,7 +313,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           const SizedBox(height: 12),
           FloatingActionButton.extended(
             heroTag: 'btn-book',
-            onPressed: () => context.push('/booking'),
+            onPressed: () => context.push('/agenda/booking'),
             icon: const Icon(Icons.add),
             label: const Text('Marcar horário'),
             backgroundColor: AppColors.primaryOf(context),
@@ -373,7 +422,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             IconButton.filled(
-              onPressed: _prevDay,
+              onPressed: () => _shiftWindow(-1),
               icon: const Icon(Icons.chevron_left),
               style: IconButton.styleFrom(
                   backgroundColor: AppColors.softOf(context),
@@ -387,7 +436,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                   ?.copyWith(fontWeight: FontWeight.w600),
             ),
             IconButton.filled(
-              onPressed: _nextDay,
+              onPressed: () => _shiftWindow(1),
               icon: const Icon(Icons.chevron_right),
               style: IconButton.styleFrom(
                   backgroundColor: AppColors.softOf(context),
@@ -396,6 +445,43 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           ],
         ),
       ),
+    );
+  }
+
+  /// B6: lista da semana — agrupa por dia com cabeçalho ("segunda, 15"),
+  /// ordenada por horário dentro de cada dia.
+  Widget _buildWeekList(DateFormat timeFmt) {
+    final dayFmt = DateFormat('EEEE, d', 'pt_BR');
+    final byDay = <DateTime, List<Appointment>>{};
+    for (final a in _appointments) {
+      final d = DateTime(a.startsAt.year, a.startsAt.month, a.startsAt.day);
+      (byDay[d] ??= []).add(a);
+    }
+    final days = byDay.keys.toList()..sort();
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: days.length,
+      itemBuilder: (_, i) {
+        final day = days[i];
+        final items = byDay[day]!
+          ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 4),
+              child: Text(
+                dayFmt.format(day).capitalize(),
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            ...items.map((a) => _buildAppointmentCard(a, timeFmt)),
+          ],
+        );
+      },
     );
   }
 
@@ -482,7 +568,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   /// O slug/token são gerados pela API no endpoint dedicado (RF-B01).
   Future<String> _confirmationLink(Appointment a) async {
     try {
-      final api = ApiClient();
+      final api = ref.read(agendaApiProvider);
       final res = await api.dio.get('/appointments/${a.id}/confirm-link');
       return (res.data as Map<String, dynamic>)['link'] as String? ?? '';
     } catch (_) {
@@ -492,7 +578,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
 
   /// RF-C01: após remarcar, oferece avisar o cliente com a NOVA data/hora.
   Future<void> _notifyRescheduledOnWhatsapp(Appointment a) async {
-    final api = ApiClient();
+    final api = ref.read(agendaApiProvider);
     // busca o agendamento remarcado pra pegar a nova data/hora
     String whenText = 'o novo horário';
     try {
@@ -536,7 +622,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   /// RF-A01..A03: sheet de bloqueio de horário. Cria appointment
   /// source='block' ocupando o intervalo escolhido do dia focado.
   Future<void> _showBlockSheet() async {
-    final api = ApiClient();
+    final api = ref.read(agendaApiProvider);
     final day = _focusedDay;
     TimeOfDay start = const TimeOfDay(hour: 12, minute: 0);
     TimeOfDay end = const TimeOfDay(hour: 13, minute: 0);
@@ -688,7 +774,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   }
 
   Future<void> _handleAppointmentAction(String action, Appointment a) async {
-    final api = ApiClient();
+    final api = ref.read(agendaApiProvider);
     try {
       switch (action) {
         case 'cancel':
@@ -714,7 +800,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           // remarcar: abre o wizard reaproveitando cliente+serviço
           if (!mounted) return;
           final changed =
-              await context.push<bool>('/booking', extra: {'reschedule': a});
+              await context.push<bool>('/agenda/booking', extra: {'reschedule': a});
           if (changed == true) {
             // RF-C01: remarcou — oferece avisar o cliente no WhatsApp
             if (mounted && a.clientPhone.isNotEmpty) {
@@ -921,6 +1007,9 @@ class _MonthPickerState extends State<_MonthPicker> {
     );
   }
 }
+
+/// B6: visões da agenda. `mes` abre o bottom sheet e volta pro `dia`.
+enum _AgendaView { dia, semana, mes }
 
 extension StringExtension on String {
   String capitalize() =>
