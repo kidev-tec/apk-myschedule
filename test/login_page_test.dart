@@ -80,14 +80,14 @@ void main() {
   testWidgets('toggle login ↔ criar conta muda copy da tela', (tester) async {
     await tester.pumpWidget(_wrap());
 
-    expect(find.text('Bem-vinda de volta'), findsOneWidget);
+    expect(find.text('Bem-vindo de volta'), findsOneWidget);
     await tester.ensureVisible(find.text('Criar conta').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Criar conta').last);
     await tester.pump();
 
     expect(find.text('Cria tua conta'), findsOneWidget);
-    expect(find.text('Bem-vinda de volta'), findsNothing);
+    expect(find.text('Bem-vindo de volta'), findsNothing);
     // botão principal vira "Criar conta" e o toggle vira "Entrar"
     expect(find.text('Criar conta'), findsOneWidget);
     expect(

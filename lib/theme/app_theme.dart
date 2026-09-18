@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import '../core/segment/segment_preset.dart';
 
-/// Tema Rubi — tokens extraídos do site oficial da Oficina da Beleza
-/// (ver .planning/tokens.json no repo de planejamento).
-///
-/// Cor dominante do site: Rubi #B51F4D (5 ocorrências).
-/// Pressed state: Rubi Escuro #9A0835.
+/// Tema do AGENVA — default = identidade da MARCA (azul #1E96E8, paleta do
+/// logo, ver DESIGN.md v2 em ~/logo-agenva/). Cor do SEGMENTO entra via
+/// buildAppTheme(preset) após o onboarding.
 class AppColors {
-  static const Color primary = Color(0xFFB51F4D); // Rubi (default beauty)
-  static const Color primaryPressed = Color(0xFF9A0835); // Rubi Escuro
+  // ---- Identidade AGENVA (DESIGN.md v2: paleta extraída do logo) ----
+  static const Color agenvaBlue = Color(0xFF1E96E8); // primária da marca
+  static const Color agenvaNavy = Color(0xFF16325C); // secundária (texto forte)
+  static const Color agenvaSky = Color(0xFF54B7EA); // destaque/badges
+  static const Color agenvaSurface = Color(0xFFF8F9FA); // fundo claro padrão
+
+  static const Color primary = agenvaBlue; // default do PRODUTO (marca AGENVA)
+  static const Color primaryPressed = Color(0xFF1573B5); // azul escuro derivado
   static const Color pinkSoft = Color(0xFFF7E3E9); // Rosa Suave
   static const Color pinkMid = Color(0xFFE8A7BC); // Rosa Médio
   static const Color neutral = Color(0xFF2B2B2B); // Texto principal
@@ -62,7 +66,9 @@ class AppTypography {
 }
 
 ThemeData buildAppTheme([SegmentPreset? preset]) {
-  final p = preset ?? SegmentPresets.beauty;
+  // Default = MARCA AGENVA (azul), não mais o preset beauty — evita o
+  // "flash rosa" nas telas de marca antes do onboarding escolher segmento.
+  final p = preset ?? SegmentPresets.brand;
   final base = ThemeData(
     useMaterial3: true,
     colorScheme: ColorScheme.fromSeed(

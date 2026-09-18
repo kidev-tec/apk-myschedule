@@ -140,18 +140,36 @@ void main() async {
 
   // Initialize Firebase (manual options p/ build de debug sem google-services.json;
   // em release, substituir pelas credenciais reais do projeto)
-  await Firebase.initializeApp(
-    options: const FirebaseOptions(
-      apiKey: String.fromEnvironment('FIREBASE_API_KEY',
-          defaultValue: 'AIzaSyBG9haJTEiv4r9slt2R92_0TZPMtJAlrRg'),
-      appId: String.fromEnvironment('FIREBASE_APP_ID',
-          defaultValue: '1:581069825659:android:5b35631cb1d25900a0e4de'),
-      messagingSenderId: String.fromEnvironment('FIREBASE_SENDER_ID',
-          defaultValue: '581069825659'),
-      projectId: String.fromEnvironment('FIREBASE_PROJECT_ID',
-          defaultValue: 'minha-agenda-6665a'),
-    ),
-  );
+  //
+  // CRÍTICO (18/09): no Android com google-services.json o plugin faz AUTO-INIT
+  // do app [DEFAULT] no arranque do processo — chamar initializeApp(options:)
+  // de novo lança [core/duplicate-app] e o app morre na splash. Fix: tentar
+  // pegar o app default; só inicializa com options se ele ainda não existe
+  // (iOS/build sem google-services).
+  try {
+    await Firebase.initializeApp();
+  } on FirebaseException catch (e) {
+    if (e.code == 'duplicate-app' || e.code == 'no-options') {
+      // auto-init já criou [DEFAULT] com as options do google-services — ok
+      debugPrint('[firebase] app default já inicializado pelo plugin nativo');
+    } else if (const bool.fromEnvironment('dart.product')) {
+      rethrow;
+    } else {
+      // fallback: inicializa manual (debug sem google-services.json)
+      await Firebase.initializeApp(
+        options: const FirebaseOptions(
+          apiKey: String.fromEnvironment('FIREBASE_API_KEY',
+              defaultValue: 'AIzaSy...lrRg'),
+          appId: String.fromEnvironment('FIREBASE_APP_ID',
+              defaultValue: '1:581069825659:android:5b35631cb1d25900a0e4de'),
+          messagingSenderId: String.fromEnvironment('FIREBASE_SENDER_ID',
+              defaultValue: '581069825659'),
+          projectId: String.fromEnvironment('FIREBASE_PROJECT_ID',
+              defaultValue: 'minha-agenda-6665a'),
+        ),
+      );
+    }
+  }
 
   // Ensure email/password auth is enabled (configured in Firebase Console)
   // FirebaseAuth.instance.setLanguageCode('pt-BR');
