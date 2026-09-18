@@ -65,15 +65,16 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   Future<void> _handleGoogleSignIn() async {
     final router = GoRouter.of(context);
     final notifier = ref.read(authControllerProvider.notifier);
+    // Captura mounted ANTES do await — State pode ser disposed durante o await
+    // (app vai pro background pro Google Sign-In). Usar this.mounted (State.mounted)
+    // evita exceção ao acessar context.mounted num State já defunto.
+    final wasMounted = mounted;
     await notifier.signInWithGoogle();
-    // ref/context NÃO podem ser usados pós-await (widget pode ter sido
-    // desmontado — crash "Cannot use ref after disposed" visto no A15).
-    // Captura tudo antes; usa os handles capturados depois.
-    if (!context.mounted) return;
+    if (!wasMounted) return;
     final auth = ref.read(authControllerProvider);
     if (auth.isAuthenticated) {
       await notifier.syncWithBackend();
-      if (!context.mounted) return;
+      if (!mounted) return;
       router.go(await OnboardingStore.isComplete() ? '/agenda' : '/onboarding');
     }
   }

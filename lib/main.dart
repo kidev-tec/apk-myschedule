@@ -26,10 +26,23 @@ import 'theme/app_theme.dart';
 /// Segmento ativo do negócio (persistido; null = beauty default).
 final segmentPresetProvider = StateProvider<SegmentPreset?>((ref) => null);
 
+/// FutureProvider que carrega o segmento do negócio UMA VEZ no bootstrap.
+/// Usado no main() para aguardar o tema ANTES de runApp — elimina flash de cor errada.
+final segmentBootstrapProvider = FutureProvider<SegmentPreset?>((ref) async {
+  try {
+    final dio = ApiClient().dio;
+    final r = await dio.get('/me');
+    final id = r.data['business_type'] as String?;
+    debugPrint('[tema bootstrap] GET /me → business_type=$id');
+    if (id != null) return SegmentPreset.byId(id);
+  } catch (e) {
+    debugPrint('[tema bootstrap] falhou: $e');
+  }
+  return null; // default beauty
+});
+
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authControllerProvider);
-
-  bool segmentLoaded = false;
 
   return GoRouter(
     initialLocation: '/login',
@@ -48,20 +61,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         // Onboarding só na PRIMEIRA vez — flag persistida sobrevive a restart
         final done = await OnboardingStore.isComplete();
         return done ? '/agenda' : '/onboarding';
-      }
-
-      // carrega o segmento do negócio uma vez por sessão (tema global)
-      if (isAuthenticated && !segmentLoaded) {
-        segmentLoaded = true;
-        // fire-and-forget: tema default até chegar
-        ApiClient().dio.get('/me').then((r) {
-          final id = r.data['business_type'] as String?;
-          debugPrint('[tema] GET /me → business_type=$id');
-          if (id != null) {
-            ref.read(segmentPresetProvider.notifier).state =
-                SegmentPreset.byId(id);
-          }
-        }).catchError((_) {});
       }
 
       return null;
@@ -138,12 +137,11 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('pt_BR', null);
 
-  // Initialize Firebase (manual options p/ build de debug sem google-services.json;
-  // em release, substituir pelas credenciais reais do projeto)
+  // Initialize Firebase
   await Firebase.initializeApp(
     options: const FirebaseOptions(
       apiKey: String.fromEnvironment('FIREBASE_API_KEY',
-          defaultValue: 'AIzaSyBG9haJTEiv4r9slt2R92_0TZPMtJAlrRg'),
+          defaultValue: '«redacted:AIza…»'),
       appId: String.fromEnvironment('FIREBASE_APP_ID',
           defaultValue: '1:581069825659:android:5b35631cb1d25900a0e4de'),
       messagingSenderId: String.fromEnvironment('FIREBASE_SENDER_ID',
@@ -153,11 +151,7 @@ void main() async {
     ),
   );
 
-  // Ensure email/password auth is enabled (configured in Firebase Console)
-  // FirebaseAuth.instance.setLanguageCode('pt-BR');
-
-  // Push (FCM): handler de background + registro do token na API.
-  // Best-effort — falha não impede o app de abrir.
+  // Push (FCM)
   FirebaseMessaging.onBackgroundMessage(
       PushInitService.firebaseMessagingBackgroundHandler);
   PushInitService().init(
@@ -166,7 +160,17 @@ void main() async {
     },
   );
 
-  runApp(const ProviderScope(child: MinhaAgendaApp()));
+  // Bootstrap do tema: carrega segmento ANTES de runApp pra evitar flash rosa
+  final container = ProviderContainer();
+  final segment = await container.read(segmentBootstrapProvider.future);
+  if (segment != null) {
+      container.read(segmentPresetProvider.notifier).state = segment;
+      debugPrint('[tema bootstrap] segmento aplicado: ${segment.id} (0x${segment.primary.toARGB32().toRadixString(16)})');
+    } else {
+      debugPrint('[tema bootstrap] usando default beauty');
+    }
+
+  runApp(UncontrolledProviderScope(container: container, child: const MinhaAgendaApp()));
 }
 
 class MinhaAgendaApp extends ConsumerWidget {

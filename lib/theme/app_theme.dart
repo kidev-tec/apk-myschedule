@@ -9,8 +9,6 @@ import '../core/segment/segment_preset.dart';
 class AppColors {
   static const Color primary = Color(0xFFB51F4D); // Rubi (default beauty)
   static const Color primaryPressed = Color(0xFF9A0835); // Rubi Escuro
-  static const Color pinkSoft = Color(0xFFF7E3E9); // Rosa Suave
-  static const Color pinkMid = Color(0xFFE8A7BC); // Rosa Médio
   static const Color neutral = Color(0xFF2B2B2B); // Texto principal
   static const Color neutralDark = Color(0xFF1A1A1A); // Fundo escuro
   static const Color surface = Color(0xFFFFFFFF);
@@ -25,11 +23,11 @@ class AppColors {
   static Color primaryOf(BuildContext context) =>
       Theme.of(context).colorScheme.primary;
 
-  /// Tom suave (container) derivado do primary ativo — substitui pinkSoft.
+  /// Tom suave (container) derivado do primary ativo.
   static Color softOf(BuildContext context) =>
       Theme.of(context).colorScheme.primary.withValues(alpha: 0.12);
 
-  /// Tom médio derivado do primary ativo — substitui pinkMid.
+  /// Tom médio derivado do primary ativo.
   static Color midOf(BuildContext context) =>
       Theme.of(context).colorScheme.primary.withValues(alpha: 0.45);
 }

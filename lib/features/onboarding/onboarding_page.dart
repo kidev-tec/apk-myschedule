@@ -201,26 +201,26 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         child: Column(
           children: [
             // Progress indicator
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Row(
-                children: List.generate(
-                  3,
-                  (i) => Expanded(
-                    child: Container(
-                      height: 4,
-                      margin: EdgeInsets.only(right: i < 2 ? 8 : 0),
-                      decoration: BoxDecoration(
-                        color: i <= _currentStep
-                            ? _segment.primary
-                            : _segment.secondary,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+                        Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Row(
+                            children: List.generate(
+                              3,
+                              (i) => Expanded(
+                                child: Container(
+                                  height: 4,
+                                  margin: EdgeInsets.only(right: i < 2 ? 8 : 0),
+                                  decoration: BoxDecoration(
+                                    color: i <= _currentStep
+                                          ? _segment.primary
+                                          : _segment.primary.withValues(alpha: 0.25),
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
             // Pages
             Expanded(
               child: PageView(
