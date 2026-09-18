@@ -325,6 +325,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
+    // B6: mensagem de vazio contextual por visão
+    final title = _view == _AgendaView.semana
+        ? 'Nada agendado pra semana'
+        : 'Nada agendado pra hoje';
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -335,7 +339,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                 size: 80, color: AppColors.midOf(context)),
             const SizedBox(height: 16),
             Text(
-              'Nada agendado pra hoje',
+              title,
               style: Theme.of(context).textTheme.headlineMedium,
               textAlign: TextAlign.center,
             ),
