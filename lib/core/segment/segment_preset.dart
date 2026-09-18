@@ -146,4 +146,18 @@ class SegmentPreset {
 /// Alias estático para defaults legíveis (usado em buildAppTheme).
 class SegmentPresets {
   static SegmentPreset get beauty => SegmentPreset.byId('beauty');
+
+  /// Tema da MARCA AGENVA (DESIGN.md v2 — paleta do logo). É o default do
+  /// app antes do usuário escolher segmento: splash, login e onboarding
+  /// passo 0 usam o azul da marca; dentro da agenda vence o preset do
+  /// segmento (decisão multi-segmento 09/09).
+  static const SegmentPreset brand = SegmentPreset(
+    id: '__brand__',
+    label: 'AGENVA',
+    icon: Icons.event_available,
+    primary: Color(0xFF1E96E8), // agenva-blue
+    primaryPressed: Color(0xFF1573B5), // derivado escuro
+    secondary: Color(0xFF54B7EA), // agenva-sky
+    suggestedServices: [],
+  );
 }
