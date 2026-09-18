@@ -134,6 +134,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     if (mounted) setState(() => _loading = false);
 
     if (!mounted) return;
+    // B6: o mês tem SEMPRE os dias visíveis (dots indicam agendamentos),
+    // então não usa empty state textual — o picker já é a "mensagem" visual.
     final picked = await showModalBottomSheet<DateTime>(
       context: context,
       isScrollControlled: true,
@@ -175,11 +177,9 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             tooltip: 'Hoje',
             onPressed: _today,
           ),
-          IconButton(
-            icon: const Icon(Icons.calendar_month),
-            tooltip: 'Agenda completa (mês)',
-            onPressed: _openMonthView,
-          ),
+          // B6: botão de mês no AppBar removido — redundante com o seletor
+          // Dia/Semana/Mês (feedback Rafael 18/09). O "Mês" do seletor abre
+          // o mesmo bottom sheet.
           IconButton(
             icon: const Icon(Icons.settings),
             tooltip: 'Configurações',
