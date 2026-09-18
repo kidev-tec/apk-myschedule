@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import 'onboarding_provisioning.dart';
+import '../../main.dart' show segmentPresetProvider;
 import '../../core/segment/segment_preset.dart';
 import '../../core/storage/onboarding_store.dart';
 import '../../theme/app_theme.dart';
@@ -27,7 +28,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   int _currentStep = 0;
   bool _finishing = false;
   SegmentPreset _segment = SegmentPresets.beauty;
-
   final _businessNameController = TextEditingController();
   final _serviceNameController = TextEditingController();
   final _serviceDurationController = TextEditingController(text: '60');
@@ -163,14 +163,15 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           _showError('Qual serviço tu oferece?');
           return false;
         }
+        // B3: mesma regra da API — 15..480, múltiplo de 15
         final dur = int.tryParse(_serviceDurationController.text);
-        if (dur == null || dur < 5 || dur > 600 || dur % 5 != 0) {
-          _showError('Duração entre 5 e 600 minutos, de 5 em 5');
+        if (dur == null || dur < 15 || dur > 480 || dur % 15 != 0) {
+          _showError('Duração entre 15 e 480 minutos, de 15 em 15');
           return false;
         }
         final price =
             double.tryParse(_servicePriceController.text.replaceAll(',', '.'));
-        if (price == null || price <= 0) {
+        if (price == null || price < 0) {
           _showError('Preço inválido — usa números, ex: 80,00');
           return false;
         }
@@ -192,6 +193,15 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: AppColors.error),
     );
+  }
+
+  /// B7: "Pular" no passo 2 — cria o serviço genérico "Atendimento"
+  /// (60 min, R$ 0) e avança. Leigo nunca fica travado sem serviço.
+  void _skipService() {
+    _serviceNameController.text = 'Atendimento';
+    _serviceDurationController.text = '60';
+    _servicePriceController.text = '0,00';
+    _validateCurrentStep();
   }
 
   @override
@@ -249,6 +259,16 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                     ),
                     const SizedBox(width: 16),
                   ],
+                  if (_currentStep == 2) ...[
+                    // B7: pular cria o serviço genérico — leigo nunca travado
+                    Expanded(
+                      child: TextButton(
+                        onPressed: _finishing ? null : _skipService,
+                        child: const Text('Pular'),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                  ],
                   Expanded(
                     child: FilledButton(
                       onPressed: _finishing ? null : _validateCurrentStep,
@@ -301,7 +321,12 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                 _SegmentCard(
                   preset: s,
                   selected: _segment.id == s.id,
-                  onTap: () => setState(() => _segment = s),
+                  onTap: () {
+                    setState(() => _segment = s);
+                    // Tema ao vivo: o form inteiro adota a paleta do
+                    // segmento já no onboarding (não só pós-conclusão).
+                    ref.read(segmentPresetProvider.notifier).state = s;
+                  },
                 ),
             ],
           ),
@@ -351,8 +376,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           Text('Teu primeiro serviço',
               style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 8),
+          // B7/B14: copy exata — deixa claro que pode adicionar mais depois
+          // (leigo não trava com medo de "só 1 serviço pra sempre").
           Text(
-            'O que tu oferece? Ex: Corte, Design de sobrancelha, Alongamento...',
+            'Cadastre seu primeiro serviço — você pode adicionar quantos quiser depois',
             style: Theme.of(context)
                 .textTheme
                 .bodyMedium
