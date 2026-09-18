@@ -18,6 +18,7 @@ on:
 env:
   FLUTTER_VERSION: '3.27.1'
   JAVA_VERSION: '21'
+  GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
 
 jobs:
   build-android-release:
@@ -44,6 +45,11 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
           cache: true
+
+      - name: Write google-services.json from secret
+        if: env.GOOGLE_SERVICES_JSON != ''
+        run: |
+          echo "${{ secrets.GOOGLE_SERVICES_JSON }}" > android/app/google-services.json
 
       - name: Install dependencies
         run: flutter pub get
