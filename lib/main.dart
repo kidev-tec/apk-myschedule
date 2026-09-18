@@ -137,20 +137,6 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('pt_BR', null);
 
-  // Initialize Firebase
-  await Firebase.initializeApp(
-    options: const FirebaseOptions(
-      apiKey: String.fromEnvironment('FIREBASE_API_KEY',
-          defaultValue: '«redacted:AIza…»'),
-      appId: String.fromEnvironment('FIREBASE_APP_ID',
-          defaultValue: '1:581069825659:android:5b35631cb1d25900a0e4de'),
-      messagingSenderId: String.fromEnvironment('FIREBASE_SENDER_ID',
-          defaultValue: '581069825659'),
-      projectId: String.fromEnvironment('FIREBASE_PROJECT_ID',
-          defaultValue: 'minha-agenda-6665a'),
-    ),
-  );
-
   // Push (FCM)
   FirebaseMessaging.onBackgroundMessage(
       PushInitService.firebaseMessagingBackgroundHandler);
