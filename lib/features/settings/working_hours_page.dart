@@ -163,16 +163,16 @@ class _WorkingHoursPageState extends ConsumerState<WorkingHoursPage> {
               padding: const EdgeInsets.all(16),
               itemCount: 7,
               itemBuilder: (_, weekday) {
-                final enabled = _hours[weekday]!.isNotEmpty;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      Switch(
-                        value: enabled,
-                        activeThumbColor: AppColors.primaryOf(context),
-                        onChanged: (_) => _toggleDay(weekday),
-                      ),
+                              final enabled = _hours[weekday]!.isNotEmpty;
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Row(
+                                  children: [
+                                    Switch(
+                                      value: enabled,
+                                      thumbColor: WidgetStatePropertyAll(AppColors.primaryOf(context)),
+                                      onChanged: (_) => _toggleDay(weekday),
+                                    ),
                       const SizedBox(width: 12),
                       SizedBox(
                         width: 44,

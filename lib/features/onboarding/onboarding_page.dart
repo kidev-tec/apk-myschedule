@@ -434,18 +434,18 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final enabled = (_workingHours[weekday] ?? []).isNotEmpty;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 48,
-            child: Switch(
-              value: enabled,
-              activeThumbColor: AppColors.primaryOf(context),
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              onChanged: (_) => _toggleDay(weekday),
-            ),
-          ),
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 48,
+                child: Switch(
+                  value: enabled,
+                  thumbColor: WidgetStatePropertyAll(AppColors.primaryOf(context)),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  onChanged: (_) => _toggleDay(weekday),
+                ),
+              ),
           const SizedBox(width: 12),
           SizedBox(
             width: 44,
