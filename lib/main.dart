@@ -164,11 +164,11 @@ void main() async {
   final container = ProviderContainer();
   final segment = await container.read(segmentBootstrapProvider.future);
   if (segment != null) {
-      container.read(segmentPresetProvider.notifier).state = segment;
-      debugPrint('[tema bootstrap] segmento aplicado: ${segment.id} (0x${segment.primary.toARGB32().toRadixString(16)})');
-    } else {
-      debugPrint('[tema bootstrap] usando default beauty');
-    }
+        container.read(segmentPresetProvider.notifier).state = segment;
+        debugPrint('[tema bootstrap] segmento aplicado: ${segment.id} (0x${segment.primary.value.toRadixString(16)})');
+      } else {
+        debugPrint('[tema bootstrap] usando default beauty');
+      }
 
   runApp(UncontrolledProviderScope(container: container, child: const MinhaAgendaApp()));
 }
