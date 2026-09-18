@@ -11,13 +11,15 @@ if ! flutter analyze 2>&1 | grep -q 'No issues found'; then
 fi
 
 echo '🔍 Format check (dart format)...'
-UNFORMATTED=$(dart format --output=none --set-exit-if-changed lib/ test/ 2>/dev/null; echo $?)
-if [ "$UNFORMATTED" != "0" ]; then
+# Fix 18/09: antes capturava stdout+exit code juntos na mesma variável
+# ($(cmd; echo $?) produz string multilinha != "0" sempre → gate travava
+# commit válido). Agora checa o exit code direto no if.
+if ! dart format --output=none --set-exit-if-changed lib/ test/ > /dev/null 2>&1; then
   echo '❌ Código não formatado — rode: dart format lib/ test/'
   exit 1
 fi
 
-echo '🔍 Tests com coverage 100%...'
+echo '🔍 Tests...'
 OUTPUT=$(flutter test --coverage 2>&1)
 STATUS=$?
 echo "$OUTPUT" | tail -2
@@ -26,15 +28,37 @@ if [ "$STATUS" -ne 0 ]; then
   exit 1
 fi
 
-# Coverage 100% via lcov (LH/LF por arquivo — soma global)
-python3 - <<'EOF' || { echo '❌ Coverage not 100%'; exit 1; }
-total=found=0
+# B13 relaxada (decisão Rafael 18/09): metas por camada no MVP.
+#  - arquivos 100% cobertos devem PERMANECER 100% (não deixar degradar)
+#  - gate duro checa que a cobertura global não caiu abaixo do piso
+python3 - <<'EOF' || { echo '❌ Coverage abaixo do piso da BARRA'; exit 1; }
+import re
+files = {}
+cur = None
 for line in open('coverage/lcov.info'):
-    if line.startswith('LF:'): found += int(line.split(':')[1])
-    if line.startswith('LH:'): total += int(line.split(':')[1])
-pct = 100 * total / max(found, 1)
-print(f'   lines: {pct:.1f}%')
-exit(0 if pct >= 100.0 else 1)
+    if line.startswith('SF:'): cur = line.strip()[3:]
+    elif line.startswith('LF:'): lf = int(line.split(':')[1])
+    elif line.startswith('LH:'):
+        lh = int(line.split(':')[1])
+        files[cur] = (lh, lf)
+pct = lambda v: 100 * v[0] / max(v[1], 1)
+overall = 100 * sum(v[0] for v in files.values()) / max(sum(v[1] for v in files.values()), 1)
+print(f'   lines global: {overall:.1f}%')
+FLOOR = 46.7  # piso atual — só sobe, nunca desce (caminho: 100% core, ≥60% UI)
+if overall + 0.05 < FLOOR:
+    print(f'   ❌ global {overall:.1f}% < piso {FLOOR}%')
+    exit(1)
+# arquivos que já foram 100% não podem degradar
+ALWAYS_100 = ['lib/core/segment/segment_preset.dart', 'lib/theme/app_theme.dart',
+              'lib/features/settings/device_token_service.dart',
+              'lib/features/settings/logo_service.dart',
+              'lib/features/onboarding/onboarding_provisioning.dart']
+for f in ALWAYS_100:
+    v = files.get(f)
+    if v and pct(v) < 100.0:
+        print(f'   ❌ {f} era 100% e caiu pra {pct(v):.1f}%')
+        exit(1)
+print('   ✅ piso respeitado; meta: core 100% + UI ≥60%')
 EOF
 
 echo '🔍 Secret scan...'
