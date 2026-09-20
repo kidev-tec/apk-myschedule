@@ -151,4 +151,47 @@ void main() {
     expect(find.text('Semana'), findsOneWidget);
     expect(find.text('Mês'), findsOneWidget);
   });
+
+  testWidgets('botão Hoje some quando já estás em hoje, volta ao navegar',
+      (tester) async {
+    await pumpPage(tester);
+    // em hoje: sem caminho redundante (1 ação dominante por tela)
+    expect(find.byTooltip('Hoje'), findsNothing);
+
+    // navega → Hoje volta como atalho pra voltar
+    await tester.tap(find.byIcon(Icons.chevron_right));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Hoje'), findsOneWidget);
+
+    // toca Hoje → volta pro dia corrente e some de novo
+    await tester.tap(find.byTooltip('Hoje'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Hoje'), findsNothing);
+  });
+
+  testWidgets('picker do mês vazio mostra "Nada agendado neste mês"',
+      (tester) async {
+    // nenhum evento no mês
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [],
+            }),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+
+    await pumpPage(tester);
+    await tester.tap(find.text('Mês'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nada agendado neste mês'), findsOneWidget);
+  });
+
+  testWidgets('picker do mês COM eventos não mostra texto de vazio',
+      (tester) async {
+    await pumpPage(tester);
+    await tester.tap(find.text('Mês'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nada agendado neste mês'), findsNothing);
+  });
 }

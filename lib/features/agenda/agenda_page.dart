@@ -95,6 +95,13 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         _loadAppointments();
       });
 
+  bool get _isToday {
+    final now = DateTime.now();
+    return _focusedDay.year == now.year &&
+        _focusedDay.month == now.month &&
+        _focusedDay.day == now.day;
+  }
+
   /// B6: alterna dia/semana preservando a data em foco.
   void _switchView(_AgendaView v) {
     if (v == _AgendaView.mes) {
@@ -172,11 +179,14 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.today),
-            tooltip: 'Hoje',
-            onPressed: _today,
-          ),
+          // "Hoje" só aparece quando estás deslocado do dia corrente —
+          // em hoje seria um 3º caminho redundante (1 ação dominante por tela).
+          if (!_isToday)
+            IconButton(
+              icon: const Icon(Icons.today),
+              tooltip: 'Hoje',
+              onPressed: _today,
+            ),
           // B6: botão de mês no AppBar removido — redundante com o seletor
           // Dia/Semana/Mês (feedback Rafael 18/09). O "Mês" do seletor abre
           // o mesmo bottom sheet.
@@ -901,6 +911,9 @@ class _MonthPickerState extends State<_MonthPicker> {
     final sel0 = DateTime(widget.selectedDay.year, widget.selectedDay.month,
         widget.selectedDay.day);
 
+    final hasAnyEvent =
+        widget.eventsByDay.values.any((list) => list.isNotEmpty);
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
@@ -923,6 +936,13 @@ class _MonthPickerState extends State<_MonthPicker> {
                     onPressed: () => _shiftMonth(1)),
               ],
             ),
+            if (!hasAnyEvent) ...[
+              const SizedBox(height: 8),
+              // Empty state do mês: texto discreto só quando NENHUM dia tem dot
+              Text('Nada agendado neste mês',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.neutral, fontStyle: FontStyle.italic)),
+            ],
             const SizedBox(height: 8),
             Row(
               children: _weekdays
