@@ -219,4 +219,112 @@ void main() {
     expect(find.text('PAGINA AGENDA'), findsNothing);
     expect(find.textContaining('Falha'), findsOneWidget);
   });
+
+  testWidgets('busca filtra clientes por nome', (tester) async {
+    await tester.pumpWidget(_wrapWithApi(api));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Buscar cliente'), 'Ana');
+    await tester.pump();
+
+    // Card do cliente Ana (Text dentro de Card, não o EditableText da busca)
+    expect(_clientCard(tester, 'Ana'), findsOneWidget);
+    expect(_clientCard(tester, 'Beto'), findsNothing);
+  });
+
+  testWidgets('busca vazia mostra botão Adicionar cliente → cria e seleciona',
+      (tester) async {
+    await tester.pumpWidget(_wrapWithApi(api));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pumpAndSettle();
+
+    // busca sem resultado → empty state com botão de criar
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Buscar cliente'), 'Zé Novato');
+    await tester.pump();
+    expect(find.text('Nenhum cliente encontrado'), findsOneWidget);
+    expect(find.text('Adicionar cliente'), findsOneWidget);
+
+    adapter.onPost(
+        '/clients',
+        (s) => s.reply(201,
+            {'id': 'c-novo', 'name': 'Zé Novato', 'phone_e164': '+5514999977'}),
+        data: Matchers.any);
+
+    await tester.tap(find.text('Adicionar cliente'));
+    await tester.pumpAndSettle();
+
+    // bottom sheet: preenche nome + telefone e salva
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Nome *'), 'Zé Novato');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'WhatsApp *'), '+5514999977');
+    await tester.tap(find.text('Criar e usar'));
+    await tester.pumpAndSettle();
+
+    // sheet fechou e o cliente novo JÁ tá selecionado no wizard
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(_clientCard(tester, 'Zé Novato'), findsOneWidget);
+    // Continuar habilitado = cliente selecionado
+    final btn = tester
+        .widget<FilledButton>(find.widgetWithText(FilledButton, 'Continuar'));
+    expect(btn.onPressed, isNotNull);
+  });
+
+  testWidgets(
+      'criar cliente com telefone duplicado (409) → oferece selecionar existente',
+      (tester) async {
+    await tester.pumpWidget(_wrapWithApi(api));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Buscar cliente'), 'Zé Novato');
+    await tester.pump();
+    await tester.tap(find.text('Adicionar cliente'));
+    await tester.pumpAndSettle();
+
+    adapter.onPost(
+        '/clients',
+        (s) => s.reply(409, {
+              'error': 'Já existe um cliente com esse telefone',
+              'existing': {
+                'id': 'c1',
+                'name': 'Ana',
+                'phone_e164': '+551****0001'
+              },
+            }),
+        data: Matchers.any);
+
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Nome *'), 'Zé Novato');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'WhatsApp *'), '+551****0001');
+    await tester.tap(find.text('Criar e usar'));
+    await tester.pumpAndSettle();
+
+    // 409 → oferece o cliente existente; tocar nele seleciona e fecha
+    expect(find.text('Já existe um cliente com esse telefone'), findsOneWidget);
+    await tester.tap(find.text('Usar Ana'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(BottomSheet), findsNothing);
+    // Ana aparece no card E no botão "Usar Ana" sumiu; o card conta 1x
+    expect(_clientCard(tester, 'Ana'), findsWidgets);
+    final btn = tester
+        .widget<FilledButton>(find.widgetWithText(FilledButton, 'Continuar'));
+    expect(btn.onPressed, isNotNull);
+  });
+}
+
+Finder _clientCard(WidgetTester tester, String name) {
+  return find.descendant(
+    of: find.byType(Card),
+    matching: find.text(name),
+  );
 }
