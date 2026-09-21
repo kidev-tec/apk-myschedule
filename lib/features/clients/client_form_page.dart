@@ -6,8 +6,9 @@ import '../../theme/app_theme.dart';
 
 class ClientFormPage extends ConsumerStatefulWidget {
   final String? clientId; // null = novo
+  final ApiClient? api; // DI pra testes (mock da rede)
 
-  const ClientFormPage({super.key, this.clientId});
+  const ClientFormPage({super.key, this.clientId, this.api});
 
   @override
   ConsumerState<ClientFormPage> createState() => _ClientFormPageState();
@@ -32,7 +33,7 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
   Future<void> _loadClient() async {
     setState(() => _loading = true);
     try {
-      final api = ApiClient();
+      final api = widget.api ?? ApiClient();
       final resp = await api.dio.get('/clients/${widget.clientId}');
       final data = resp.data;
       _nameController.text = data['name'];
@@ -72,7 +73,7 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
     };
 
     try {
-      final api = ApiClient();
+      final api = widget.api ?? ApiClient();
       if (_isEditing) {
         await api.dio.patch('/clients/${widget.clientId}', data: data);
       } else {

@@ -29,6 +29,7 @@ dependencies:
   # 6.3.2 exige Dart ^3.6; CI ainda usa Flutter 3.24.3 (Dart 3.5.3)
   url_launcher: '>=6.3.0 <6.3.2'
   flutter_markdown: ^0.7.7+1
+  share_plus: ^12.0.2
 
 dev_dependencies:
   flutter_test:
