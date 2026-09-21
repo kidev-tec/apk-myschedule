@@ -159,7 +159,7 @@ void main() async {
       await Firebase.initializeApp(
         options: const FirebaseOptions(
           apiKey: String.fromEnvironment('FIREBASE_API_KEY',
-              defaultValue: 'AIzaSy...lrRg'),
+              defaultValue: 'AIzaSyBG9haJTEiv4r9slt2R92_0TZPMtJAlrRg'),
           appId: String.fromEnvironment('FIREBASE_APP_ID',
               defaultValue: '1:581069825659:android:5b35631cb1d25900a0e4de'),
           messagingSenderId: String.fromEnvironment('FIREBASE_SENDER_ID',
