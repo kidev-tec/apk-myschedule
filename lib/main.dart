@@ -68,6 +68,13 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(
+        // GoException "no routes for location: /" (18/09): algo navega pra
+        // raiz (não existe tela home). Redirect deixa o router decidir via
+        // redirect() acima (login → onboarding/agenda conforme estado).
+        path: '/',
+        redirect: (_, __) => null,
+      ),
+      GoRoute(
         path: '/terms',
         builder: (_, state) {
           final extra = state.extra as Map<String, dynamic>?;

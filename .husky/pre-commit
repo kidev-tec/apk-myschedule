@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Pre-commit quality gates — minha-agenda-app (Flutter)
+# Espelho do husky da API, adaptado pra Dart/Flutter.
+set -u
+
+echo '🔍 Flutter analyze...'
+flutter analyze 2>&1 | tail -2
+if ! flutter analyze 2>&1 | grep -q 'No issues found'; then
+  echo '❌ Analyze failed — corrija os issues antes de commitar'
+  exit 1
+fi
+
+echo '🔍 Format check (dart format)...'
+# Fix 18/09: antes capturava stdout+exit code juntos na mesma variável
+# ($(cmd; echo $?) produz string multilinha != "0" sempre → gate travava
+# commit válido). Agora checa o exit code direto no if.
+if ! dart format --output=none --set-exit-if-changed lib/ test/ > /dev/null 2>&1; then
+  echo '❌ Código não formatado — rode: dart format lib/ test/'
+  exit 1
+fi
+
+echo '🔍 Tests...'
+OUTPUT=$(flutter test --coverage 2>&1)
+STATUS=$?
+echo "$OUTPUT" | tail -2
+if [ "$STATUS" -ne 0 ]; then
+  echo '❌ Tests failed'
+  exit 1
+fi
+
+# B13 relaxada (decisão Rafael 18/09): metas por camada no MVP.
+#  - arquivos 100% cobertos devem PERMANECER 100% (não deixar degradar)
+#  - gate duro checa que a cobertura global não caiu abaixo do piso
+python3 - <<'EOF' || { echo '❌ Coverage abaixo do piso da BARRA'; exit 1; }
+import re
+files = {}
+cur = None
+for line in open('coverage/lcov.info'):
+    if line.startswith('SF:'): cur = line.strip()[3:]
+    elif line.startswith('LF:'): lf = int(line.split(':')[1])
+    elif line.startswith('LH:'):
+        lh = int(line.split(':')[1])
+        files[cur] = (lh, lf)
+pct = lambda v: 100 * v[0] / max(v[1], 1)
+overall = 100 * sum(v[0] for v in files.values()) / max(sum(v[1] for v in files.values()), 1)
+print(f'   lines global: {overall:.1f}%')
+FLOOR = 46.5  # piso atual (com margem de ruído ±0.1) — só sobe, nunca desce
+if overall + 0.05 < FLOOR:
+    print(f'   ❌ global {overall:.1f}% < piso {FLOOR}%')
+    exit(1)
+# arquivos que já foram 100% não podem degradar
+ALWAYS_100 = ['lib/core/segment/segment_preset.dart', 'lib/theme/app_theme.dart',
+              'lib/features/settings/device_token_service.dart',
+              'lib/features/settings/logo_service.dart',
+              'lib/features/onboarding/onboarding_provisioning.dart']
+for f in ALWAYS_100:
+    v = files.get(f)
+    if v and pct(v) < 100.0:
+        print(f'   ❌ {f} era 100% e caiu pra {pct(v):.1f}%')
+        exit(1)
+print('   ✅ piso respeitado; meta: core 100% + UI ≥60%')
+EOF
+
+echo '🔍 Secret scan...'
+STAGED_SECRETS=$(git diff --cached -U0 | grep -E '^\+' | grep -vE '^\+\+\+' | \
+  grep -E '(BEGIN (RSA|EC|OPENSSH) PRIVATE|sk-[a-zA-Z0-9]{20,}|AIza[A-Za-z0-9_-]{30,}|://[^/@[:space:]]+:[^/@[:space:]]+@)' || true)
+if [ -n "$STAGED_SECRETS" ]; then
+  echo "$STAGED_SECRETS" | head -5
+  echo '❌ Possible secret detected in staged diff'
+  exit 1
+fi
+
+echo '✅ All pre-commit checks passed'

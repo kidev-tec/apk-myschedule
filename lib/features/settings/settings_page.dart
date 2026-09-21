@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 import 'logo_service.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_config.dart';
@@ -161,15 +162,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
   }
 
+  /// B8: share NATIVO (Android sheet / iOS share sheet) — o link chega no
+  /// WhatsApp, Telegram, Instagram etc. sem copiar/colar (decisão Rafael).
   Future<void> _sharePublicLink() async {
     if (_publicUrl == null) return;
+    // cópia de segurança junto (usuário leigo às vezes quer colar depois)
     await Clipboard.setData(ClipboardData(text: _publicUrl!));
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Link copiado! Cola no teu WhatsApp ou Instagram')),
-      );
-    }
+    await SharePlus.instance.share(
+      ShareParams(
+          text: 'Agende comigo: $_publicUrl', subject: 'Agendamento online'),
+    );
   }
 
   String get _subscriptionStatus =>
