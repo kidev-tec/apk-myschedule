@@ -115,13 +115,12 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     try {
       final api = ref.read(wizardApiProvider);
       await api.dio.post('/appointments', data: {
-        'client_id': _selectedClient!.id,
-        'service_id': _selectedService!.id,
-        'starts_at': _selectedSlot!.toIso8601String(),
-        'ends_at': _selectedSlot!
+        'clientId': _selectedClient!.id,
+        'serviceId': _selectedService!.id,
+        'startsAt': _selectedSlot!.toIso8601String(),
+        'endsAt': _selectedSlot!
             .add(Duration(minutes: _selectedService!.durationMin))
             .toIso8601String(),
-        'source': 'app',
       });
       if (mounted) {
         context.go('/agenda');
