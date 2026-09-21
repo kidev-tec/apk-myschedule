@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -197,7 +198,184 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     }
   }
 
+  String _query = '';
+
+  List<Client> get _filteredClients {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return _clients;
+    return _clients
+        .where((c) =>
+            c.name.toLowerCase().contains(q) ||
+            c.phoneE164.toLowerCase().contains(q))
+        .toList();
+  }
+
+  Future<void> _openAddClientSheet() async {
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController(text: _query.trim());
+    final emailCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool saving = false;
+    String? duplicateError;
+    Client? duplicate;
+
+    final created = await showModalBottomSheet<Client>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            Future<void> save() async {
+              if (!formKey.currentState!.validate()) return;
+              setSheetState(() {
+                saving = true;
+                duplicateError = null;
+              });
+              try {
+                final api = ref.read(wizardApiProvider);
+                final resp = await api.dio.post('/clients', data: {
+                  'name': nameCtrl.text.trim(),
+                  'phone_e164': phoneCtrl.text.trim(),
+                  if (emailCtrl.text.trim().isNotEmpty)
+                    'email': emailCtrl.text.trim(),
+                });
+                if (sheetContext.mounted) {
+                  Navigator.pop(sheetContext, Client.fromJson(resp.data));
+                }
+              } on DioException catch (e) {
+                final status = e.response?.statusCode;
+                final data = e.response?.data;
+                if (status == 409 && data is Map<String, dynamic>) {
+                  setSheetState(() {
+                    saving = false;
+                    duplicateError =
+                        data['error'] as String? ?? 'Cliente já existe';
+                    final ex = data['existing'];
+                    if (ex is Map<String, dynamic>) {
+                      duplicate = Client.fromJson(ex);
+                    }
+                  });
+                } else {
+                  final msg =
+                      data is Map<String, dynamic> ? data['error'] : null;
+                  setSheetState(() => saving = false);
+                  if (sheetContext.mounted) {
+                    ScaffoldMessenger.of(sheetContext).showSnackBar(SnackBar(
+                      content:
+                          Text(msg is String ? msg : 'Falha ao criar cliente'),
+                      backgroundColor: AppColors.error,
+                    ));
+                  }
+                }
+              } catch (e) {
+                setSheetState(() => saving = false);
+                if (sheetContext.mounted) {
+                  ScaffoldMessenger.of(sheetContext).showSnackBar(SnackBar(
+                    content: Text('Falha ao criar cliente: $e'),
+                    backgroundColor: AppColors.error,
+                  ));
+                }
+              }
+            }
+
+            return Padding(
+              // viewInsets (teclado) + padding.bottom (barra de gestos) —
+              // sem os dois o botão some atrás da barra no A15.
+              padding: EdgeInsets.fromLTRB(
+                  16,
+                  16,
+                  16,
+                  MediaQuery.of(sheetContext).viewInsets.bottom +
+                      MediaQuery.of(sheetContext).padding.bottom +
+                      24),
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Adicionar cliente',
+                        style: Theme.of(sheetContext).textTheme.titleMedium),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: nameCtrl,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(
+                        labelText: 'Nome *',
+                        prefixIcon: Icon(Icons.person_outline),
+                      ),
+                      validator: (v) => v == null || v.trim().isEmpty
+                          ? 'Nome é obrigatório'
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: phoneCtrl,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                        labelText: 'WhatsApp *',
+                        hintText: '(14) 99999-9999',
+                        prefixIcon: Icon(Icons.phone_outlined),
+                      ),
+                      validator: (v) => v == null || v.trim().length < 10
+                          ? 'Telefone é obrigatório'
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: emailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
+                        labelText: 'E-mail (opcional)',
+                        prefixIcon: Icon(Icons.email_outlined),
+                      ),
+                    ),
+                    if (duplicateError != null) ...[
+                      const SizedBox(height: 12),
+                      Text(duplicateError!,
+                          style: const TextStyle(color: AppColors.error)),
+                      if (duplicate != null)
+                        TextButton.icon(
+                          icon: const Icon(Icons.person_search),
+                          label: Text('Usar ${duplicate!.name}'),
+                          onPressed: () =>
+                              Navigator.pop(sheetContext, duplicate),
+                        ),
+                    ],
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: saving ? null : save,
+                        child: saving
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
+                            : const Text('Criar e usar'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (created != null && mounted) {
+      setState(() {
+        _clients = [..._clients, created];
+        _selectedClient = created;
+        // limpa a busca: a lista volta completa com o selecionado visível
+        _query = '';
+      });
+    }
+  }
+
   Widget _buildClientStep() {
+    final filtered = _filteredClients;
     return Column(
       children: [
         Padding(
@@ -208,36 +386,78 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
               hintText: 'Nome ou telefone',
               prefixIcon: Icon(Icons.search),
             ),
-            onChanged: (v) => setState(() {}), // filter handled in list
+            onChanged: (v) => setState(() => _query = v),
           ),
         ),
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: _clients.length,
-            itemBuilder: (_, i) {
-              final c = _clients[i];
-              final selected = _selectedClient?.id == c.id;
-              return Card(
-                color: selected ? AppColors.softOf(context) : null,
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: AppColors.primaryOf(context),
-                    child: Text(c.name[0].toUpperCase(),
-                        style: const TextStyle(color: Colors.white)),
+        if (filtered.isEmpty)
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.person_off,
+                      size: 64, color: AppColors.neutral),
+                  const SizedBox(height: 16),
+                  Text(
+                      _query.trim().isEmpty
+                          ? 'Nenhum cliente ainda'
+                          : 'Nenhum cliente encontrado',
+                      style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    icon: const Icon(Icons.person_add),
+                    label: const Text('Adicionar cliente'),
+                    onPressed: _openAddClientSheet,
                   ),
-                  title: Text(c.name),
-                  subtitle: Text(c.phoneE164),
-                  trailing: selected
-                      ? Icon(Icons.check_circle,
-                          color: AppColors.primaryOf(context))
-                      : null,
-                  onTap: () => setState(() => _selectedClient = c),
+                ],
+              ),
+            ),
+          )
+        else
+          Expanded(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      icon: const Icon(Icons.person_add),
+                      label: const Text('Adicionar cliente'),
+                      onPressed: _openAddClientSheet,
+                    ),
+                  ),
                 ),
-              );
-            },
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    itemCount: filtered.length,
+                    itemBuilder: (_, i) {
+                      final c = filtered[i];
+                      final selected = _selectedClient?.id == c.id;
+                      return Card(
+                        color: selected ? AppColors.softOf(context) : null,
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: AppColors.primaryOf(context),
+                            child: Text(c.name[0].toUpperCase(),
+                                style: const TextStyle(color: Colors.white)),
+                          ),
+                          title: Text(c.name),
+                          subtitle: Text(c.phoneE164),
+                          trailing: selected
+                              ? Icon(Icons.check_circle,
+                                  color: AppColors.primaryOf(context))
+                              : null,
+                          onTap: () => setState(() => _selectedClient = c),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
       ],
     );
   }
