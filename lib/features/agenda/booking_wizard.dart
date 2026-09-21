@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
+import '../../core/utils/phone_br.dart';
 import '../../theme/app_theme.dart';
 import 'booking_logic.dart' as logic;
 
@@ -234,7 +235,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                 final api = ref.read(wizardApiProvider);
                 final resp = await api.dio.post('/clients', data: {
                   'name': nameCtrl.text.trim(),
-                  'phone_e164': phoneCtrl.text.trim(),
+                  'phone_e164': normalizePhoneBr(phoneCtrl.text),
                   if (emailCtrl.text.trim().isNotEmpty)
                     'email': emailCtrl.text.trim(),
                 });
@@ -313,11 +314,13 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                       decoration: const InputDecoration(
                         labelText: 'WhatsApp *',
                         hintText: '(14) 99999-9999',
+                        helperText: 'Com DDD — o 55 do Brasil entra sozinho',
                         prefixIcon: Icon(Icons.phone_outlined),
                       ),
-                      validator: (v) => v == null || v.trim().length < 10
-                          ? 'Telefone é obrigatório'
-                          : null,
+                      validator: (v) =>
+                          normalizePhoneBr(v ?? '').isEmpty
+                              ? 'Telefone inválido (informe DDD)'
+                              : null,
                     ),
                     const SizedBox(height: 12),
                     TextFormField(

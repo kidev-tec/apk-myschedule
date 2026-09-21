@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
+import '../../core/utils/phone_br.dart';
 import '../../core/api/paywall_flag.dart';
 import '../../core/update/update_service.dart';
 import '../../theme/app_theme.dart';
@@ -402,9 +403,11 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         trailing: a.isBlock
             ? PopupMenuButton<String>(
                 onSelected: (v) => _handleAppointmentAction(v, a),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                      value: 'cancel', child: Text('Liberar horário')),
+                itemBuilder: (_) => [
+                  // Horário já passou: sem ações (nada a liberar).
+                  if (!_isPast(a))
+                    const PopupMenuItem(
+                        value: 'cancel', child: Text('Liberar horário')),
                 ],
               )
             : PopupMenuButton<String>(
@@ -413,13 +416,19 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                   if (a.status == 'pending')
                     const PopupMenuItem(
                         value: 'confirm', child: Text('Confirmar')),
-                  if (a.status == 'pending')
+                  if (a.status == 'pending' && !_isPast(a))
                     const PopupMenuItem(
                         value: 'askConfirm',
                         child: Text('Pedir confirmação no WhatsApp')),
                   const PopupMenuItem(value: 'edit', child: Text('Remarcar')),
-                  const PopupMenuItem(value: 'done', child: Text('Concluir')),
-                  const PopupMenuItem(value: 'cancel', child: Text('Cancelar')),
+                  // Passou do horário: sem concluir/cancelar (decisão de
+                  // produto — ações de agendamento só com antecedência).
+                  if (!_isPast(a)) ...[
+                    const PopupMenuItem(
+                        value: 'done', child: Text('Concluir')),
+                    const PopupMenuItem(
+                        value: 'cancel', child: Text('Cancelar')),
+                  ],
                 ],
               ),
       ),
@@ -515,6 +524,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     }
   }
 
+  /// Agendamento cujo horário já passou: sem cancelar/concluir/pedir
+  /// confirmação (decisão de produto 21/09 — ação só com antecedência).
+  bool _isPast(Appointment a) => a.startsAt.isBefore(DateTime.now());
+
   /// Ao cancelar, abre o WhatsApp do cliente com mensagem pronta.
   /// O cliente não tem app — WhatsApp é o canal onde ele já está.
   Future<void> _notifyCancelOnWhatsapp(Appointment a) async {
@@ -522,7 +535,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     final msg = Uri.encodeComponent(
         'Oi ${a.clientName}! Tive que remanejar teu horário de $when. '
         'Me chama pra combinarmos outro horário! 🙂');
-    final phone = a.clientPhone.replaceAll(RegExp(r'[^0-9]'), '');
+    final phone = ensureDdi55(a.clientPhone);
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -553,7 +566,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     final msg = Uri.encodeComponent(
         'Oi ${a.clientName}! Confirmando teu horário de $when. '
         'Pode confirmar tua presença aqui? $link 🙂');
-    final phone = a.clientPhone.replaceAll(RegExp(r'[^0-9]'), '');
+    final phone = ensureDdi55(a.clientPhone);
     if (!mounted) return;
     final ok = await showDialog<bool>(
       context: context,
@@ -609,7 +622,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     final msg = Uri.encodeComponent(
         'Oi ${a.clientName}! Remarquei teu horário pra $whenText. '
         'Confirma se esse novo horário funciona pra você? 🙂');
-    final phone = a.clientPhone.replaceAll(RegExp(r'[^0-9]'), '');
+    final phone = ensureDdi55(a.clientPhone);
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(

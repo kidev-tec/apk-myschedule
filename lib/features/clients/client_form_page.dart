@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
+import '../../core/utils/phone_br.dart';
 import '../../theme/app_theme.dart';
 
 class ClientFormPage extends ConsumerStatefulWidget {
@@ -65,7 +66,7 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
 
     final data = {
       'name': _nameController.text.trim(),
-      'phone_e164': _phoneController.text.trim(),
+      'phone_e164': normalizePhoneBr(_phoneController.text),
       if (_emailController.text.trim().isNotEmpty)
         'email': _emailController.text.trim(),
       if (birthday != null)
@@ -141,10 +142,11 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
                     decoration: const InputDecoration(
                       labelText: 'WhatsApp *',
                       hintText: '(11) 99999-9999',
+                      helperText: 'Com DDD — o 55 do Brasil entra sozinho',
                       prefixIcon: Icon(Icons.phone_outlined),
                     ),
-                    validator: (v) => v == null || v.trim().isEmpty
-                        ? 'Telefone é obrigatório'
+                    validator: (v) => normalizePhoneBr(v ?? '').isEmpty
+                        ? 'Telefone inválido (informe DDD)'
                         : null,
                   ),
                   const SizedBox(height: 16),

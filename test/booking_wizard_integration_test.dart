@@ -297,7 +297,7 @@ void main() {
               'existing': {
                 'id': 'c1',
                 'name': 'Ana',
-                'phone_e164': '+551****0001'
+                'phone_e164': '5514991110001'
               },
             }),
         data: Matchers.any);
@@ -305,7 +305,7 @@ void main() {
     await tester.enterText(
         find.widgetWithText(TextFormField, 'Nome *'), 'Zé Novato');
     await tester.enterText(
-        find.widgetWithText(TextFormField, 'WhatsApp *'), '+551****0001');
+        find.widgetWithText(TextFormField, 'WhatsApp *'), '(14) 99111-0001');
     await tester.tap(find.text('Criar e usar'));
     await tester.pumpAndSettle();
 
