@@ -162,13 +162,14 @@ void main() {
 
     // payload validado: campos que o wizard manda (capturado no interceptor)
     expect(posted, hasLength(1));
-    expect(posted.first['client_id'], 'c1');
-    expect(posted.first['service_id'], 's1');
-    expect(posted.first['source'], 'app');
-    expect(DateTime.parse(posted.first['starts_at'] as String).hour, 10);
+    expect(posted.first['clientId'], 'c1');
+    expect(posted.first['serviceId'], 's1');
+    // source foi removido: a API só aceita 'block' ou ausente
+    expect(posted.first.containsKey('source'), isFalse);
+    expect(DateTime.parse(posted.first['startsAt'] as String).hour, 10);
     // ends_at = starts_at + duração do serviço (60min)
-    final start = DateTime.parse(posted.first['starts_at'] as String);
-    final end = DateTime.parse(posted.first['ends_at'] as String);
+    final start = DateTime.parse(posted.first['startsAt'] as String);
+    final end = DateTime.parse(posted.first['endsAt'] as String);
     expect(end.difference(start), const Duration(minutes: 60));
   });
 

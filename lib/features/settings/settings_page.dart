@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:dio/dio.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'logo_service.dart';
 import '../../core/api/api_client.dart';
@@ -15,7 +17,8 @@ import '../../theme/app_theme.dart';
 import 'gcal_service.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
-  const SettingsPage({super.key});
+  final ApiClient? api; // DI pra testes (mesma padrão do client_form)
+  const SettingsPage({super.key, this.api});
 
   @override
   ConsumerState<SettingsPage> createState() => _SettingsPageState();
@@ -147,7 +150,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   Future<void> _loadMe() async {
     try {
-      final api = ApiClient();
+      final api = widget.api ?? ApiClient();
       final resp = await api.dio.get('/me');
       if (!mounted) return;
       setState(() {
@@ -169,6 +172,97 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       ShareParams(
           text: 'Agende comigo: $_publicUrl', subject: 'Agendamento online'),
     );
+  }
+
+  String get _subscriptionStatus =>
+      _me?['subscription_status'] as String? ?? 'trial';
+
+  bool _loadingSubscription = false;
+
+  /// Pede o CPF antes do checkout — o Asaas rejeita cobrança sem CPF/CNPJ
+  /// do pagador (descoberta do sandbox, Fase D). Aceita com ou sem máscara.
+  Future<void> _askCpfAndCheckout() async {
+    final ctrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Seu CPF'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          maxLength: 11,
+          decoration: const InputDecoration(
+            labelText: 'CPF (só números)',
+            hintText: '000.000.000-00',
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Continuar')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final cpf = ctrl.text.trim();
+    if (cpf.length != 11) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('CPF precisa ter 11 números')));
+      return;
+    }
+    await _startCheckout(cpf);
+  }
+
+  /// Checkout Asaas: cria a cobrança no backend e abre a página de pagamento
+  /// no browser. Ao voltar, "Já paguei — atualizar" refaz o GET /me (o estado
+  /// novo vem do webhook, que é a única fonte de verdade).
+  Future<void> _startCheckout(String cpf) async {
+    setState(() => _loadingSubscription = true);
+    try {
+      final api = widget.api ?? ApiClient();
+      final resp = await api.dio.post('/billing/checkout', data: {
+        'cpf_cnpj': cpf,
+      });
+      final invoiceUrl = resp.data['invoiceUrl'] as String?;
+      if (!mounted) return;
+      if (invoiceUrl == null || invoiceUrl.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Não consegui gerar o link de pagamento. Tenta de novo.')));
+        return;
+      }
+      await launchUrl(Uri.parse(invoiceUrl),
+          mode: LaunchMode.externalApplication);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        duration: const Duration(seconds: 8),
+        action: SnackBarAction(
+          label: 'Já paguei — atualizar',
+          onPressed: _loadMe,
+        ),
+        content: const Text(
+            'Finaliza o pagamento na página que abriu. Depois toca em atualizar.'),
+      ));
+    } on DioException catch (e) {
+      if (mounted) {
+        final data = e.response?.data;
+        final msg = data is Map<String, dynamic> && data['error'] is String
+            ? data['error'] as String
+            : 'Cobrança indisponível no momento';
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(msg)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Cobrança indisponível no momento')));
+      }
+    }
+    if (mounted) setState(() => _loadingSubscription = false);
   }
 
   String get _subscriptionLabel {
@@ -248,14 +342,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         padding: EdgeInsets.fromLTRB(
             16, 16, 16, 16 + MediaQuery.of(context).padding.bottom),
         children: [
-          // Assinatura (RF-14)
+          // Assinatura (RF-14) — card reflete o estado do webhook (Fase B);
+          // botão de assinar aparece em todo estado que não seja active.
           if (_me != null)
             Card(
               child: ListTile(
                 leading:
                     Icon(Icons.workspace_premium, color: _subscriptionColor),
                 title: Text(_subscriptionLabel),
-                subtitle: Text(_me?['name'] as String? ?? ''),
+                subtitle: _subscriptionStatus == 'past_due'
+                    ? const Text('Confere no teu e-mail')
+                    : Text(_me?['name'] as String? ?? ''),
+                trailing: _subscriptionStatus != 'active'
+                    ? TextButton(
+                        onPressed:
+                            _loadingSubscription ? null : _askCpfAndCheckout,
+                        child: const Text('Assinar agora'),
+                      )
+                    : null,
               ),
             ),
           const SizedBox(height: 8),
