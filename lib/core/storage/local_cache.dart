@@ -16,6 +16,7 @@ class LocalCache {
   static const appointmentsBox = 'appointments';
   static const workingHoursBox = 'working_hours';
   static const _metaBox = '_meta';
+  static const _queueBox = '_queue';
 
   /// Inicializa o Hive. Idempotente; [path] permite teste com tmp dir.
   static Future<void> init({String? path}) async {
@@ -30,6 +31,7 @@ class LocalCache {
     await Hive.openBox(appointmentsBox);
     await Hive.openBox(workingHoursBox);
     await Hive.openBox(_metaBox);
+    await Hive.openBox(_queueBox);
     _initialized = true;
   }
 
@@ -74,4 +76,7 @@ class LocalCache {
 
   /// Indica se a box tem algum conteúdo cacheado.
   static bool hasData(String boxName) => Hive.box(boxName).isNotEmpty;
+
+  /// @visibleForTesting: reseta o flag de init (Hive.close() em teste).
+  static void resetForTest() => _initialized = false;
 }

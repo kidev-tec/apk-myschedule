@@ -218,7 +218,9 @@ void main() {
 
     // 409 → fica no wizard, sem navegar, com SnackBar de erro
     expect(find.text('PAGINA AGENDA'), findsNothing);
-    expect(find.textContaining('Falha'), findsOneWidget);
+    // 409 é erro de negócio: mostra a mensagem humana da API na hora
+    // (fase 2 do offline: só falha de CONEXÃO é que enfileira).
+    expect(find.textContaining('slot já reservado'), findsOneWidget);
   });
 
   testWidgets('busca filtra clientes por nome', (tester) async {

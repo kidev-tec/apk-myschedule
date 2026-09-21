@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
 import '../../core/storage/local_cache.dart';
+import '../../core/storage/connectivity_provider.dart';
+import '../../core/storage/sync_queue.dart';
 import '../../core/utils/phone_br.dart';
 import '../../core/api/paywall_flag.dart';
 import '../../core/update/update_service.dart';
@@ -58,6 +60,46 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
               if (info != null && mounted) _updateBanner.value = true;
             }))();
     _loadAppointments();
+    // Offline fase 2: voltou a rede → replay da fila de escritas.
+    _connRemove = ref.read(connectivityProvider.notifier).addListener(_onOnline);
+  }
+
+  void Function()? _connRemove;
+  bool _syncing = false;
+
+  @override
+  void dispose() {
+    _connRemove?.call();
+    super.dispose();
+  }
+
+  void _onOnline(bool online) {
+    if (!online || _syncing) return;
+    _syncing = true;
+    final queue = ref.read(syncQueueProvider.notifier);
+    if (queue.count == 0) {
+      _syncing = false;
+      return;
+    }
+    queue
+        .replay(ref.read(agendaApiProvider).dio)
+        .then((failures) {
+      if (!mounted) return;
+      if (failures.isEmpty) {
+        if (queue.count == 0) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Agendamentos offline sincronizados!'),
+              backgroundColor: Colors.green));
+          _loadAppointments();
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                '${failures.length} agendamento(s) não sincronizaram: ${failures.first.error}'),
+            backgroundColor: AppColors.error));
+        _loadAppointments();
+      }
+    }).whenComplete(() => _syncing = false);
   }
 
   Future<void> _loadAppointments() async {
