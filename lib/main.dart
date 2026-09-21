@@ -8,6 +8,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'core/auth/auth_controller.dart';
 import 'features/auth/login_page.dart';
 import 'core/api/api_client.dart';
+import 'core/storage/local_cache.dart';
 import 'core/segment/segment_preset.dart';
 import 'core/storage/onboarding_store.dart';
 import 'features/onboarding/onboarding_page.dart';
@@ -190,6 +191,14 @@ void main() async {
       debugPrint('[push:fg] $title — $body');
     },
   );
+
+  // Offline-first: inicializa o cache local (best-effort — falha de storage
+  // não impede o app de abrir, só perde o modo offline).
+  try {
+    await LocalCache.init();
+  } catch (e) {
+    debugPrint('[cache] init falhou (app segue online-only): $e');
+  }
 
   runApp(const ProviderScope(child: MinhaAgendaApp()));
 }

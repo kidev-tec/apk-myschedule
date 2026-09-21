@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
+import '../../core/storage/local_cache.dart';
 import '../../core/utils/phone_br.dart';
 import '../../core/api/paywall_flag.dart';
 import '../../core/update/update_service.dart';
@@ -31,6 +32,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
 
   final ValueNotifier<bool> _updateBanner = ValueNotifier(false);
   bool _downloading = false;
+  DateTime? _offlineSync;
 
   Future<void> _doUpdate() async {
     final info = UpdateService.lastCheck;
@@ -80,10 +82,34 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       _appointments = list
           .map((j) => Appointment.fromJson(j as Map<String, dynamic>))
           .toList();
+      // Offline-first: cacheia a janela carregada (chave = visão+dia focado).
+      try {
+        await LocalCache.putBoxByDay(list, _cacheKeyForWindow());
+      } catch (_) {
+        // cache é best-effort
+      }
     } catch (e) {
-      debugPrint('[agenda] falha ao carregar: $e');
+      debugPrint('[agenda] falha ao carregar (tentando cache offline): $e');
+      // Offline-first: sem rede, serve a última janela cacheada desse dia.
+      try {
+        final cached = LocalCache.getListByDay(_cacheKeyForWindow());
+        _appointments = cached
+            .map((j) => Appointment.fromJson(j as Map<String, dynamic>))
+            .toList();
+        _offlineSync = LocalCache.lastSync(_cacheKeyForWindow());
+      } catch (_) {
+        _offlineSync = null;
+      }
     }
     if (mounted) setState(() => _loading = false);
+  }
+
+  /// Chave de cache da janela visível (dia/semana do dia focado).
+  String _cacheKeyForWindow() {
+    final start = _view == _AgendaView.semana
+        ? _focusedDay.subtract(Duration(days: _focusedDay.weekday % 7))
+        : _focusedDay;
+    return 'appointments_${_view.name}_${start.year}-${start.month}-${start.day}';
   }
 
   void _shiftWindow(int days) => setState(() {
@@ -268,6 +294,31 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                       ? const Center(child: CircularProgressIndicator())
                       : Column(
                           children: [
+                            // Offline-first: banner quando servindo do cache
+                            if (_offlineSync != null)
+                              Material(
+                                color: Colors.amber.shade700,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 6),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.cloud_off,
+                                          color: Colors.white, size: 18),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Modo offline — dados de '
+                                          '${DateFormat('HH:mm').format(_offlineSync!)}',
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 13),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             // B6: seletor Dia / Semana / Mês (foco preservado)
                             Padding(
                               padding:
