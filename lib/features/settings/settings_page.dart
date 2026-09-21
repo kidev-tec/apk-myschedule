@@ -177,14 +177,54 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   bool _loadingSubscription = false;
 
+  /// Pede o CPF antes do checkout — o Asaas rejeita cobrança sem CPF/CNPJ
+  /// do pagador (descoberta do sandbox, Fase D). Aceita com ou sem máscara.
+  Future<void> _askCpfAndCheckout() async {
+    final ctrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Seu CPF'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          maxLength: 11,
+          decoration: const InputDecoration(
+            labelText: 'CPF (só números)',
+            hintText: '000.000.000-00',
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Continuar')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final cpf = ctrl.text.trim();
+    if (cpf.length != 11) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('CPF precisa ter 11 números')));
+      return;
+    }
+    await _startCheckout(cpf);
+  }
+
   /// Checkout Asaas: cria a cobrança no backend e abre a página de pagamento
   /// no browser. Ao voltar, "Já paguei — atualizar" refaz o GET /me (o estado
   /// novo vem do webhook, que é a única fonte de verdade).
-  Future<void> _startCheckout() async {
+  Future<void> _startCheckout(String cpf) async {
     setState(() => _loadingSubscription = true);
     try {
       final api = widget.api ?? ApiClient();
-      final resp = await api.dio.post('/billing/checkout');
+      final resp = await api.dio.post('/billing/checkout', data: {
+        'cpf_cnpj': cpf,
+      });
       final invoiceUrl = resp.data['invoiceUrl'] as String?;
       if (!mounted) return;
       if (invoiceUrl == null || invoiceUrl.isEmpty) {
@@ -313,7 +353,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     : Text(_me?['name'] as String? ?? ''),
                 trailing: _subscriptionStatus != 'active'
                     ? TextButton(
-                        onPressed: _loadingSubscription ? null : _startCheckout,
+                        onPressed:
+                            _loadingSubscription ? null : _askCpfAndCheckout,
                         child: const Text('Assinar agora'),
                       )
                     : null,

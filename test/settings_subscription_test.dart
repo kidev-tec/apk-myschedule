@@ -180,6 +180,13 @@ void main() {
     await tester.tap(find.text('Assinar agora'));
     await tester.pumpAndSettle();
 
+    // dialog de CPF
+    expect(find.text('Seu CPF'), findsOneWidget);
+    await tester.enterText(
+        find.widgetWithText(TextField, 'CPF (só números)'), '20447670824');
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
+
     expect(launcher.launched, ['https://pay.asaas.com/x']);
     // snackbar com ação de atualizar
     expect(find.text('Já paguei — atualizar'), findsOneWidget);
@@ -193,8 +200,26 @@ void main() {
     await pumpPage(tester);
     await tester.tap(find.text('Assinar agora'));
     await tester.pumpAndSettle();
+    await tester.enterText(
+        find.widgetWithText(TextField, 'CPF (só números)'), '20447670824');
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
 
     expect(launcher.launched, isEmpty);
     expect(find.text('Cobrança indisponível no momento'), findsOneWidget);
+  });
+
+  testWidgets('CPF com menos de 11 dígitos → SnackBar, sem chamar API',
+      (tester) async {
+    await pumpPage(tester);
+    await tester.tap(find.text('Assinar agora'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.widgetWithText(TextField, 'CPF (só números)'), '123');
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
+
+    expect(launcher.launched, isEmpty);
+    expect(find.text('CPF precisa ter 11 números'), findsOneWidget);
   });
 }
