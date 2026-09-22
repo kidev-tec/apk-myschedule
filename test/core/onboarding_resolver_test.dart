@@ -21,8 +21,7 @@ void main() {
 
   group('resolveOnboardingComplete — servidor é a fonte da verdade', () {
     test('server true → completo (e sincroniza a flag local)', () async {
-      adapter.onGet('/me',
-          (s) => s.reply(200, {'onboarding_complete': true}));
+      adapter.onGet('/me', (s) => s.reply(200, {'onboarding_complete': true}));
 
       final done = await resolveOnboardingComplete(api);
       expect(done, isTrue);
@@ -33,8 +32,7 @@ void main() {
     test('server false → assistente (mesmo com flag local antiga true)',
         () async {
       await OnboardingStore.markComplete(); // flag suja de sessão anterior
-      adapter.onGet('/me',
-          (s) => s.reply(200, {'onboarding_complete': false}));
+      adapter.onGet('/me', (s) => s.reply(200, {'onboarding_complete': false}));
 
       final done = await resolveOnboardingComplete(api);
       expect(done, isFalse);

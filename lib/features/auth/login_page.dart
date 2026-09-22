@@ -57,7 +57,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         // Servidor é a fonte da verdade (igual ao fluxo Google no main.dart):
         // flag local é global por aparelho e pulava o onboarding de contas
         // novas criadas por email num aparelho que já completou com outra conta.
-        context.go(await resolveOnboardingComplete(ApiClient()) ? '/agenda' : '/onboarding');
+        context.go(await resolveOnboardingComplete(ApiClient())
+            ? '/agenda'
+            : '/onboarding');
       }
     } catch (_) {
       // error shown via provider
@@ -76,7 +78,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     if (auth.isAuthenticated) {
       await notifier.syncWithBackend();
       if (!context.mounted) return;
-      router.go(await resolveOnboardingComplete(ApiClient()) ? '/agenda' : '/onboarding');
+      router.go(await resolveOnboardingComplete(ApiClient())
+          ? '/agenda'
+          : '/onboarding');
     }
   }
 
