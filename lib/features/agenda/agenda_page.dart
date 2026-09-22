@@ -61,7 +61,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             }))();
     _loadAppointments();
     // Offline fase 2: voltou a rede → replay da fila de escritas.
-    _connRemove = ref.read(connectivityProvider.notifier).addListener(_onOnline);
+    _connRemove =
+        ref.read(connectivityProvider.notifier).addListener(_onOnline);
   }
 
   void Function()? _connRemove;
@@ -81,9 +82,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       _syncing = false;
       return;
     }
-    queue
-        .replay(ref.read(agendaApiProvider).dio)
-        .then((failures) {
+    queue.replay(ref.read(agendaApiProvider).dio).then((failures) {
       if (!mounted) return;
       if (failures.isEmpty) {
         if (queue.count == 0) {
@@ -517,8 +516,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                   // Passou do horário: sem concluir/cancelar (decisão de
                   // produto — ações de agendamento só com antecedência).
                   if (!_isPast(a)) ...[
-                    const PopupMenuItem(
-                        value: 'done', child: Text('Concluir')),
+                    const PopupMenuItem(value: 'done', child: Text('Concluir')),
                     const PopupMenuItem(
                         value: 'cancel', child: Text('Cancelar')),
                   ],

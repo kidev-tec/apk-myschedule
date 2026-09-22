@@ -81,7 +81,9 @@ void main() {
       final e = DioException(requestOptions: RequestOptions(path: '/x'));
       await q.enqueueIfOffline(e, op());
       // nova instância = novo notifier (simula restart do app)
-      final q2 = container.read(syncQueueProvider.notifier,);
+      final q2 = container.read(
+        syncQueueProvider.notifier,
+      );
       expect(q2.count, 1);
       expect(q2.state.first.description, 'Agendamento de Ana às 14:00');
     });
@@ -113,8 +115,7 @@ void main() {
       final e = DioException(requestOptions: RequestOptions(path: '/x'));
       await q.enqueueIfOffline(e, op(id: 'op-conflict'));
 
-      adapter.onPost(
-          '/appointments',
+      adapter.onPost('/appointments',
           (s) => s.reply(409, {'error': 'Conflito de horário — já ocupado'}),
           data: Matchers.any);
 

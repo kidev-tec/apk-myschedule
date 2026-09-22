@@ -12,9 +12,7 @@ final connectivityProvider = StateNotifierProvider<ConnectivityNotifier, bool>(
 
 class ConnectivityNotifier extends StateNotifier<bool> {
   ConnectivityNotifier() : super(true) {
-    _sub = Connectivity()
-        .onConnectivityChanged
-        .listen((results) {
+    _sub = Connectivity().onConnectivityChanged.listen((results) {
       // connectivity_plus 7 devolve lista de resultados
       final offline =
           results.isEmpty || results.every((c) => c == ConnectivityResult.none);

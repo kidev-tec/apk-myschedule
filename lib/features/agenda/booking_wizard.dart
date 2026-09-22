@@ -143,7 +143,8 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     } on DioException catch (e) {
       // Offline-first fase 2: falha de CONEXÃO enfileira; erro de negócio
       // (409 conflito, 400 validação) mostra a mensagem humana na hora.
-      final queued = await ref.read(syncQueueProvider.notifier).enqueueIfOffline(e, op);
+      final queued =
+          await ref.read(syncQueueProvider.notifier).enqueueIfOffline(e, op);
       if (mounted) {
         if (queued) {
           context.go('/agenda');
@@ -351,10 +352,9 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                         helperText: 'Com DDD — o 55 do Brasil entra sozinho',
                         prefixIcon: Icon(Icons.phone_outlined),
                       ),
-                      validator: (v) =>
-                          normalizePhoneBr(v ?? '').isEmpty
-                              ? 'Telefone inválido (informe DDD)'
-                              : null,
+                      validator: (v) => normalizePhoneBr(v ?? '').isEmpty
+                          ? 'Telefone inválido (informe DDD)'
+                          : null,
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
