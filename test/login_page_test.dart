@@ -145,15 +145,17 @@ void main() {
     expect(find.text('Esqueci minha senha'), findsOneWidget);
   });
 
-  testWidgets('F0: esqueci senha sem e-mail → erro amigável', (tester) async {
+  testWidgets('F0: esqueci senha abre view dedicada de recuperação', (tester) async {
     await tester.pumpWidget(_wrap());
 
     await tester.ensureVisible(find.text('Esqueci minha senha'));
     await tester.tap(find.text('Esqueci minha senha'), warnIfMissed: false);
     await tester.pumpAndSettle();
 
-    expect(find.text('Digita teu e-mail aí em cima pra recuperar a senha'),
-        findsOneWidget);
+    // view dedicada com copy empática e campo próprio
+    expect(find.text('Recuperar senha'), findsOneWidget);
+    expect(find.text('E-mail de cadastro'), findsOneWidget);
+    expect(find.text('Enviar link de recuperação'), findsOneWidget);
   });
 }
 
