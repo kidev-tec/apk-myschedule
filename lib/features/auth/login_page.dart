@@ -15,6 +15,7 @@ class LoginPage extends ConsumerStatefulWidget {
 class _LoginPageState extends ConsumerState<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _nameController = TextEditingController();
   bool _isLogin = true; // true = login, false = create account
   bool _obscurePassword = true;
 
@@ -22,6 +23,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _nameController.dispose();
     super.dispose();
   }
 
@@ -46,7 +48,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       } else {
         await ref
             .read(authControllerProvider.notifier)
-            .createAccount(email, password);
+            .createAccount(email, password, name: _nameController.text.trim());
       }
 
       if (mounted && ref.read(authControllerProvider).isAuthenticated) {
@@ -75,6 +77,29 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       await notifier.syncWithBackend();
       if (!context.mounted) return;
       router.go(await OnboardingStore.isComplete() ? '/agenda' : '/onboarding');
+    }
+  }
+
+  /// Esqueci minha senha: Firebase manda e-mail de redefinição.
+  Future<void> _resetPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      _showError('Digita teu e-mail aí em cima pra recuperar a senha');
+      return;
+    }
+    try {
+      await ref
+          .read(authControllerProvider.notifier)
+          .sendPasswordReset(email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Enviamos um link de recuperação pra $email'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } catch (_) {
+      // erro já exposto via provider
     }
   }
 
@@ -134,6 +159,21 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       .bodyMedium
                       ?.copyWith(color: AppColors.neutral)),
               const SizedBox(height: 24),
+              // Nome do prestador: só no cadastro (contas Google já trazem
+              // o nome da conta; email/senha precisam pedir).
+              if (!_isLogin) ...[
+                TextField(
+                  controller: _nameController,
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Teu nome',
+                    hintText: 'Como os clientes vão te ver',
+                    prefixIcon: Icon(Icons.person_outline),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               TextField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
@@ -180,6 +220,17 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             strokeWidth: 2, color: Colors.white))
                     : Text(_isLogin ? 'Entrar' : 'Criar conta'),
               ),
+              const SizedBox(height: 16),
+              // Esqueci minha senha: só no modo login (conta nova ainda
+              // não tem senha pra recuperar).
+              if (_isLogin)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: auth.isLoading ? null : _resetPassword,
+                    child: const Text('Esqueci minha senha'),
+                  ),
+                ),
               const SizedBox(height: 16),
               // Google sign in
               Row(

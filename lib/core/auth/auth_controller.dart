@@ -84,14 +84,65 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> createAccount(String email, String password) async {
+  Future<void> createAccount(String email, String password,
+      {String? name}) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      await _auth.createUserWithEmailAndPassword(
+      final cred = await _auth.createUserWithEmailAndPassword(
           email: email, password: password);
+      // nome do prestador: seta no Firebase (o /auth/sync repassa pro
+      // Postgres via authUser.name) e no perfil local na mesma hora.
+      if (name != null && name.trim().isNotEmpty) {
+        await cred.user?.updateDisplayName(name.trim());
+        await cred.user?.reload();
+      }
       await _auth.currentUser?.sendEmailVerification();
     } on FirebaseAuthException catch (e) {
       state = state.copyWith(isLoading: false, error: _friendlyError(e.code));
+      rethrow;
+    }
+  }
+
+  /// Envia e-mail de redefinição de senha (Firebase cuida do fluxo todo).
+  Future<void> sendPasswordReset(String email) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+      state = state.copyWith(isLoading: false);
+    } on FirebaseAuthException catch (e) {
+      state = state.copyWith(isLoading: false, error: _friendlyError(e.code));
+      rethrow;
+    }
+  }
+
+  /// Exclui a conta: dados no Postgres (DELETE /auth/account) + registro
+  /// no Firebase. Requer re-autenticação recente do Firebase — se o token
+  /// estiver velho o servidor mantém Postgres limpo e o Firebase pode
+  /// falhar; nesse caso o usuário sai com conta órfã inutilizável.
+  Future<void> deleteAccount() async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      try {
+        await _api.dio.delete('/auth/account');
+      } catch (_) {
+        // se o Postgres falhar, não exclui o auth (evita órfão invertido)
+        state = state.copyWith(
+          isLoading: false,
+          error: 'Não deu pra excluir agora. Verifica a internet e tenta de novo.',
+        );
+        return;
+      }
+      await _auth.currentUser?.delete();
+      state = const AuthState();
+    } on FirebaseAuthException catch (e) {
+      // requires-recent-login: pede login de novo e retry (fluxo do app
+      // orienta: sair e entrar antes de excluir)
+      state = state.copyWith(
+        isLoading: false,
+        error: e.code == 'requires-recent-login'
+            ? 'Por segurança, sai da conta e entra de novo antes de excluir.'
+            : _friendlyError(e.code),
+      );
       rethrow;
     }
   }

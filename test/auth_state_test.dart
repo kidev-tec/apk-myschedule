@@ -33,4 +33,10 @@ void main() {
       expect(limpo.isLoading, isTrue);
     });
   });
+
+  group('F0 — conta (cadastro com nome, reset, exclusão)', () {
+    // Contratos de assinatura (createAccount com {name}, sendPasswordReset,
+    // deleteAccount) são exercitados em login_page_test.dart, que roda com
+    // FirebasePlatform fake (o forTest() instancia FirebaseAuth.instance).
+  });
 }
