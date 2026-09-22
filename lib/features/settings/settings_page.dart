@@ -463,7 +463,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           const SizedBox(height: 8),
 
-          // Meu negócio (RF-02): gerenciar serviços a qualquer momento —
+                    if (_me != null)
+            Card(
+              child: ListTile(
+                leading:
+                    Icon(Icons.business_center, color: AppColors.primaryOf(context)),
+                title: const Text('Editar meu negócio'),
+                subtitle: const Text('Nome, segmento e endereço'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/edit-business'),
+              ),
+            ),
+          const SizedBox(height: 8),
+
+// Meu negócio (RF-02): gerenciar serviços a qualquer momento —
           // não só no onboarding. O onboarding define o segmento; aqui o
           // prestador mantém o catálogo (criar, editar preço/duração, arquivar).
           if (_me != null)

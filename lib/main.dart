@@ -19,6 +19,7 @@ import 'features/clients/client_form_page.dart';
 import 'features/services/services_page.dart';
 import 'features/settings/time_offs_page.dart';
 import 'features/settings/waitlist_page.dart';
+import 'features/settings/edit_business_page.dart';
 import 'features/services/service_form_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/settings/working_hours_page.dart';
@@ -129,6 +130,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/waitlist',
         builder: (_, __) => const WaitlistPage(),
+      ),
+      GoRoute(
+        path: '/edit-business',
+        builder: (_, __) => const EditBusinessPage(),
       ),
       GoRoute(
         path: '/services',
