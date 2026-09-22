@@ -111,8 +111,9 @@ class _EditBusinessPageState extends ConsumerState<EditBusinessPage> {
     // máscara
     final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
     var masked = digits;
-    if (digits.length > 5)
+    if (digits.length > 5) {
       masked = '${digits.substring(0, 5)}-${digits.substring(5, 8)}';
+    }
     if (masked != value) {
       _zipController.value = TextEditingValue(
           text: masked,
