@@ -34,16 +34,65 @@ jobs:
       - name: Sanitize Gradle properties for CI
         run: |
           sed -i -E '/org\.gradle\.java\.home=/d;/android\.aapt2FromMavenOverride=/d' android/gradle.properties
-      - name: Dummy google-services.json (CI)
-        run: test -f android/app/google-services.json || cp android/app/google-services.ci.json android/app/google-services.json
+
+      # Firebase real: sem isso os resources saem com o ci-dummy e o login
+      # quebra de vez (bug da v1.2.0: apiKey "dummy" embutida no APK).
+      - name: Restore real google-services.json
+        env:
+          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
+        run: |
+          test -n "$GOOGLE_SERVICES_JSON_B64" || { echo "::error::Secret GOOGLE_SERVICES_JSON_B64 ausente"; exit 1; }
+          echo "$GOOGLE_SERVICES_JSON_B64" | base64 -d > android/app/google-services.json
+          python3 -c "import json;d=json.load(open('android/app/google-services.json'));assert d['client'][0]['api_key'][0]['current_key'].startswith('AIza') and d['project_info']['project_id']!='ci-dummy', 'google-services.json invalido'"
+
+      # Keystore de release FIXO: o SHA-1 dele está registrado no Firebase.
+      # Sem keystore fixo, o runner gera um debug keystore novo a cada build
+      # (bug da v1.2.0: SHA-1 desconhecido → Google login falha).
+      - name: Restore release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          test -n "$KEYSTORE_BASE64" || { echo "::error::Secret KEYSTORE_BASE64 ausente"; exit 1; }
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+          echo "KEYSTORE_PATH=$GITHUB_WORKSPACE/android/app/upload-keystore.jks" >> "$GITHUB_ENV"
+          echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "KEY_ALIAS=${KEY_ALIAS:-agenva}" >> "$GITHUB_ENV"
+
       - name: Get Dependencies
         run: flutter pub get
       - name: Generate Code
         run: dart run build_runner build --delete-conflicting-outputs
       - name: Build APK (release)
         run: flutter build apk --release --dart-define=API_BASE_URL=${{ vars.API_BASE_URL_PROD }}
+
       - name: Verify APK
         run: test -f build/app/outputs/flutter-apk/app-release.apk
+
+      # Gate: falha o release se o APK sair com Firebase dummy (nunca mais
+      # deixar o bug da v1.2.0 passar em silêncio).
+      - name: Verify Firebase config is real (anti-dummy gate)
+        run: |
+          BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          $BT/aapt2 dump resources build/app/outputs/flutter-apk/app-release.apk > /tmp/res.txt
+          if grep -q '"ci-dummy"' /tmp/res.txt || grep -q '"1:0:android:0"' /tmp/res.txt; then
+            echo "::error::APK com Firebase DUMMY embutido — google-services.json não foi injetado"; exit 1
+          fi
+          grep -A1 'string/google_app_id' /tmp/res.txt | grep -qE '"1:[0-9]{9,}:' \
+            || { echo "::error::google_app_id ausente/inválido no APK"; exit 1; }
+          echo "Firebase config OK (google_app_id real presente)"
+
+      - name: Verify signing certificate
+        run: |
+          BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          $BT/apksigner verify --print-certs build/app/outputs/flutter-apk/app-release.apk
+          SHA1=$($BT/apksigner verify --print-certs build/app/outputs/flutter-apk/app-release.apk | grep 'SHA-1' | awk '{print $2}' | tr -d ':' | tr 'A-F' 'a-f')
+          if [ "$SHA1" = "a2ed26cb06b26b16fcaa88276b26c589349ac755" ]; then
+            echo "::error::APK assinado com debug keystore DA RUNNER (SHA-1 não registrado no Firebase)"; exit 1
+          fi
+          echo "SHA-1 de assinatura OK ($SHA1)"
+
       - name: Upload APK to release
         uses: softprops/action-gh-release@v2
         with:
