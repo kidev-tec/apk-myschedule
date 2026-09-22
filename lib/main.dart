@@ -16,6 +16,8 @@ import 'features/agenda/booking_wizard.dart';
 import 'features/clients/clients_page.dart';
 import 'features/clients/client_form_page.dart';
 import 'features/services/services_page.dart';
+import 'features/settings/time_offs_page.dart';
+import 'features/settings/waitlist_page.dart';
 import 'features/services/service_form_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/settings/working_hours_page.dart';
@@ -110,6 +112,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/working-hours',
         builder: (_, __) => const WorkingHoursPage(),
+      ),
+      GoRoute(
+        path: '/time-offs',
+        builder: (_, __) => const TimeOffsPage(),
+      ),
+      GoRoute(
+        path: '/waitlist',
+        builder: (_, __) => const WaitlistPage(),
       ),
       GoRoute(
         path: '/services',

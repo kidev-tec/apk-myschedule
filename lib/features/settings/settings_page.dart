@@ -378,6 +378,30 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             Card(
               child: ListTile(
                 leading:
+                    Icon(Icons.block, color: AppColors.primaryOf(context)),
+                title: const Text('Bloqueios de agenda'),
+                subtitle: const Text('Almoço, feriado, férias'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/time-offs'),
+              ),
+            ),
+          const SizedBox(height: 8),
+          if (_me != null)
+            Card(
+              child: ListTile(
+                leading:
+                    Icon(Icons.hourglass_top, color: AppColors.primaryOf(context)),
+                title: const Text('Lista de espera'),
+                subtitle: const Text('Clientes esperando vaga'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/waitlist'),
+              ),
+            ),
+          const SizedBox(height: 8),
+          if (_me != null)
+            Card(
+              child: ListTile(
+                leading:
                     Icon(Icons.schedule, color: AppColors.primaryOf(context)),
                 title: const Text('Horário de funcionamento'),
                 subtitle: const Text('Quando tu atende, dia a dia'),
