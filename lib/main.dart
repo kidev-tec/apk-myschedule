@@ -10,7 +10,7 @@ import 'features/auth/login_page.dart';
 import 'core/api/api_client.dart';
 import 'core/storage/local_cache.dart';
 import 'core/segment/segment_preset.dart';
-import 'core/storage/onboarding_store.dart';
+import 'core/storage/onboarding_resolver.dart';
 import 'features/onboarding/onboarding_page.dart';
 import 'features/agenda/agenda_page.dart';
 import 'features/agenda/booking_wizard.dart';
@@ -46,8 +46,9 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       // Se autenticado e está em login -> onboarding (1ª vez) ou agenda
       if (isAuthenticated && isAuthRoute) {
-        // Onboarding só na PRIMEIRA vez — flag persistida sobrevive a restart
-        final done = await OnboardingStore.isComplete();
+        // Servidor é a fonte da verdade (feedback Ezequias 22/09);
+        // fallback offline usa a flag local. Ver onboarding_resolver.dart.
+        final done = await resolveOnboardingComplete(ApiClient());
         return done ? '/agenda' : '/onboarding';
       }
 
