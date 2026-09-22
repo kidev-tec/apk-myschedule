@@ -13,6 +13,7 @@ import '../../core/api/api_client.dart';
 import '../../core/api/api_config.dart';
 import '../../core/segment/segment_preset.dart';
 import '../../core/auth/auth_controller.dart';
+import '../../core/storage/onboarding_store.dart';
 import '../../theme/app_theme.dart';
 import 'gcal_service.dart';
 
@@ -319,6 +320,67 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
   }
 
+  /// Exclusão de conta com confirmação dupla: 1º diálogo explica e pede
+  /// "EXCLUIR" digitado; a chamada apaga dados (Postgres) + auth (Firebase).
+  Future<void> _deleteAccount() async {
+    final controller = TextEditingController();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Excluir tua conta?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Isso apaga PERMANENTEMENTE teu perfil, teus serviços, '
+              'teus clientes e todo o teu histórico de agendamentos. '
+              'Não tem como desfazer.',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Digita EXCLUIR pra confirmar',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () {
+              if (controller.text.trim().toUpperCase() == 'EXCLUIR') {
+                Navigator.pop(dialogContext, true);
+              }
+            },
+            child: const Text('Excluir conta'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    final auth = ref.read(authControllerProvider.notifier);
+    await auth.deleteAccount();
+    if (!mounted) return;
+    final error = ref.read(authControllerProvider).error;
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error), backgroundColor: AppColors.error),
+      );
+      return;
+    }
+    // sucesso: onboarding precisa rodar de novo numa conta futura
+    await OnboardingStore.reset();
+    if (mounted) context.go('/login');
+  }
+
   /// Inicial do avatar — tolerante a nome/email vazios ou whitespace.
   /// ('' ?? fallback NÃO cai no fallback pois '' não é null; ''[0] estoura
   /// RangeError: Valid value range is empty: 0 — o crash que víamos.)
@@ -400,7 +462,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           const SizedBox(height: 8),
 
-          // Meu negócio (RF-02): gerenciar serviços a qualquer momento —
+          if (_me != null)
+            Card(
+              child: ListTile(
+                leading: Icon(Icons.business_center,
+                    color: AppColors.primaryOf(context)),
+                title: const Text('Editar meu negócio'),
+                subtitle: const Text('Nome, segmento e endereço'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/edit-business'),
+              ),
+            ),
+          const SizedBox(height: 8),
+
+// Meu negócio (RF-02): gerenciar serviços a qualquer momento —
           // não só no onboarding. O onboarding define o segmento; aqui o
           // prestador mantém o catálogo (criar, editar preço/duração, arquivar).
           if (_me != null)
@@ -417,6 +492,29 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           const SizedBox(height: 8),
 
+          if (_me != null)
+            Card(
+              child: ListTile(
+                leading: Icon(Icons.block, color: AppColors.primaryOf(context)),
+                title: const Text('Bloqueios de agenda'),
+                subtitle: const Text('Almoço, feriado, férias'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/time-offs'),
+              ),
+            ),
+          const SizedBox(height: 8),
+          if (_me != null)
+            Card(
+              child: ListTile(
+                leading: Icon(Icons.hourglass_top,
+                    color: AppColors.primaryOf(context)),
+                title: const Text('Lista de espera'),
+                subtitle: const Text('Clientes esperando vaga'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/waitlist'),
+              ),
+            ),
+          const SizedBox(height: 8),
           if (_me != null)
             Card(
               child: ListTile(
@@ -500,6 +598,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   title: const Text('Sair da conta',
                       style: TextStyle(color: AppColors.error)),
                   onTap: _signOut,
+                ),
+                const Divider(height: 1),
+                // Excluir conta (LGPD art. 18, VI): discreta mas acessível.
+                // Confirmação dupla com dígito de "EXCLUIR" — retenção honesta.
+                ListTile(
+                  leading:
+                      const Icon(Icons.delete_forever, color: AppColors.error),
+                  title: const Text('Excluir minha conta',
+                      style: TextStyle(color: AppColors.error, fontSize: 13)),
+                  onTap: _deleteAccount,
                 ),
               ],
             ),

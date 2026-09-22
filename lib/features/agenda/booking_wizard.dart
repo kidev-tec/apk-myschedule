@@ -36,6 +36,78 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
 
   bool _loading = true;
 
+  // F4 — histórico do cliente selecionado
+  Map<String, dynamic>? _clientHistory;
+  bool _historyLoading = false;
+
+  Future<void> _loadHistory(String clientId) async {
+    setState(() => _historyLoading = true);
+    try {
+      final r = await ref
+          .read(wizardApiProvider)
+          .dio
+          .get('/clients/$clientId/history');
+      if (mounted) setState(() => _clientHistory = r.data);
+    } catch (_) {
+      if (mounted) setState(() => _clientHistory = null);
+    } finally {
+      if (mounted) setState(() => _historyLoading = false);
+    }
+  }
+
+  /// Painel resumido do histórico — "esse cliente veio 12x, sempre corta
+  /// degradê". Aparece logo após selecionar o cliente no passo 1.
+  Widget _buildHistoryPanel() {
+    if (_selectedClient == null) return const SizedBox.shrink();
+    if (_historyLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+    final h = _clientHistory;
+    if (h == null) return const SizedBox.shrink();
+    final total = h['total'] as int? ?? 0;
+    if (total == 0) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Text('Primeira visita deste cliente 👋',
+            style: TextStyle(fontSize: 13)),
+      );
+    }
+    final canceled = h['canceled'] as int? ?? 0;
+    final lastVisit = h['last_visit'] as String?;
+    final last = lastVisit != null
+        ? DateFormat('dd/MM/yyyy').format(DateTime.parse(lastVisit))
+        : '—';
+    final recent = (h['recent'] as List? ?? [])
+        .take(3)
+        .map((a) => '${a['service_name']} — '
+            '${DateFormat('dd/MM').format(DateTime.parse(a['starts_at']))}'
+            '${a['status'] == 'canceled' ? ' (cancelado)' : ''}')
+        .toList();
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+                '$total visita${total > 1 ? 's' : ''} · última em $last'
+                '${canceled > 0 ? ' · $canceled cancelamento(s)' : ''}',
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            if (recent.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              ...recent.map(
+                  (s) => Text('• $s', style: const TextStyle(fontSize: 12))),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -235,16 +307,6 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
 
   String _query = '';
 
-  List<Client> get _filteredClients {
-    final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return _clients;
-    return _clients
-        .where((c) =>
-            c.name.toLowerCase().contains(q) ||
-            c.phoneE164.toLowerCase().contains(q))
-        .toList();
-  }
-
   Future<void> _openAddClientSheet() async {
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController(text: _query.trim());
@@ -411,7 +473,13 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
   }
 
   Widget _buildClientStep() {
-    final filtered = _filteredClients;
+    final filtered = _clients
+        .where((c) =>
+            _query.trim().isEmpty ||
+            c.name.toLowerCase().contains(_query.trim().toLowerCase()) ||
+            c.phoneE164.contains(_query.trim()))
+        .toList();
+
     return Column(
       children: [
         Padding(
@@ -425,6 +493,8 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
             onChanged: (v) => setState(() => _query = v),
           ),
         ),
+        // F4: histórico do cliente selecionado
+        _buildHistoryPanel(),
         if (filtered.isEmpty)
           Expanded(
             child: Center(
@@ -485,7 +555,10 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                               ? Icon(Icons.check_circle,
                                   color: AppColors.primaryOf(context))
                               : null,
-                          onTap: () => setState(() => _selectedClient = c),
+                          onTap: () {
+                            setState(() => _selectedClient = c);
+                            _loadHistory(c.id);
+                          },
                         ),
                       );
                     },
