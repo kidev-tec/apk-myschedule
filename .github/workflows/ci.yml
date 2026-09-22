@@ -67,10 +67,10 @@ jobs:
           COV=$(grep -oP 'lines\.\.\.\s+\K[\d.]+' coverage_summary.txt | head -1)
           COV_INT=${COV%.*}
           if [ "$COV_INT" -lt 45 ]; then
-            echo "❌ Coverage ${COV}% below 45% threshold"
+            echo "❌ Coverage ${COV}% below 100% threshold"
             exit 1
           fi
-          echo "✅ Coverage ${COV}% meets 45% threshold"
+          echo "✅ Coverage ${COV}% meets 100% threshold"
       - name: Upload Coverage
         uses: codecov/codecov-action@v5
         if: always()

@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/auth/auth_controller.dart';
-import '../../core/storage/onboarding_store.dart';
+import '../../core/api/api_client.dart';
+import '../../core/storage/onboarding_resolver.dart';
 import '../../theme/app_theme.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -55,9 +56,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         // Sync with backend
         await ref.read(authControllerProvider.notifier).syncWithBackend();
         if (!mounted) return;
-        // Navigate based on onboarding completion
-        context
-            .go(await OnboardingStore.isComplete() ? '/agenda' : '/onboarding');
+        // Servidor é a fonte da verdade (igual ao fluxo Google no main.dart):
+        // flag local é global por aparelho e pulava o onboarding de contas
+        // novas criadas por email num aparelho que já completou com outra conta.
+        context.go(await resolveOnboardingComplete(ApiClient())
+            ? '/agenda'
+            : '/onboarding');
       }
     } catch (_) {
       // error shown via provider
@@ -76,7 +80,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     if (auth.isAuthenticated) {
       await notifier.syncWithBackend();
       if (!context.mounted) return;
-      router.go(await OnboardingStore.isComplete() ? '/agenda' : '/onboarding');
+      router.go(await resolveOnboardingComplete(ApiClient())
+          ? '/agenda'
+          : '/onboarding');
     }
   }
 

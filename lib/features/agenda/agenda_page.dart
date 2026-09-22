@@ -4,9 +4,16 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
+import '../../core/storage/local_cache.dart';
+import '../../core/storage/connectivity_provider.dart';
+import '../../core/storage/sync_queue.dart';
+import '../../core/utils/phone_br.dart';
 import '../../core/api/paywall_flag.dart';
 import '../../core/update/update_service.dart';
 import '../../theme/app_theme.dart';
+
+/// B6/DI: provider do ApiClient pra agenda — testes sobrescrevem com mock.
+final agendaApiProvider = Provider<ApiClient>((ref) => ApiClient());
 
 class AgendaPage extends ConsumerStatefulWidget {
   const AgendaPage({super.key, this.onCheckUpdate});
@@ -22,9 +29,12 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   DateTime _focusedDay = DateTime.now();
   List<Appointment> _appointments = [];
   bool _loading = true;
+  // B6: visão corrente — dia (default), semana ou mês (via bottom sheet)
+  _AgendaView _view = _AgendaView.dia;
 
   final ValueNotifier<bool> _updateBanner = ValueNotifier(false);
   bool _downloading = false;
+  DateTime? _offlineSync;
 
   Future<void> _doUpdate() async {
     final info = UpdateService.lastCheck;
@@ -50,17 +60,61 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
               if (info != null && mounted) _updateBanner.value = true;
             }))();
     _loadAppointments();
+    // Offline fase 2: voltou a rede → replay da fila de escritas.
+    _connRemove =
+        ref.read(connectivityProvider.notifier).addListener(_onOnline);
+  }
+
+  void Function()? _connRemove;
+  bool _syncing = false;
+
+  @override
+  void dispose() {
+    _connRemove?.call();
+    super.dispose();
+  }
+
+  void _onOnline(bool online) {
+    if (!online || _syncing) return;
+    _syncing = true;
+    final queue = ref.read(syncQueueProvider.notifier);
+    if (queue.count == 0) {
+      _syncing = false;
+      return;
+    }
+    queue.replay(ref.read(agendaApiProvider).dio).then((failures) {
+      if (!mounted) return;
+      if (failures.isEmpty) {
+        if (queue.count == 0) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Agendamentos offline sincronizados!'),
+              backgroundColor: Colors.green));
+          _loadAppointments();
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                '${failures.length} agendamento(s) não sincronizaram: ${failures.first.error}'),
+            backgroundColor: AppColors.error));
+        _loadAppointments();
+      }
+    }).whenComplete(() => _syncing = false);
   }
 
   Future<void> _loadAppointments() async {
     setState(() => _loading = true);
     try {
-      final api = ApiClient();
-      final start =
-          DateTime(_focusedDay.year, _focusedDay.month, _focusedDay.day);
-      final end = start.add(const Duration(days: 1));
+      final api = ref.read(agendaApiProvider);
+      // B6: janela conforme a visão — dia = 1 dia; semana = dom..sáb da semana
+      // do dia focado (preserva foco ao alternar visões).
+      final start = _view == _AgendaView.semana
+          ? _focusedDay.subtract(Duration(days: _focusedDay.weekday % 7))
+          : _focusedDay;
+      final windowStart = DateTime(start.year, start.month, start.day);
+      final days = _view == _AgendaView.semana ? 7 : 1;
+      final end = windowStart.add(Duration(days: days));
       final resp = await api.dio.get('/appointments', queryParameters: {
-        'from': start.toIso8601String(),
+        'from': windowStart.toIso8601String(),
         'to': end.toIso8601String(),
       });
       final list = resp.data is List
@@ -69,19 +123,38 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       _appointments = list
           .map((j) => Appointment.fromJson(j as Map<String, dynamic>))
           .toList();
+      // Offline-first: cacheia a janela carregada (chave = visão+dia focado).
+      try {
+        await LocalCache.putBoxByDay(list, _cacheKeyForWindow());
+      } catch (_) {
+        // cache é best-effort
+      }
     } catch (e) {
-      debugPrint('[agenda] falha ao carregar: $e');
+      debugPrint('[agenda] falha ao carregar (tentando cache offline): $e');
+      // Offline-first: sem rede, serve a última janela cacheada desse dia.
+      try {
+        final cached = LocalCache.getListByDay(_cacheKeyForWindow());
+        _appointments = cached
+            .map((j) => Appointment.fromJson(j as Map<String, dynamic>))
+            .toList();
+        _offlineSync = LocalCache.lastSync(_cacheKeyForWindow());
+      } catch (_) {
+        _offlineSync = null;
+      }
     }
     if (mounted) setState(() => _loading = false);
   }
 
-  void _prevDay() => setState(() {
-        _focusedDay = _focusedDay.subtract(const Duration(days: 1));
-        _loadAppointments();
-      });
+  /// Chave de cache da janela visível (dia/semana do dia focado).
+  String _cacheKeyForWindow() {
+    final start = _view == _AgendaView.semana
+        ? _focusedDay.subtract(Duration(days: _focusedDay.weekday % 7))
+        : _focusedDay;
+    return 'appointments_${_view.name}_${start.year}-${start.month}-${start.day}';
+  }
 
-  void _nextDay() => setState(() {
-        _focusedDay = _focusedDay.add(const Duration(days: 1));
+  void _shiftWindow(int days) => setState(() {
+        _focusedDay = _focusedDay.add(Duration(days: days));
         _loadAppointments();
       });
 
@@ -89,6 +162,23 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         _focusedDay = DateTime.now();
         _loadAppointments();
       });
+
+  bool get _isToday {
+    final now = DateTime.now();
+    return _focusedDay.year == now.year &&
+        _focusedDay.month == now.month &&
+        _focusedDay.day == now.day;
+  }
+
+  /// B6: alterna dia/semana preservando a data em foco.
+  void _switchView(_AgendaView v) {
+    if (v == _AgendaView.mes) {
+      _openMonthView();
+      return;
+    }
+    setState(() => _view = v);
+    _loadAppointments();
+  }
 
   /// Visão mensal: bottom sheet com grid do mês, marca dias com agendamentos
   /// e permite pular pro dia tocado. Carrega o mês inteiro numa query.
@@ -98,7 +188,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     final monthEnd = DateTime(_focusedDay.year, _focusedDay.month + 1, 1);
     Map<DateTime, List<Appointment>> byDay = {};
     try {
-      final api = ApiClient();
+      final api = ref.read(agendaApiProvider);
       final resp = await api.dio.get('/appointments', queryParameters: {
         'from': monthStart.toIso8601String(),
         'to': monthEnd.toIso8601String(),
@@ -119,6 +209,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     if (mounted) setState(() => _loading = false);
 
     if (!mounted) return;
+    // B6: o mês tem SEMPRE os dias visíveis (dots indicam agendamentos),
+    // então não usa empty state textual — o picker já é a "mensagem" visual.
     final picked = await showModalBottomSheet<DateTime>(
       context: context,
       isScrollControlled: true,
@@ -155,16 +247,17 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.today),
-            tooltip: 'Hoje',
-            onPressed: _today,
-          ),
-          IconButton(
-            icon: const Icon(Icons.calendar_month),
-            tooltip: 'Agenda completa (mês)',
-            onPressed: _openMonthView,
-          ),
+          // "Hoje" só aparece quando estás deslocado do dia corrente —
+          // em hoje seria um 3º caminho redundante (1 ação dominante por tela).
+          if (!_isToday)
+            IconButton(
+              icon: const Icon(Icons.today),
+              tooltip: 'Hoje',
+              onPressed: _today,
+            ),
+          // B6: botão de mês no AppBar removido — redundante com o seletor
+          // Dia/Semana/Mês (feedback Rafael 18/09). O "Mês" do seletor abre
+          // o mesmo bottom sheet.
           IconButton(
             icon: const Icon(Icons.settings),
             tooltip: 'Configurações',
@@ -238,13 +331,71 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                         ),
                 ),
                 Expanded(
-                  child: _appointments.isEmpty
-                      ? _buildEmptyState(context)
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _appointments.length,
-                          itemBuilder: (_, i) =>
-                              _buildAppointmentCard(_appointments[i], timeFmt),
+                  child: _loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : Column(
+                          children: [
+                            // Offline-first: banner quando servindo do cache
+                            if (_offlineSync != null)
+                              Material(
+                                color: Colors.amber.shade700,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 6),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.cloud_off,
+                                          color: Colors.white, size: 18),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Modo offline — dados de '
+                                          '${DateFormat('HH:mm').format(_offlineSync!)}',
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 13),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            // B6: seletor Dia / Semana / Mês (foco preservado)
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              child: SegmentedButton<_AgendaView>(
+                                segments: const [
+                                  ButtonSegment(
+                                      value: _AgendaView.dia,
+                                      label: Text('Dia')),
+                                  ButtonSegment(
+                                      value: _AgendaView.semana,
+                                      label: Text('Semana')),
+                                  ButtonSegment(
+                                      value: _AgendaView.mes,
+                                      label: Text('Mês')),
+                                ],
+                                selected: {_view},
+                                onSelectionChanged: (sel) =>
+                                    _switchView(sel.first),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Expanded(
+                              child: _appointments.isEmpty
+                                  ? _buildEmptyState(context)
+                                  : _view == _AgendaView.semana
+                                      ? _buildWeekList(timeFmt)
+                                      : ListView.builder(
+                                          padding: const EdgeInsets.all(16),
+                                          itemCount: _appointments.length,
+                                          itemBuilder: (_, i) =>
+                                              _buildAppointmentCard(
+                                                  _appointments[i], timeFmt),
+                                        ),
+                            ),
+                          ],
                         ),
                 ),
               ],
@@ -264,7 +415,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           const SizedBox(height: 12),
           FloatingActionButton.extended(
             heroTag: 'btn-book',
-            onPressed: () => context.push('/booking'),
+            onPressed: () => context.push('/agenda/booking'),
             icon: const Icon(Icons.add),
             label: const Text('Marcar horário'),
             backgroundColor: AppColors.primaryOf(context),
@@ -277,6 +428,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
+    // B6: mensagem de vazio contextual por visão
+    final title = _view == _AgendaView.semana
+        ? 'Nada agendado pra semana'
+        : 'Nada agendado pra hoje';
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -287,7 +442,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                 size: 80, color: AppColors.midOf(context)),
             const SizedBox(height: 16),
             Text(
-              'Nada agendado pra hoje',
+              title,
               style: Theme.of(context).textTheme.headlineMedium,
               textAlign: TextAlign.center,
             ),
@@ -340,9 +495,11 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         trailing: a.isBlock
             ? PopupMenuButton<String>(
                 onSelected: (v) => _handleAppointmentAction(v, a),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                      value: 'cancel', child: Text('Liberar horário')),
+                itemBuilder: (_) => [
+                  // Horário já passou: sem ações (nada a liberar).
+                  if (!_isPast(a))
+                    const PopupMenuItem(
+                        value: 'cancel', child: Text('Liberar horário')),
                 ],
               )
             : PopupMenuButton<String>(
@@ -351,13 +508,18 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                   if (a.status == 'pending')
                     const PopupMenuItem(
                         value: 'confirm', child: Text('Confirmar')),
-                  if (a.status == 'pending')
+                  if (a.status == 'pending' && !_isPast(a))
                     const PopupMenuItem(
                         value: 'askConfirm',
                         child: Text('Pedir confirmação no WhatsApp')),
                   const PopupMenuItem(value: 'edit', child: Text('Remarcar')),
-                  const PopupMenuItem(value: 'done', child: Text('Concluir')),
-                  const PopupMenuItem(value: 'cancel', child: Text('Cancelar')),
+                  // Passou do horário: sem concluir/cancelar (decisão de
+                  // produto — ações de agendamento só com antecedência).
+                  if (!_isPast(a)) ...[
+                    const PopupMenuItem(value: 'done', child: Text('Concluir')),
+                    const PopupMenuItem(
+                        value: 'cancel', child: Text('Cancelar')),
+                  ],
                 ],
               ),
       ),
@@ -373,7 +535,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             IconButton.filled(
-              onPressed: _prevDay,
+              onPressed: () => _shiftWindow(-1),
               icon: const Icon(Icons.chevron_left),
               style: IconButton.styleFrom(
                   backgroundColor: AppColors.softOf(context),
@@ -387,7 +549,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                   ?.copyWith(fontWeight: FontWeight.w600),
             ),
             IconButton.filled(
-              onPressed: _nextDay,
+              onPressed: () => _shiftWindow(1),
               icon: const Icon(Icons.chevron_right),
               style: IconButton.styleFrom(
                   backgroundColor: AppColors.softOf(context),
@@ -396,6 +558,43 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           ],
         ),
       ),
+    );
+  }
+
+  /// B6: lista da semana — agrupa por dia com cabeçalho ("segunda, 15"),
+  /// ordenada por horário dentro de cada dia.
+  Widget _buildWeekList(DateFormat timeFmt) {
+    final dayFmt = DateFormat('EEEE, d', 'pt_BR');
+    final byDay = <DateTime, List<Appointment>>{};
+    for (final a in _appointments) {
+      final d = DateTime(a.startsAt.year, a.startsAt.month, a.startsAt.day);
+      (byDay[d] ??= []).add(a);
+    }
+    final days = byDay.keys.toList()..sort();
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: days.length,
+      itemBuilder: (_, i) {
+        final day = days[i];
+        final items = byDay[day]!
+          ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 4),
+              child: Text(
+                dayFmt.format(day).capitalize(),
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            ...items.map((a) => _buildAppointmentCard(a, timeFmt)),
+          ],
+        );
+      },
     );
   }
 
@@ -416,6 +615,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     }
   }
 
+  /// Agendamento cujo horário já passou: sem cancelar/concluir/pedir
+  /// confirmação (decisão de produto 21/09 — ação só com antecedência).
+  bool _isPast(Appointment a) => a.startsAt.isBefore(DateTime.now());
+
   /// Ao cancelar, abre o WhatsApp do cliente com mensagem pronta.
   /// O cliente não tem app — WhatsApp é o canal onde ele já está.
   Future<void> _notifyCancelOnWhatsapp(Appointment a) async {
@@ -423,7 +626,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     final msg = Uri.encodeComponent(
         'Oi ${a.clientName}! Tive que remanejar teu horário de $when. '
         'Me chama pra combinarmos outro horário! 🙂');
-    final phone = a.clientPhone.replaceAll(RegExp(r'[^0-9]'), '');
+    final phone = ensureDdi55(a.clientPhone);
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -454,7 +657,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     final msg = Uri.encodeComponent(
         'Oi ${a.clientName}! Confirmando teu horário de $when. '
         'Pode confirmar tua presença aqui? $link 🙂');
-    final phone = a.clientPhone.replaceAll(RegExp(r'[^0-9]'), '');
+    final phone = ensureDdi55(a.clientPhone);
     if (!mounted) return;
     final ok = await showDialog<bool>(
       context: context,
@@ -482,7 +685,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   /// O slug/token são gerados pela API no endpoint dedicado (RF-B01).
   Future<String> _confirmationLink(Appointment a) async {
     try {
-      final api = ApiClient();
+      final api = ref.read(agendaApiProvider);
       final res = await api.dio.get('/appointments/${a.id}/confirm-link');
       return (res.data as Map<String, dynamic>)['link'] as String? ?? '';
     } catch (_) {
@@ -492,7 +695,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
 
   /// RF-C01: após remarcar, oferece avisar o cliente com a NOVA data/hora.
   Future<void> _notifyRescheduledOnWhatsapp(Appointment a) async {
-    final api = ApiClient();
+    final api = ref.read(agendaApiProvider);
     // busca o agendamento remarcado pra pegar a nova data/hora
     String whenText = 'o novo horário';
     try {
@@ -510,7 +713,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     final msg = Uri.encodeComponent(
         'Oi ${a.clientName}! Remarquei teu horário pra $whenText. '
         'Confirma se esse novo horário funciona pra você? 🙂');
-    final phone = a.clientPhone.replaceAll(RegExp(r'[^0-9]'), '');
+    final phone = ensureDdi55(a.clientPhone);
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -536,7 +739,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   /// RF-A01..A03: sheet de bloqueio de horário. Cria appointment
   /// source='block' ocupando o intervalo escolhido do dia focado.
   Future<void> _showBlockSheet() async {
-    final api = ApiClient();
+    final api = ref.read(agendaApiProvider);
     final day = _focusedDay;
     TimeOfDay start = const TimeOfDay(hour: 12, minute: 0);
     TimeOfDay end = const TimeOfDay(hour: 13, minute: 0);
@@ -688,7 +891,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   }
 
   Future<void> _handleAppointmentAction(String action, Appointment a) async {
-    final api = ApiClient();
+    final api = ref.read(agendaApiProvider);
     try {
       switch (action) {
         case 'cancel':
@@ -713,8 +916,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         case 'edit':
           // remarcar: abre o wizard reaproveitando cliente+serviço
           if (!mounted) return;
-          final changed =
-              await context.push<bool>('/booking', extra: {'reschedule': a});
+          final changed = await context
+              .push<bool>('/agenda/booking', extra: {'reschedule': a});
           if (changed == true) {
             // RF-C01: remarcou — oferece avisar o cliente no WhatsApp
             if (mounted && a.clientPhone.isNotEmpty) {
@@ -812,6 +1015,9 @@ class _MonthPickerState extends State<_MonthPicker> {
     final sel0 = DateTime(widget.selectedDay.year, widget.selectedDay.month,
         widget.selectedDay.day);
 
+    final hasAnyEvent =
+        widget.eventsByDay.values.any((list) => list.isNotEmpty);
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
@@ -834,6 +1040,13 @@ class _MonthPickerState extends State<_MonthPicker> {
                     onPressed: () => _shiftMonth(1)),
               ],
             ),
+            if (!hasAnyEvent) ...[
+              const SizedBox(height: 8),
+              // Empty state do mês: texto discreto só quando NENHUM dia tem dot
+              Text('Nada agendado neste mês',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.neutral, fontStyle: FontStyle.italic)),
+            ],
             const SizedBox(height: 8),
             Row(
               children: _weekdays
@@ -921,6 +1134,9 @@ class _MonthPickerState extends State<_MonthPicker> {
     );
   }
 }
+
+/// B6: visões da agenda. `mes` abre o bottom sheet e volta pro `dia`.
+enum _AgendaView { dia, semana, mes }
 
 extension StringExtension on String {
   String capitalize() =>

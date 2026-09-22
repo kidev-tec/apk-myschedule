@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*'
 
+# Sem isto o GITHUB_TOKEN é read-only e o upload da Release responde 403.
+permissions:
+  contents: write
+
 env:
   FLUTTER_VERSION: '3.35.5'
   JAVA_VERSION: '17'
@@ -43,6 +47,7 @@ jobs:
       - name: Upload APK to release
         uses: softprops/action-gh-release@v2
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           files: build/app/outputs/flutter-apk/app-release.apk
 
   release-ios:
@@ -73,6 +78,7 @@ jobs:
       - name: Upload IPA to release
         uses: softprops/action-gh-release@v2
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           files: build/ios/ipa/*.ipa
 
   validate:

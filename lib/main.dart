@@ -8,8 +8,9 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'core/auth/auth_controller.dart';
 import 'features/auth/login_page.dart';
 import 'core/api/api_client.dart';
+import 'core/storage/local_cache.dart';
 import 'core/segment/segment_preset.dart';
-import 'core/storage/onboarding_store.dart';
+import 'core/storage/onboarding_resolver.dart';
 import 'features/onboarding/onboarding_page.dart';
 import 'features/agenda/agenda_page.dart';
 import 'features/agenda/booking_wizard.dart';
@@ -47,8 +48,9 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       // Se autenticado e está em login -> onboarding (1ª vez) ou agenda
       if (isAuthenticated && isAuthRoute) {
-        // Onboarding só na PRIMEIRA vez — flag persistida sobrevive a restart
-        final done = await OnboardingStore.isComplete();
+        // Servidor é a fonte da verdade (feedback Ezequias 22/09);
+        // fallback offline usa a flag local. Ver onboarding_resolver.dart.
+        final done = await resolveOnboardingComplete(ApiClient());
         return done ? '/agenda' : '/onboarding';
       }
 
@@ -69,6 +71,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      GoRoute(
+        // GoException "no routes for location: /" (18/09): algo navega pra
+        // raiz (não existe tela home). Redirect deixa o router decidir via
+        // redirect() acima (login → onboarding/agenda conforme estado).
+        path: '/',
+        redirect: (_, __) => null,
+      ),
       GoRoute(
         path: '/terms',
         builder: (_, state) {
@@ -169,7 +178,7 @@ void main() async {
       await Firebase.initializeApp(
         options: const FirebaseOptions(
           apiKey: String.fromEnvironment('FIREBASE_API_KEY',
-              defaultValue: 'AIzaSy...lrRg'),
+              defaultValue: 'AIzaSyBG9haJTEiv4r9slt2R92_0TZPMtJAlrRg'),
           appId: String.fromEnvironment('FIREBASE_APP_ID',
               defaultValue: '1:581069825659:android:5b35631cb1d25900a0e4de'),
           messagingSenderId: String.fromEnvironment('FIREBASE_SENDER_ID',
@@ -193,6 +202,14 @@ void main() async {
       debugPrint('[push:fg] $title — $body');
     },
   );
+
+  // Offline-first: inicializa o cache local (best-effort — falha de storage
+  // não impede o app de abrir, só perde o modo offline).
+  try {
+    await LocalCache.init();
+  } catch (e) {
+    debugPrint('[cache] init falhou (app segue online-only): $e');
+  }
 
   runApp(const ProviderScope(child: MinhaAgendaApp()));
 }
