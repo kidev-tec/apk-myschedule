@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
+import '../../core/storage/sync_queue.dart';
+import '../../core/utils/phone_br.dart';
 import '../../theme/app_theme.dart';
 import 'booking_logic.dart' as logic;
 
@@ -112,22 +114,56 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     }
 
     setState(() => _loading = true);
-    try {
-      final api = ref.read(wizardApiProvider);
-      await api.dio.post('/appointments', data: {
+    final op = PendingOp(
+      id: 'appt-${_selectedSlot!.millisecondsSinceEpoch}',
+      method: 'POST',
+      path: '/appointments',
+      body: {
         'clientId': _selectedClient!.id,
         'serviceId': _selectedService!.id,
         'startsAt': _selectedSlot!.toIso8601String(),
         'endsAt': _selectedSlot!
             .add(Duration(minutes: _selectedService!.durationMin))
             .toIso8601String(),
-      });
+      },
+      queuedAt: DateTime.now(),
+      description:
+          'Agendamento de ${_selectedClient!.name} às ${DateFormat('HH:mm').format(_selectedSlot!)}',
+    );
+    try {
+      final api = ref.read(wizardApiProvider);
+      await api.dio.post('/appointments', data: op.body);
       if (mounted) {
         context.go('/agenda');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
               content: Text('Horário marcado!'), backgroundColor: Colors.green),
         );
+      }
+    } on DioException catch (e) {
+      // Offline-first fase 2: falha de CONEXÃO enfileira; erro de negócio
+      // (409 conflito, 400 validação) mostra a mensagem humana na hora.
+      final queued =
+          await ref.read(syncQueueProvider.notifier).enqueueIfOffline(e, op);
+      if (mounted) {
+        if (queued) {
+          context.go('/agenda');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text(
+                    'Sem internet — horário salvo no celular e vai sincronizar sozinho'),
+                backgroundColor: Colors.orange),
+          );
+        } else {
+          final msg = e.response?.data is Map<String, dynamic>
+              ? (e.response!.data as Map<String, dynamic>)['error'] as String?
+              : null;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text(msg ?? 'Falha: ${e.message}'),
+                backgroundColor: AppColors.error),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -234,7 +270,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                 final api = ref.read(wizardApiProvider);
                 final resp = await api.dio.post('/clients', data: {
                   'name': nameCtrl.text.trim(),
-                  'phone_e164': phoneCtrl.text.trim(),
+                  'phone_e164': normalizePhoneBr(phoneCtrl.text),
                   if (emailCtrl.text.trim().isNotEmpty)
                     'email': emailCtrl.text.trim(),
                 });
@@ -313,10 +349,11 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                       decoration: const InputDecoration(
                         labelText: 'WhatsApp *',
                         hintText: '(14) 99999-9999',
+                        helperText: 'Com DDD — o 55 do Brasil entra sozinho',
                         prefixIcon: Icon(Icons.phone_outlined),
                       ),
-                      validator: (v) => v == null || v.trim().length < 10
-                          ? 'Telefone é obrigatório'
+                      validator: (v) => normalizePhoneBr(v ?? '').isEmpty
+                          ? 'Telefone inválido (informe DDD)'
                           : null,
                     ),
                     const SizedBox(height: 12),

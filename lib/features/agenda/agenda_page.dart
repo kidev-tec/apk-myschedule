@@ -4,6 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
+import '../../core/storage/local_cache.dart';
+import '../../core/storage/connectivity_provider.dart';
+import '../../core/storage/sync_queue.dart';
+import '../../core/utils/phone_br.dart';
 import '../../core/api/paywall_flag.dart';
 import '../../core/update/update_service.dart';
 import '../../theme/app_theme.dart';
@@ -30,6 +34,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
 
   final ValueNotifier<bool> _updateBanner = ValueNotifier(false);
   bool _downloading = false;
+  DateTime? _offlineSync;
 
   Future<void> _doUpdate() async {
     final info = UpdateService.lastCheck;
@@ -55,6 +60,45 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
               if (info != null && mounted) _updateBanner.value = true;
             }))();
     _loadAppointments();
+    // Offline fase 2: voltou a rede → replay da fila de escritas.
+    _connRemove =
+        ref.read(connectivityProvider.notifier).addListener(_onOnline);
+  }
+
+  void Function()? _connRemove;
+  bool _syncing = false;
+
+  @override
+  void dispose() {
+    _connRemove?.call();
+    super.dispose();
+  }
+
+  void _onOnline(bool online) {
+    if (!online || _syncing) return;
+    _syncing = true;
+    final queue = ref.read(syncQueueProvider.notifier);
+    if (queue.count == 0) {
+      _syncing = false;
+      return;
+    }
+    queue.replay(ref.read(agendaApiProvider).dio).then((failures) {
+      if (!mounted) return;
+      if (failures.isEmpty) {
+        if (queue.count == 0) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Agendamentos offline sincronizados!'),
+              backgroundColor: Colors.green));
+          _loadAppointments();
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                '${failures.length} agendamento(s) não sincronizaram: ${failures.first.error}'),
+            backgroundColor: AppColors.error));
+        _loadAppointments();
+      }
+    }).whenComplete(() => _syncing = false);
   }
 
   Future<void> _loadAppointments() async {
@@ -79,10 +123,34 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       _appointments = list
           .map((j) => Appointment.fromJson(j as Map<String, dynamic>))
           .toList();
+      // Offline-first: cacheia a janela carregada (chave = visão+dia focado).
+      try {
+        await LocalCache.putBoxByDay(list, _cacheKeyForWindow());
+      } catch (_) {
+        // cache é best-effort
+      }
     } catch (e) {
-      debugPrint('[agenda] falha ao carregar: $e');
+      debugPrint('[agenda] falha ao carregar (tentando cache offline): $e');
+      // Offline-first: sem rede, serve a última janela cacheada desse dia.
+      try {
+        final cached = LocalCache.getListByDay(_cacheKeyForWindow());
+        _appointments = cached
+            .map((j) => Appointment.fromJson(j as Map<String, dynamic>))
+            .toList();
+        _offlineSync = LocalCache.lastSync(_cacheKeyForWindow());
+      } catch (_) {
+        _offlineSync = null;
+      }
     }
     if (mounted) setState(() => _loading = false);
+  }
+
+  /// Chave de cache da janela visível (dia/semana do dia focado).
+  String _cacheKeyForWindow() {
+    final start = _view == _AgendaView.semana
+        ? _focusedDay.subtract(Duration(days: _focusedDay.weekday % 7))
+        : _focusedDay;
+    return 'appointments_${_view.name}_${start.year}-${start.month}-${start.day}';
   }
 
   void _shiftWindow(int days) => setState(() {
@@ -267,6 +335,31 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                       ? const Center(child: CircularProgressIndicator())
                       : Column(
                           children: [
+                            // Offline-first: banner quando servindo do cache
+                            if (_offlineSync != null)
+                              Material(
+                                color: Colors.amber.shade700,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 6),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.cloud_off,
+                                          color: Colors.white, size: 18),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Modo offline — dados de '
+                                          '${DateFormat('HH:mm').format(_offlineSync!)}',
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 13),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             // B6: seletor Dia / Semana / Mês (foco preservado)
                             Padding(
                               padding:
@@ -402,9 +495,11 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         trailing: a.isBlock
             ? PopupMenuButton<String>(
                 onSelected: (v) => _handleAppointmentAction(v, a),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                      value: 'cancel', child: Text('Liberar horário')),
+                itemBuilder: (_) => [
+                  // Horário já passou: sem ações (nada a liberar).
+                  if (!_isPast(a))
+                    const PopupMenuItem(
+                        value: 'cancel', child: Text('Liberar horário')),
                 ],
               )
             : PopupMenuButton<String>(
@@ -413,13 +508,18 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                   if (a.status == 'pending')
                     const PopupMenuItem(
                         value: 'confirm', child: Text('Confirmar')),
-                  if (a.status == 'pending')
+                  if (a.status == 'pending' && !_isPast(a))
                     const PopupMenuItem(
                         value: 'askConfirm',
                         child: Text('Pedir confirmação no WhatsApp')),
                   const PopupMenuItem(value: 'edit', child: Text('Remarcar')),
-                  const PopupMenuItem(value: 'done', child: Text('Concluir')),
-                  const PopupMenuItem(value: 'cancel', child: Text('Cancelar')),
+                  // Passou do horário: sem concluir/cancelar (decisão de
+                  // produto — ações de agendamento só com antecedência).
+                  if (!_isPast(a)) ...[
+                    const PopupMenuItem(value: 'done', child: Text('Concluir')),
+                    const PopupMenuItem(
+                        value: 'cancel', child: Text('Cancelar')),
+                  ],
                 ],
               ),
       ),
@@ -515,6 +615,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     }
   }
 
+  /// Agendamento cujo horário já passou: sem cancelar/concluir/pedir
+  /// confirmação (decisão de produto 21/09 — ação só com antecedência).
+  bool _isPast(Appointment a) => a.startsAt.isBefore(DateTime.now());
+
   /// Ao cancelar, abre o WhatsApp do cliente com mensagem pronta.
   /// O cliente não tem app — WhatsApp é o canal onde ele já está.
   Future<void> _notifyCancelOnWhatsapp(Appointment a) async {
@@ -522,7 +626,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     final msg = Uri.encodeComponent(
         'Oi ${a.clientName}! Tive que remanejar teu horário de $when. '
         'Me chama pra combinarmos outro horário! 🙂');
-    final phone = a.clientPhone.replaceAll(RegExp(r'[^0-9]'), '');
+    final phone = ensureDdi55(a.clientPhone);
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -553,7 +657,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     final msg = Uri.encodeComponent(
         'Oi ${a.clientName}! Confirmando teu horário de $when. '
         'Pode confirmar tua presença aqui? $link 🙂');
-    final phone = a.clientPhone.replaceAll(RegExp(r'[^0-9]'), '');
+    final phone = ensureDdi55(a.clientPhone);
     if (!mounted) return;
     final ok = await showDialog<bool>(
       context: context,
@@ -609,7 +713,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     final msg = Uri.encodeComponent(
         'Oi ${a.clientName}! Remarquei teu horário pra $whenText. '
         'Confirma se esse novo horário funciona pra você? 🙂');
-    final phone = a.clientPhone.replaceAll(RegExp(r'[^0-9]'), '');
+    final phone = ensureDdi55(a.clientPhone);
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(

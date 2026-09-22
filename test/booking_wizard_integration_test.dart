@@ -218,7 +218,9 @@ void main() {
 
     // 409 → fica no wizard, sem navegar, com SnackBar de erro
     expect(find.text('PAGINA AGENDA'), findsNothing);
-    expect(find.textContaining('Falha'), findsOneWidget);
+    // 409 é erro de negócio: mostra a mensagem humana da API na hora
+    // (fase 2 do offline: só falha de CONEXÃO é que enfileira).
+    expect(find.textContaining('slot já reservado'), findsOneWidget);
   });
 
   testWidgets('busca filtra clientes por nome', (tester) async {
@@ -297,7 +299,7 @@ void main() {
               'existing': {
                 'id': 'c1',
                 'name': 'Ana',
-                'phone_e164': '+551****0001'
+                'phone_e164': '5514991110001'
               },
             }),
         data: Matchers.any);
@@ -305,7 +307,7 @@ void main() {
     await tester.enterText(
         find.widgetWithText(TextFormField, 'Nome *'), 'Zé Novato');
     await tester.enterText(
-        find.widgetWithText(TextFormField, 'WhatsApp *'), '+551****0001');
+        find.widgetWithText(TextFormField, 'WhatsApp *'), '(14) 99111-0001');
     await tester.tap(find.text('Criar e usar'));
     await tester.pumpAndSettle();
 
