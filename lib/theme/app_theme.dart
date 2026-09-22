@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import '../core/segment/segment_preset.dart';
 
-/// Tema Rubi — tokens extraídos do site oficial da Oficina da Beleza
-/// (ver .planning/tokens.json no repo de planejamento).
-///
-/// Cor dominante do site: Rubi #B51F4D (5 ocorrências).
-/// Pressed state: Rubi Escuro #9A0835.
+/// Tema do AGENVA — default = identidade da MARCA (azul #1E96E8, paleta do
+/// logo, ver DESIGN.md v2 em ~/logo-agenva/). Cor do SEGMENTO entra via
+/// buildAppTheme(preset) após o onboarding.
 class AppColors {
-  static const Color primary = Color(0xFFB51F4D); // Rubi (default beauty)
-  static const Color primaryPressed = Color(0xFF9A0835); // Rubi Escuro
+  // ---- Identidade AGENVA (DESIGN.md v2: paleta extraída do logo) ----
+  static const Color agenvaBlue = Color(0xFF1E96E8); // primária da marca
+  static const Color agenvaNavy = Color(0xFF16325C); // secundária (texto forte)
+  static const Color agenvaSky = Color(0xFF54B7EA); // destaque/badges
+  static const Color agenvaSurface = Color(0xFFF8F9FA); // fundo claro padrão
+
+  static const Color primary = agenvaBlue; // default do PRODUTO (marca AGENVA)
+  static const Color primaryPressed = Color(0xFF1573B5); // azul escuro derivado
   static const Color pinkSoft = Color(0xFFF7E3E9); // Rosa Suave
   static const Color pinkMid = Color(0xFFE8A7BC); // Rosa Médio
   static const Color neutral = Color(0xFF2B2B2B); // Texto principal
@@ -62,7 +66,9 @@ class AppTypography {
 }
 
 ThemeData buildAppTheme([SegmentPreset? preset]) {
-  final p = preset ?? SegmentPresets.beauty;
+  // Default = MARCA AGENVA (azul), não mais o preset beauty — evita o
+  // "flash rosa" nas telas de marca antes do onboarding escolher segmento.
+  final p = preset ?? SegmentPresets.brand;
   final base = ThemeData(
     useMaterial3: true,
     colorScheme: ColorScheme.fromSeed(
@@ -89,25 +95,30 @@ ThemeData buildAppTheme([SegmentPreset? preset]) {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: AppColors.primary,
+        backgroundColor: p.primary,
         foregroundColor: Colors.white,
-        // Pressed → Rubi Escuro #9A0835 (site oficial)
-        // Overlay darkening nativo do Material 3 cobre; cor explícita
-        // no pressedState via WidgetStateProperty quando necessário.
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: p.primary,
+        side: BorderSide(color: p.primary),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: AppColors.pinkSoft.withValues(alpha: 0.3),
+      fillColor: p.primary.withValues(alpha: 0.08),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.pinkMid),
+        borderSide: BorderSide(color: p.primary.withValues(alpha: 0.4)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.primary, width: 2),
+        borderSide: BorderSide(color: p.primary, width: 2),
       ),
     ),
   );

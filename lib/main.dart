@@ -3,10 +3,12 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/auth/auth_controller.dart';
 import 'features/auth/login_page.dart';
 import 'core/api/api_client.dart';
+import 'core/storage/local_cache.dart';
 import 'core/segment/segment_preset.dart';
 import 'core/storage/onboarding_store.dart';
 import 'features/onboarding/onboarding_page.dart';
@@ -17,6 +19,8 @@ import 'features/clients/client_form_page.dart';
 import 'features/services/services_page.dart';
 import 'features/services/service_form_page.dart';
 import 'features/settings/settings_page.dart';
+import 'features/settings/working_hours_page.dart';
+import 'features/settings/push_init_service.dart';
 import 'features/terms/terms_page.dart';
 import 'theme/app_theme.dart';
 
@@ -53,6 +57,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         // fire-and-forget: tema default até chegar
         ApiClient().dio.get('/me').then((r) {
           final id = r.data['business_type'] as String?;
+          debugPrint('[tema] GET /me → business_type=$id');
           if (id != null) {
             ref.read(segmentPresetProvider.notifier).state =
                 SegmentPreset.byId(id);
@@ -63,6 +68,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      GoRoute(
+        // GoException "no routes for location: /" (18/09): algo navega pra
+        // raiz (não existe tela home). Redirect deixa o router decidir via
+        // redirect() acima (login → onboarding/agenda conforme estado).
+        path: '/',
+        redirect: (_, __) => null,
+      ),
       GoRoute(
         path: '/terms',
         builder: (_, state) {
@@ -104,6 +116,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
       GoRoute(
+        path: '/working-hours',
+        builder: (_, __) => const WorkingHoursPage(),
+      ),
+      GoRoute(
         path: '/services',
         builder: (_, __) => const ServicesPage(),
         routes: [
@@ -132,21 +148,57 @@ void main() async {
 
   // Initialize Firebase (manual options p/ build de debug sem google-services.json;
   // em release, substituir pelas credenciais reais do projeto)
-  await Firebase.initializeApp(
-    options: const FirebaseOptions(
-      apiKey: String.fromEnvironment('FIREBASE_API_KEY',
-          defaultValue: 'AIzaSyBG9haJTEiv4r9slt2R92_0TZPMtJAlrRg'),
-      appId: String.fromEnvironment('FIREBASE_APP_ID',
-          defaultValue: '1:581069825659:android:5b35631cb1d25900a0e4de'),
-      messagingSenderId: String.fromEnvironment('FIREBASE_SENDER_ID',
-          defaultValue: '581069825659'),
-      projectId: String.fromEnvironment('FIREBASE_PROJECT_ID',
-          defaultValue: 'minha-agenda-6665a'),
-    ),
-  );
+  //
+  // CRÍTICO (18/09): no Android com google-services.json o plugin faz AUTO-INIT
+  // do app [DEFAULT] no arranque do processo — chamar initializeApp(options:)
+  // de novo lança [core/duplicate-app] e o app morre na splash. Fix: tentar
+  // pegar o app default; só inicializa com options se ele ainda não existe
+  // (iOS/build sem google-services).
+  try {
+    await Firebase.initializeApp();
+  } on FirebaseException catch (e) {
+    if (e.code == 'duplicate-app' || e.code == 'no-options') {
+      // auto-init já criou [DEFAULT] com as options do google-services — ok
+      debugPrint('[firebase] app default já inicializado pelo plugin nativo');
+    } else if (const bool.fromEnvironment('dart.product')) {
+      rethrow;
+    } else {
+      // fallback: inicializa manual (debug sem google-services.json)
+      await Firebase.initializeApp(
+        options: const FirebaseOptions(
+          apiKey: String.fromEnvironment('FIREBASE_API_KEY',
+              defaultValue: 'AIzaSyBG9haJTEiv4r9slt2R92_0TZPMtJAlrRg'),
+          appId: String.fromEnvironment('FIREBASE_APP_ID',
+              defaultValue: '1:581069825659:android:5b35631cb1d25900a0e4de'),
+          messagingSenderId: String.fromEnvironment('FIREBASE_SENDER_ID',
+              defaultValue: '581069825659'),
+          projectId: String.fromEnvironment('FIREBASE_PROJECT_ID',
+              defaultValue: 'minha-agenda-6665a'),
+        ),
+      );
+    }
+  }
 
   // Ensure email/password auth is enabled (configured in Firebase Console)
   // FirebaseAuth.instance.setLanguageCode('pt-BR');
+
+  // Push (FCM): handler de background + registro do token na API.
+  // Best-effort — falha não impede o app de abrir.
+  FirebaseMessaging.onBackgroundMessage(
+      PushInitService.firebaseMessagingBackgroundHandler);
+  PushInitService().init(
+    onForegroundMessage: (title, body) {
+      debugPrint('[push:fg] $title — $body');
+    },
+  );
+
+  // Offline-first: inicializa o cache local (best-effort — falha de storage
+  // não impede o app de abrir, só perde o modo offline).
+  try {
+    await LocalCache.init();
+  } catch (e) {
+    debugPrint('[cache] init falhou (app segue online-only): $e');
+  }
 
   runApp(const ProviderScope(child: MinhaAgendaApp()));
 }
@@ -159,7 +211,7 @@ class MinhaAgendaApp extends ConsumerWidget {
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
-      title: 'Minha Agenda',
+      title: 'AGENVA',
       debugShowCheckedModeBanner: false,
       // Conteúdo nunca fica atrás da barra de gestos (home/voltar) nem da
       // status bar — vale pra todas as telas que não usam SafeArea própria.

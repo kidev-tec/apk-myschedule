@@ -74,8 +74,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     if (auth.isAuthenticated) {
       await notifier.syncWithBackend();
       if (!context.mounted) return;
-      router.go(
-          await OnboardingStore.isComplete() ? '/agenda' : '/onboarding');
+      router.go(await OnboardingStore.isComplete() ? '/agenda' : '/onboarding');
     }
   }
 
@@ -101,24 +100,19 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               Center(
                 child: Column(
                   children: [
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryOf(context),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Icon(Icons.content_cut,
-                          size: 40, color: Colors.white),
-                    ),
+                    // Logo da MARCA AGENVA (A + checkmark) — o app é
+                    // multi-segmento; ícone de segmento (tesoura) aqui
+                    // acoplava a marca à beleza.
+                    Image.asset('assets/images/agenva_logo.png',
+                        width: 80, height: 80),
                     const SizedBox(height: 16),
-                    Text('Minha Agenda',
+                    Text('AGENVA',
                         style: Theme.of(context)
                             .textTheme
                             .headlineMedium
                             ?.copyWith(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 4),
-                    Text('Agenda pra profissionais da beleza',
+                    Text('Sua agenda, seu negócio',
                         style: Theme.of(context)
                             .textTheme
                             .bodyMedium
@@ -128,7 +122,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               ),
               const SizedBox(height: 48),
               // Form
-              Text(_isLogin ? 'Bem-vinda de volta' : 'Cria tua conta',
+              Text(_isLogin ? 'Bem-vindo de volta' : 'Cria tua conta',
                   style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 8),
               Text(

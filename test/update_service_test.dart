@@ -2,7 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minha_agenda/core/update/update_service.dart';
 
 void main() {
-  group('UpdateInfo.hasUpdate — lógica de versionamento (testa _versionToInt indiretamente)', () {
+  group(
+      'UpdateInfo.hasUpdate — lógica de versionamento (testa _versionToInt indiretamente)',
+      () {
     test('versão padrão 1.0.0 igual → false', () {
       const info = UpdateInfo(
         currentVersion: '1.0.0',
@@ -73,7 +75,8 @@ void main() {
       expect(info.hasUpdate, isFalse);
     });
 
-    test('versão com letras trata como 0 (1.a.3 == 1.0.3) → true para 1.0.4', () {
+    test('versão com letras trata como 0 (1.a.3 == 1.0.3) → true para 1.0.4',
+        () {
       const info = UpdateInfo(
         currentVersion: '1.0.3',
         remoteVersion: '1.a.4',
@@ -94,8 +97,11 @@ void main() {
     });
   });
 
-  group('UpdateService.check — contrato (integração real no teste de integração)', () {
-    test('placeholder — check() depende de Dio sem injeção; integração cobre', () {
+  group(
+      'UpdateService.check — contrato (integração real no teste de integração)',
+      () {
+    test('placeholder — check() depende de Dio sem injeção; integração cobre',
+        () {
       expect(true, isTrue);
     });
   });
