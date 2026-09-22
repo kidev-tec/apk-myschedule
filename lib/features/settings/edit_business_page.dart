@@ -26,7 +26,9 @@ class _EditBusinessPageState extends ConsumerState<EditBusinessPage> {
 
   bool _loading = true;
   bool _saving = false;
+  bool _zipLookingUp = false;
   String? _currentSegment;
+  DateTime? _lastZipLookup;
 
   static const _segments = {
     'beauty': 'Beleza / Estética',
@@ -101,6 +103,56 @@ class _EditBusinessPageState extends ConsumerState<EditBusinessPage> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// CEP: máscara 00000-000 e, ao completar 8 dígitos, busca no ViaCEP
+  /// e preenche rua/bairro/cidade/UF. Usuário só digita número/complemento.
+  Future<void> _onZipChanged(String value) async {
+    // máscara
+    final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+    var masked = digits;
+    if (digits.length > 5) masked = '${digits.substring(0, 5)}-${digits.substring(5, 8)}';
+    if (masked != value) {
+      _zipController.value = TextEditingValue(
+          text: masked, selection: TextSelection.collapsed(offset: masked.length));
+    }
+
+    // debounce: só busca 800ms depois da última digitação e com 8 dígitos
+    _lastZipLookup = DateTime.now();
+    final myLookup = _lastZipLookup;
+    if (digits.length != 8 || _zipLookingUp) return;
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (!mounted ||
+        _lastZipLookup != myLookup ||
+        _zipController.text.replaceAll(RegExp(r'[^0-9]'), '') != digits) {
+      return;
+    }
+
+    setState(() => _zipLookingUp = true);
+    try {
+      final r = await Dio()
+          .get('https://viacep.com.br/ws/$digits/json/');
+      if (!mounted) return;
+      if (r.data is Map && r.data['erro'] == true) {
+        _snack('CEP não encontrado — preenche manualmente');
+        return;
+      }
+      setState(() {
+        _streetController.text = r.data['logradouro'] ?? '';
+        _districtController.text = r.data['bairro'] ?? '';
+        _cityController.text = r.data['localidade'] ?? '';
+        _stateController.text = r.data['uf'] ?? '';
+      });
+    } catch (_) {
+      if (mounted) _snack('Não deu pra buscar o CEP — preenche manualmente');
+    } finally {
+      if (mounted) setState(() => _zipLookingUp = false);
+    }
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
@@ -223,8 +275,23 @@ class _EditBusinessPageState extends ConsumerState<EditBusinessPage> {
                         child: TextFormField(
                           controller: _zipController,
                           keyboardType: TextInputType.number,
-                          decoration:
-                              const InputDecoration(labelText: 'CEP'),
+                          maxLength: 9,
+                          onChanged: _onZipChanged,
+                          decoration: InputDecoration(
+                            labelText: 'CEP',
+                            counterText: '',
+                            suffixIcon: _zipLookingUp
+                                ? const Padding(
+                                    padding: EdgeInsets.all(12),
+                                    child: SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2)),
+                                  )
+                                : const Icon(Icons.travel_explore_outlined),
+                            helperText: 'Preenche o resto sozinho',
+                          ),
                         ),
                       ),
                     ],
