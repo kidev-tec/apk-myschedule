@@ -99,8 +99,8 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                 style: const TextStyle(fontWeight: FontWeight.w600)),
             if (recent.isNotEmpty) ...[
               const SizedBox(height: 6),
-              ...recent.map((s) =>
-                  Text('• $s', style: const TextStyle(fontSize: 12))),
+              ...recent.map(
+                  (s) => Text('• $s', style: const TextStyle(fontSize: 12))),
             ],
           ],
         ),
@@ -306,7 +306,6 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
   }
 
   String _query = '';
-
 
   Future<void> _openAddClientSheet() async {
     final nameCtrl = TextEditingController();
@@ -571,6 +570,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
       ],
     );
   }
+
   Widget _buildServiceStep() {
     return ListView.builder(
       padding: const EdgeInsets.all(16),

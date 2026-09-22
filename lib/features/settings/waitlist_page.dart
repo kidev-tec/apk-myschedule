@@ -118,11 +118,11 @@ class _WaitlistPageState extends ConsumerState<WaitlistPage> {
                             : AppColors.success,
                       ),
                       title: Text(e['client_name'] as String),
-                      subtitle: Text(
-                          '${e['phone']} · ${_statusLabel(status)}'),
+                      subtitle: Text('${e['phone']} · ${_statusLabel(status)}'),
                       trailing: status == 'waiting'
                           ? TextButton(
-                              onPressed: () => _mark(e['id'] as String, 'notified'),
+                              onPressed: () =>
+                                  _mark(e['id'] as String, 'notified'),
                               child: const Text('Avisar'),
                             )
                           : status == 'notified'

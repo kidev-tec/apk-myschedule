@@ -111,10 +111,12 @@ class _EditBusinessPageState extends ConsumerState<EditBusinessPage> {
     // máscara
     final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
     var masked = digits;
-    if (digits.length > 5) masked = '${digits.substring(0, 5)}-${digits.substring(5, 8)}';
+    if (digits.length > 5)
+      masked = '${digits.substring(0, 5)}-${digits.substring(5, 8)}';
     if (masked != value) {
       _zipController.value = TextEditingValue(
-          text: masked, selection: TextSelection.collapsed(offset: masked.length));
+          text: masked,
+          selection: TextSelection.collapsed(offset: masked.length));
     }
 
     // debounce: só busca 800ms depois da última digitação e com 8 dígitos
@@ -130,8 +132,7 @@ class _EditBusinessPageState extends ConsumerState<EditBusinessPage> {
 
     setState(() => _zipLookingUp = true);
     try {
-      final r = await Dio()
-          .get('https://viacep.com.br/ws/$digits/json/');
+      final r = await Dio().get('https://viacep.com.br/ws/$digits/json/');
       if (!mounted) return;
       if (r.data is Map && r.data['erro'] == true) {
         _snack('CEP não encontrado — preenche manualmente');
@@ -151,8 +152,7 @@ class _EditBusinessPageState extends ConsumerState<EditBusinessPage> {
   }
 
   void _snack(String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
@@ -208,7 +208,8 @@ class _EditBusinessPageState extends ConsumerState<EditBusinessPage> {
                   Text('Endereço (onde os clientes te encontram)',
                       style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 4),
-                  Text('Aparece no teu link de agendamento público. '
+                  Text(
+                      'Aparece no teu link de agendamento público. '
                       'Deixa vazio se atende em todo lugar ou online.',
                       style: Theme.of(context)
                           .textTheme

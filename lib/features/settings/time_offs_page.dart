@@ -67,7 +67,8 @@ class _TimeOffsPageState extends ConsumerState<TimeOffsPage> {
       ),
     );
     if (time == null || !mounted) return;
-    final dt = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    final dt =
+        DateTime(date.year, date.month, date.day, time.hour, time.minute);
     setState(() {
       if (isStart) {
         _start = dt;
@@ -81,8 +82,7 @@ class _TimeOffsPageState extends ConsumerState<TimeOffsPage> {
     });
   }
 
-  String _fmt(DateTime d) =>
-      DateFormat('dd/MM HH:mm').format(d);
+  String _fmt(DateTime d) => DateFormat('dd/MM HH:mm').format(d);
 
   Future<void> _save() async {
     if (_start == null || _end == null) {
@@ -117,10 +117,11 @@ class _TimeOffsPageState extends ConsumerState<TimeOffsPage> {
     } on DioException catch (e) {
       if (!mounted) return;
       final msg = e.response?.data is Map
-          ? (e.response?.data['error'] as String? ?? 'Não deu pra criar o bloqueio')
+          ? (e.response?.data['error'] as String? ??
+              'Não deu pra criar o bloqueio')
           : 'Não deu pra criar o bloqueio. Verifica a internet.';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(msg), backgroundColor: AppColors.error));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), backgroundColor: AppColors.error));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -133,7 +134,8 @@ class _TimeOffsPageState extends ConsumerState<TimeOffsPage> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Não deu pra remover'), backgroundColor: AppColors.error));
+            content: Text('Não deu pra remover'),
+            backgroundColor: AppColors.error));
       }
     }
   }
@@ -164,10 +166,12 @@ class _TimeOffsPageState extends ConsumerState<TimeOffsPage> {
                 else
                   ..._timeOffs!.map((t) => Card(
                         child: ListTile(
-                          leading: const Icon(Icons.block, color: AppColors.error),
+                          leading:
+                              const Icon(Icons.block, color: AppColors.error),
                           title: Text(
                               '${_fmt(DateTime.parse(t['starts_at']))} → ${_fmt(DateTime.parse(t['ends_at']))}'),
-                          subtitle: t['reason'] != null && (t['reason'] as String).isNotEmpty
+                          subtitle: t['reason'] != null &&
+                                  (t['reason'] as String).isNotEmpty
                               ? Text(t['reason'])
                               : null,
                           trailing: IconButton(
@@ -195,9 +199,7 @@ class _TimeOffsPageState extends ConsumerState<TimeOffsPage> {
                     Expanded(
                       child: OutlinedButton.icon(
                         icon: const Icon(Icons.play_arrow),
-                        label: Text(_start == null
-                            ? 'Início'
-                            : _fmt(_start!)),
+                        label: Text(_start == null ? 'Início' : _fmt(_start!)),
                         onPressed: () => _pick(isStart: true),
                       ),
                     ),

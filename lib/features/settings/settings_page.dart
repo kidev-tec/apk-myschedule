@@ -353,8 +353,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             child: const Text('Cancelar'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(
-                backgroundColor: AppColors.error),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () {
               if (controller.text.trim().toUpperCase() == 'EXCLUIR') {
                 Navigator.pop(dialogContext, true);
@@ -463,11 +462,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           const SizedBox(height: 8),
 
-                    if (_me != null)
+          if (_me != null)
             Card(
               child: ListTile(
-                leading:
-                    Icon(Icons.business_center, color: AppColors.primaryOf(context)),
+                leading: Icon(Icons.business_center,
+                    color: AppColors.primaryOf(context)),
                 title: const Text('Editar meu negócio'),
                 subtitle: const Text('Nome, segmento e endereço'),
                 trailing: const Icon(Icons.chevron_right),
@@ -496,8 +495,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           if (_me != null)
             Card(
               child: ListTile(
-                leading:
-                    Icon(Icons.block, color: AppColors.primaryOf(context)),
+                leading: Icon(Icons.block, color: AppColors.primaryOf(context)),
                 title: const Text('Bloqueios de agenda'),
                 subtitle: const Text('Almoço, feriado, férias'),
                 trailing: const Icon(Icons.chevron_right),
@@ -508,8 +506,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           if (_me != null)
             Card(
               child: ListTile(
-                leading:
-                    Icon(Icons.hourglass_top, color: AppColors.primaryOf(context)),
+                leading: Icon(Icons.hourglass_top,
+                    color: AppColors.primaryOf(context)),
                 title: const Text('Lista de espera'),
                 subtitle: const Text('Clientes esperando vaga'),
                 trailing: const Icon(Icons.chevron_right),
@@ -608,8 +606,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   leading:
                       const Icon(Icons.delete_forever, color: AppColors.error),
                   title: const Text('Excluir minha conta',
-                      style: TextStyle(
-                          color: AppColors.error, fontSize: 13)),
+                      style: TextStyle(color: AppColors.error, fontSize: 13)),
                   onTap: _deleteAccount,
                 ),
               ],

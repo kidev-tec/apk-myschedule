@@ -128,7 +128,8 @@ class AuthController extends StateNotifier<AuthState> {
         // se o Postgres falhar, não exclui o auth (evita órfão invertido)
         state = state.copyWith(
           isLoading: false,
-          error: 'Não deu pra excluir agora. Verifica a internet e tenta de novo.',
+          error:
+              'Não deu pra excluir agora. Verifica a internet e tenta de novo.',
         );
         return;
       }

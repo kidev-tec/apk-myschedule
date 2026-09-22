@@ -129,23 +129,27 @@ void main() {
     expect(depois.obscureText, isFalse);
   });
 
-  testWidgets('F0: modo cadastro mostra campo "Teu nome" (login não mostra)', (tester) async {
+  testWidgets('F0: modo cadastro mostra campo "Teu nome" (login não mostra)',
+      (tester) async {
     await tester.pumpWidget(_wrap());
     // toggle pra criar conta
     await tester.ensureVisible(find.widgetWithText(TextButton, 'Criar conta'));
-    await tester.tap(find.widgetWithText(TextButton, 'Criar conta'), warnIfMissed: false);
+    await tester.tap(find.widgetWithText(TextButton, 'Criar conta'),
+        warnIfMissed: false);
     await tester.pumpAndSettle();
 
     expect(find.text('Teu nome'), findsOneWidget);
   });
 
-  testWidgets('F0: modo login mostra link "Esqueci minha senha"', (tester) async {
+  testWidgets('F0: modo login mostra link "Esqueci minha senha"',
+      (tester) async {
     await tester.pumpWidget(_wrap());
 
     expect(find.text('Esqueci minha senha'), findsOneWidget);
   });
 
-  testWidgets('F0: esqueci senha abre view dedicada de recuperação', (tester) async {
+  testWidgets('F0: esqueci senha abre view dedicada de recuperação',
+      (tester) async {
     await tester.pumpWidget(_wrap());
 
     await tester.ensureVisible(find.text('Esqueci minha senha'));
