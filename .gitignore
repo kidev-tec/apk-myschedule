@@ -46,5 +46,10 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
-android/app/google-services.json
+<<<<<<< HEAD
 ios/Runner/GoogleService-Info.plist
+||||||| parent of 7ec29ba (fix(ci): release com Firebase real + keystore fixo — login Google/email no APK do CI)
+=======
+# google-services.json AGORA versionado: a Web API Key do Firebase é pública
+# por design (bug v1.2.0: build sem o arquivo usava dummy e quebrava o login).
+>>>>>>> 7ec29ba (fix(ci): release com Firebase real + keystore fixo — login Google/email no APK do CI)
