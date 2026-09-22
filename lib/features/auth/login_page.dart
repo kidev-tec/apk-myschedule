@@ -16,6 +16,7 @@ class LoginPage extends ConsumerStatefulWidget {
 class _LoginPageState extends ConsumerState<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _nameController = TextEditingController();
   bool _isLogin = true; // true = login, false = create account
   bool _obscurePassword = true;
 
@@ -23,6 +24,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _nameController.dispose();
     super.dispose();
   }
 
@@ -47,7 +49,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       } else {
         await ref
             .read(authControllerProvider.notifier)
-            .createAccount(email, password);
+            .createAccount(email, password, name: _nameController.text.trim());
       }
 
       if (mounted && ref.read(authControllerProvider).isAuthenticated) {
@@ -82,6 +84,102 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           ? '/agenda'
           : '/onboarding');
     }
+  }
+
+  /// Esqueci minha senha: bottom sheet dedicado com dois estados —
+  /// 1) formulário com email + copy empática; 2) confirmação persistente
+  /// ("confere tua caixa de entrada") com opção de reenviar.
+  Future<void> _openForgotPassword() async {
+    final emailCtrl = TextEditingController(text: _emailController.text.trim());
+    final sent = ValueNotifier<bool>(false);
+    final formKey = GlobalKey<FormState>();
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.fromLTRB(
+            24, 24, 24, 24 + MediaQuery.of(sheetContext).viewInsets.bottom),
+        child: Form(
+          key: formKey,
+          child: ValueListenableBuilder<bool>(
+            valueListenable: sent,
+            builder: (context, isSent, _) => Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (!isSent) ...[
+                  Text('Recuperar senha',
+                      style: Theme.of(sheetContext).textTheme.titleLarge),
+                  const SizedBox(height: 8),
+                  const Text(
+                      'Digita teu e-mail de cadastro que a gente te manda '
+                      'um link pra criar uma senha nova.',
+                      style: TextStyle(fontSize: 14)),
+                  const SizedBox(height: 24),
+                  TextFormField(
+                    controller: emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    autofocus: true,
+                    validator: (v) =>
+                        v != null && v.contains('@') ? null : 'E-mail inválido',
+                    decoration: const InputDecoration(
+                      labelText: 'E-mail de cadastro',
+                      prefixIcon: Icon(Icons.email_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton(
+                    onPressed: () async {
+                      if (formKey.currentState!.validate()) {
+                        try {
+                          await ref
+                              .read(authControllerProvider.notifier)
+                              .sendPasswordReset(emailCtrl.text.trim());
+                          sent.value = true;
+                        } catch (_) {
+                          // erro é tratado via provider (_friendlyError)
+                        }
+                      }
+                    },
+                    child: const Text('Enviar link de recuperação'),
+                  ),
+                ] else ...[
+                  const Icon(Icons.mark_email_read_outlined,
+                      size: 72, color: AppColors.success),
+                  const SizedBox(height: 16),
+                  Text('Confere tua caixa de entrada',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(sheetContext).textTheme.titleLarge),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Mandamos um link de recuperação pra\n${emailCtrl.text.trim()}\n\n'
+                    'Clica no link pra criar tua senha nova. '
+                    'Se não chegar em alguns minutos, olha o spam.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 14, height: 1.5),
+                  ),
+                  const SizedBox(height: 20),
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(sheetContext),
+                    child: const Text('Voltar pro login'),
+                  ),
+                  TextButton(
+                    onPressed: () => ref
+                        .read(authControllerProvider.notifier)
+                        .sendPasswordReset(emailCtrl.text.trim()),
+                    child: const Text('Não chegou nada, enviar de novo'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _showError(String msg) {
@@ -140,6 +238,21 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       .bodyMedium
                       ?.copyWith(color: AppColors.neutral)),
               const SizedBox(height: 24),
+              // Nome do prestador: só no cadastro (contas Google já trazem
+              // o nome da conta; email/senha precisam pedir).
+              if (!_isLogin) ...[
+                TextField(
+                  controller: _nameController,
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Teu nome',
+                    hintText: 'Como os clientes vão te ver',
+                    prefixIcon: Icon(Icons.person_outline),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               TextField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
@@ -186,6 +299,17 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             strokeWidth: 2, color: Colors.white))
                     : Text(_isLogin ? 'Entrar' : 'Criar conta'),
               ),
+              const SizedBox(height: 16),
+              // Esqueci minha senha: abre bottom sheet dedicado (view
+              // própria com copy empática e confirmação persistente).
+              if (_isLogin)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: auth.isLoading ? null : _openForgotPassword,
+                    child: const Text('Esqueci minha senha'),
+                  ),
+                ),
               const SizedBox(height: 16),
               // Google sign in
               Row(

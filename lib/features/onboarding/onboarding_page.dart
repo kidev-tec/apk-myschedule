@@ -29,6 +29,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   bool _finishing = false;
   SegmentPreset _segment = SegmentPresets.beauty;
   final _businessNameController = TextEditingController();
+  final _addrStreetController = TextEditingController();
+  final _addrNumberController = TextEditingController();
+  final _addrDistrictController = TextEditingController();
+  final _addrCityController = TextEditingController();
+  final _addrStateController = TextEditingController();
   final _serviceNameController = TextEditingController();
   final _serviceDurationController = TextEditingController(text: '60');
   final _servicePriceController = TextEditingController();
@@ -42,6 +47,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   void dispose() {
     _pageController.dispose();
     _businessNameController.dispose();
+    _addrStreetController.dispose();
+    _addrNumberController.dispose();
+    _addrDistrictController.dispose();
+    _addrCityController.dispose();
+    _addrStateController.dispose();
     _serviceNameController.dispose();
     _serviceDurationController.dispose();
     _servicePriceController.dispose();
@@ -77,10 +87,18 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       // onboarding_provisioning.dart. Testado em onboarding_provisioning_test.dart.
       await ensureProvisioned(api.dio, segmentId: _segment.id);
 
-      // 1. Perfil do negócio
+      // 1. Perfil do negócio (+ endereço F1 — campos vazios são omitidos)
+      final address = <String, String>{
+        'street': _addrStreetController.text.trim(),
+        'number': _addrNumberController.text.trim(),
+        'district': _addrDistrictController.text.trim(),
+        'city': _addrCityController.text.trim(),
+        'state': _addrStateController.text.trim().toUpperCase(),
+      }..removeWhere((_, v) => v.isEmpty);
       await api.dio.patch('/me', data: {
         'business_name': _businessNameController.text.trim(),
         'business_type': _segment.id,
+        if (address.isNotEmpty) 'address': address,
       });
 
       // 2. Primeiro serviço
@@ -354,12 +372,76 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           TextField(
             controller: _businessNameController,
             textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.done,
+            textInputAction: TextInputAction.next,
             decoration: const InputDecoration(
               labelText: 'Nome do espaço',
               hintText: 'Ex: Studio Ana Beleza',
               prefixIcon: Icon(Icons.storefront_outlined),
             ),
+          ),
+          const SizedBox(height: 16),
+          // Endereço (F1): onde os clientes vão te encontrar. Opcional —
+          // quem atende fora de um espaço fixo pode pular.
+          Text(
+            'Onde os clientes te encontram? (opcional)',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _addrStreetController,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
+            decoration: const InputDecoration(
+              labelText: 'Rua',
+              prefixIcon: Icon(Icons.location_on_outlined),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  controller: _addrNumberController,
+                  decoration: const InputDecoration(labelText: 'Número'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 3,
+                child: TextField(
+                  controller: _addrDistrictController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(labelText: 'Bairro'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: TextField(
+                  controller: _addrCityController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(labelText: 'Cidade'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 1,
+                child: TextField(
+                  controller: _addrStateController,
+                  textCapitalization: TextCapitalization.characters,
+                  maxLength: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'UF',
+                    counterText: '',
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

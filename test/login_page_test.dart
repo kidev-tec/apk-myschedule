@@ -128,6 +128,39 @@ void main() {
         tester.widget<TextField>(find.widgetWithText(TextField, 'Senha'));
     expect(depois.obscureText, isFalse);
   });
+
+  testWidgets('F0: modo cadastro mostra campo "Teu nome" (login não mostra)',
+      (tester) async {
+    await tester.pumpWidget(_wrap());
+    // toggle pra criar conta
+    await tester.ensureVisible(find.widgetWithText(TextButton, 'Criar conta'));
+    await tester.tap(find.widgetWithText(TextButton, 'Criar conta'),
+        warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Teu nome'), findsOneWidget);
+  });
+
+  testWidgets('F0: modo login mostra link "Esqueci minha senha"',
+      (tester) async {
+    await tester.pumpWidget(_wrap());
+
+    expect(find.text('Esqueci minha senha'), findsOneWidget);
+  });
+
+  testWidgets('F0: esqueci senha abre view dedicada de recuperação',
+      (tester) async {
+    await tester.pumpWidget(_wrap());
+
+    await tester.ensureVisible(find.text('Esqueci minha senha'));
+    await tester.tap(find.text('Esqueci minha senha'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    // view dedicada com copy empática e campo próprio
+    expect(find.text('Recuperar senha'), findsOneWidget);
+    expect(find.text('E-mail de cadastro'), findsOneWidget);
+    expect(find.text('Enviar link de recuperação'), findsOneWidget);
+  });
 }
 
 /// Platform Firebase mínima: só registra o app DEFAULT. Qualquer chamada
@@ -168,3 +201,7 @@ class _FakeFirebasePlatform extends FirebasePlatform {
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
 }
+
+// ---- F0: campo nome no cadastro + esqueci minha senha ----
+
+void main2() {}
