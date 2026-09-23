@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -174,8 +175,13 @@ class AuthController extends StateNotifier<AuthState> {
     if (state.idToken == null) return;
     try {
       await _api.dio.post('/auth/sync', data: {'id_token': state.idToken});
-    } catch (_) {
-      // silencioso — backend sync é idempotente; retry na próxima abertura
+    } catch (e) {
+      // NÃO silencioso: se o sync falha, o user não existe no Postgres e
+      // /me responde 404. O onboarding recupera disso (ensureProvisioned),
+      // mas o log é essencial pra diagnosticar (bug mmmarckos 22/09: sync
+      // falhava sem vestígio e a conta ficava fantasma no Firebase).
+      debugPrint('[auth] /auth/sync falhou: $e');
+      rethrow;
     }
   }
 

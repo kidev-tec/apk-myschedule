@@ -22,6 +22,16 @@ Future<bool> resolveOnboardingComplete(ApiClient api) async {
       return server;
     }
   } on DioException catch (e) {
+    // 404 = conta autenticada que o Postgres não conhece (sync falhou,
+    // firebase órfão recreado, etc). NÃO cai na flag local: ela é global
+    // por aparelho — se OUTRA conta já completou onboarding aqui, a flag
+    // é true e o usuário novo pulava o assistente sem nunca ser
+    // provisionado (bug visto com mmmarckos em 22/09). Onboarding é o
+    // único caminho que provisiona (ensureProvisioned → /auth/sync).
+    if (e.response?.statusCode == 404) {
+      await OnboardingStore.reset();
+      return false;
+    }
     debugPrint('[onboarding] fallback na flag local: ${e.type}');
   } catch (e) {
     debugPrint('[onboarding] fallback na flag local: $e');

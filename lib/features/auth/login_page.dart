@@ -53,8 +53,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       }
 
       if (mounted && ref.read(authControllerProvider).isAuthenticated) {
-        // Sync with backend
-        await ref.read(authControllerProvider.notifier).syncWithBackend();
+        // Sync with backend. Se falha, NÃO aborta o fluxo: o onboarding
+        // recupera via ensureProvisioned (404 → /auth/sync → re-PATCH).
+        // Falha do sync só é logada (auth_controller) — seguir adiante.
+        try {
+          await ref.read(authControllerProvider.notifier).syncWithBackend();
+        } catch (_) {}
         if (!mounted) return;
         // Servidor é a fonte da verdade (igual ao fluxo Google no main.dart):
         // flag local é global por aparelho e pulava o onboarding de contas
@@ -78,7 +82,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     if (!context.mounted) return;
     final auth = ref.read(authControllerProvider);
     if (auth.isAuthenticated) {
-      await notifier.syncWithBackend();
+      // Falha do sync não aborta: onboarding recupera (ensureProvisioned).
+      try {
+        await notifier.syncWithBackend();
+      } catch (_) {}
       if (!context.mounted) return;
       router.go(await resolveOnboardingComplete(ApiClient())
           ? '/agenda'
