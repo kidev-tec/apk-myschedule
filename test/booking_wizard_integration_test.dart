@@ -119,12 +119,15 @@ void main() {
     await tester.tap(find.text('Continuar'));
     await tester.pumpAndSettle();
 
-    // Step 3: slots — hoje (sexta) não tem working hour (fixture = segunda).
-    // Navega a data 3x com o chevron até segunda-feira 14/09.
+    // Step 3: slots — hoje não tem working hour (fixture = segunda).
+    // Navega a data com o chevron até a PRÓXIMA segunda (dinâmico — o teste
+    // antigo fixava +3 dias e quebrava quando rodado fora de sexta).
     expect(find.text('Escolhe o horário'), findsOneWidget);
     // estado vazio visível (sem slots hoje) — valida o empty state do step
     expect(find.text('Sem horários livres neste dia'), findsOneWidget);
-    for (var i = 0; i < 3; i++) {
+    var dias = (DateTime.monday - DateTime.now().weekday) % 7;
+    if (dias == 0) dias = 7; // hoje é segunda → próxima segunda
+    for (var i = 0; i < dias; i++) {
       await tester.tap(find.byIcon(Icons.chevron_right));
       await tester.pumpAndSettle();
     }
@@ -174,9 +177,11 @@ void main() {
     await tester.tap(find.text('Continuar'));
     await tester.pumpAndSettle();
 
-    // navega a data até segunda (hoje sexta não tem slots)
+    // navega a data até a próxima segunda (hoje não tem slots)
     expect(find.text('Sem horários livres neste dia'), findsOneWidget);
-    for (var i = 0; i < 3; i++) {
+    var dias = (DateTime.monday - DateTime.now().weekday) % 7;
+    if (dias == 0) dias = 7;
+    for (var i = 0; i < dias; i++) {
       await tester.tap(find.byIcon(Icons.chevron_right));
       await tester.pumpAndSettle();
     }

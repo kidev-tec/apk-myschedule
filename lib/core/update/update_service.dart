@@ -50,11 +50,15 @@ class UpdateService {
   static UpdateInfo? lastCheck;
 
   /// Consulta a API. Retorna info se houver update, null se igual/erro.
-  static Future<UpdateInfo?> check() async {
+  ///
+  /// [dio] injetável pra testes (mesmo padrão de DI do ApiClient); em prod
+  /// não passar nada — cria um Dio com os timeouts da ApiConfig.
+  static Future<UpdateInfo?> check({Dio? dio}) async {
     try {
-      final resp = await Dio(BaseOptions(
-              connectTimeout: ApiConfig.timeout,
-              receiveTimeout: ApiConfig.timeout))
+      final resp = await (dio ??
+              Dio(BaseOptions(
+                  connectTimeout: ApiConfig.timeout,
+                  receiveTimeout: ApiConfig.timeout)))
           .get('${ApiConfig.baseUrl}/version');
       final info = UpdateInfo(
         currentVersion: _currentVersion,
@@ -71,14 +75,19 @@ class UpdateService {
   }
 
   /// Baixa o APK (com progresso 0..1) e abre o instalador do Android.
+  ///
+  /// [dio] injetável pra testes (mesmo padrão do check()); em prod cria um
+  /// Dio próprio. A guarda de plataforma roda DEPOIS do download, então os
+  /// bytes já estão em disco quando o instalador do Android abre.
   static Future<void> downloadAndInstall(
     UpdateInfo info, {
     void Function(double progress)? onProgress,
+    Dio? dio,
   }) async {
     final dir = await getTemporaryDirectory();
     final savePath = '${dir.path}/minha-agenda-${info.remoteVersion}.apk';
 
-    await Dio().download(
+    await (dio ?? Dio()).download(
       '${ApiConfig.baseUrl}${info.apkUrl}',
       savePath,
       onReceiveProgress: (received, total) {
