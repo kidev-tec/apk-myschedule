@@ -80,10 +80,9 @@ class _ScriptedAdapter implements HttpClientAdapter {
     Future<void>? cancelFuture,
   ) async {
     final entry = script[_i < script.length ? _i++ : script.length - 1];
-    return ResponseBody.fromString(entry.value, entry.key,
-        headers: {
-          'content-type': ['application/json'],
-        });
+    return ResponseBody.fromString(entry.value, entry.key, headers: {
+      'content-type': ['application/json'],
+    });
   }
 }
 
@@ -119,8 +118,7 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
   });
 
-  testWidgets(
-      'B2: /me pendente → skeleton, sem cards de negócio em cascata',
+  testWidgets('B2: /me pendente → skeleton, sem cards de negócio em cascata',
       (tester) async {
     // Adapter travado: /me nunca responde; Dio estoura receiveTimeout (15s).
     final stalled = ApiClient(adapter: _StalledAdapter());

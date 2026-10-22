@@ -453,8 +453,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         Icon(Icons.cloud_off),
                         SizedBox(width: 12),
                         Expanded(
-                          child: Text(
-                              'Não consegui carregar tuas configurações'),
+                          child:
+                              Text('Não consegui carregar tuas configurações'),
                         ),
                       ],
                     ),
