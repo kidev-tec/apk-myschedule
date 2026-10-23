@@ -125,6 +125,8 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
           cache: true
+      - name: Dummy GoogleService-Info.plist (CI)
+        run: test -f ios/Runner/GoogleService-Info.plist || cp ios/Runner/GoogleService-Info.ci.plist ios/Runner/GoogleService-Info.plist
       - name: Get Dependencies
         run: flutter pub get
       - name: Generate Code
