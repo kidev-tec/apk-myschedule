@@ -27,6 +27,7 @@ class SettingsPage extends ConsumerStatefulWidget {
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
   Map<String, dynamic>? _me;
+  bool _meError = false; // B2: /me falhou → tela de retry, não card fantasma
   String? _slug;
   bool? _gcalConnected; // null = verificando
   bool _gcalBusy = false;
@@ -157,9 +158,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       setState(() {
         _me = Map<String, dynamic>.from(resp.data);
         _slug = resp.data['slug'] as String?;
+        _meError = false;
       });
     } catch (e) {
       debugPrint('[settings] erro: $e');
+      if (mounted) setState(() => _meError = true);
     }
   }
 
@@ -391,9 +394,42 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     return raw.isNotEmpty ? raw[0].toUpperCase() : 'U';
   }
 
+  /// B2: skeleton com a mesma pegada dos cards reais (Card+ListTile com
+  /// placeholders cinzas) — a troca skeleton→conteúdo não desloca o layout,
+  /// acabando com a tela "pulando" em duas ondas.
+  Widget _skeletonTile() => Card(
+        child: ListTile(
+          key: const Key('settings-skeleton'),
+          leading: Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: Theme.of(context).disabledColor.withValues(alpha: 0.3),
+              shape: BoxShape.circle,
+            ),
+          ),
+          title: Container(
+            height: 14,
+            decoration: BoxDecoration(
+              color: Theme.of(context).disabledColor.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          subtitle: Container(
+            height: 10,
+            margin: const EdgeInsets.only(top: 6),
+            decoration: BoxDecoration(
+              color: Theme.of(context).disabledColor.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
+    final loading = _me == null && !_meError;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Configurações')),
@@ -404,6 +440,42 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         padding: EdgeInsets.fromLTRB(
             16, 16, 16, 16 + MediaQuery.of(context).padding.bottom),
         children: [
+          // B2: /me falhou → um card de retry humano, nada de cards fantasmas.
+          if (_meError)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.cloud_off),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child:
+                              Text('Não consegui carregar tuas configurações'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: _loadMe,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Tentar de novo'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          // B2: carregando → skeleton espelhando os cards reais (sem cascata)
+          if (loading) ...[
+            _skeletonTile(),
+            _skeletonTile(),
+            _skeletonTile(),
+            _skeletonTile(),
+            _skeletonTile(),
+          ],
           // Assinatura (RF-14) — card reflete o estado do webhook (Fase B);
           // botão de assinar aparece em todo estado que não seja active.
           if (_me != null)
@@ -623,7 +695,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 const ListTile(
                   leading: Icon(Icons.info_outline),
                   title: Text('Versão'),
-                  subtitle: Text('1.2.2'),
+                  subtitle: Text('1.3.0'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.privacy_tip_outlined),

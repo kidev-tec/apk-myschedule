@@ -108,6 +108,17 @@ lib/
 | API_BASE_URL | base da API (ex: http://192.168.1.192:3200/v1) |
 | FIREBASE_API_KEY / APP_ID / SENDER_ID / PROJECT_ID | defaults do projeto no main.dart |
 
+## iOS / TestFlight
+
+- Bundle ID `com.minhaagenda.minhaAgendaApp`, Team `QN5U3D5244`, assinatura automática
+  na nuvem (workflow `ios-testflight.yml`, chamado pelo Release em cada tag `v*`).
+- Secrets: `GOOGLESERVICE_INFO_PLIST_B64` (Firebase iOS; o CI injeta também o URL
+  scheme `REVERSED_CLIENT_ID` do Google Sign-In), `APP_STORE_CONNECT_API_KEY`
+  (conteúdo do .p8), `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`.
+- `ios/Runner/GoogleService-Info.plist` fica fora do git; o build de simulador do CI
+  usa `GoogleService-Info.ci.plist`.
+- Build number do pubspec precisa subir a cada envio (a App Store Connect recusa repetido).
+
 ## Out of scope
 
 - Migrar para Material 3 expressive / trocar Riverpod por Bloc

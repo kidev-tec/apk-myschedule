@@ -1,0 +1,105 @@
+name: iOS TestFlight
+
+# Chamado pelo Release (tag v*) e disponível para disparo manual.
+# Assinatura automática na nuvem via chave da App Store Connect API:
+# dispensa importar certificado/profile no runner.
+on:
+  workflow_call:
+    inputs:
+      build_number:
+        type: string
+        required: false
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: 'Build number (vazio = o do pubspec). Tem que ser maior que o último já enviado nesta versão.'
+        required: false
+
+env:
+  FLUTTER_VERSION: '3.35.5'
+
+jobs:
+  testflight:
+    name: iOS TestFlight (assinado)
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: Restaurar GoogleService-Info.plist (Firebase iOS)
+        env:
+          GOOGLESERVICE_INFO_PLIST_B64: ${{ secrets.GOOGLESERVICE_INFO_PLIST_B64 }}
+        run: |
+          if [ -z "$GOOGLESERVICE_INFO_PLIST_B64" ]; then
+            echo "::error::Secret GOOGLESERVICE_INFO_PLIST_B64 ausente — sem ele o app trava na splash (Firebase não inicializa)."
+            exit 1
+          fi
+          echo "$GOOGLESERVICE_INFO_PLIST_B64" | base64 --decode > ios/Runner/GoogleService-Info.plist
+          plutil -lint ios/Runner/GoogleService-Info.plist
+
+      # O Google Sign-In no iOS volta para o app pelo URL scheme REVERSED_CLIENT_ID.
+      - name: Registrar URL scheme do Google Sign-In
+        run: |
+          PLIST=ios/Runner/GoogleService-Info.plist
+          if ! REVERSED=$(/usr/libexec/PlistBuddy -c 'Print :REVERSED_CLIENT_ID' "$PLIST" 2>/dev/null); then
+            echo "::error::REVERSED_CLIENT_ID ausente no GoogleService-Info.plist — habilite o login Google no Firebase e baixe o plist de novo."
+            exit 1
+          fi
+          /usr/libexec/PlistBuddy \
+            -c 'Add :CFBundleURLTypes array' \
+            -c 'Add :CFBundleURLTypes:0 dict' \
+            -c 'Add :CFBundleURLTypes:0:CFBundleTypeRole string Editor' \
+            -c 'Add :CFBundleURLTypes:0:CFBundleURLSchemes array' \
+            -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string $REVERSED" \
+            ios/Runner/Info.plist
+
+      - name: Get Dependencies
+        run: flutter pub get
+      - name: Generate Code
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      # --config-only grava dart-defines e build number no Generated.xcconfig;
+      # o archive assinado é feito pelo xcodebuild logo abaixo.
+      - name: Configurar projeto iOS
+        env:
+          BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          flutter build ios --release --config-only \
+            ${BUILD_NUMBER:+--build-number=$BUILD_NUMBER} \
+            --dart-define=API_BASE_URL=${{ vars.API_BASE_URL_PROD }}
+          if [ -f ios/Podfile ]; then (cd ios && pod install); fi
+
+      - name: Restaurar chave da App Store Connect API
+        env:
+          APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+        run: |
+          KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s\n' "$APP_STORE_CONNECT_API_KEY" > "$KEY_PATH"
+          echo "ASC_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
+
+      # ExportOptions.plist usa destination=upload: o export já envia o build ao TestFlight.
+      - name: Archive assinado e envio ao TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          AUTH=(-allowProvisioningUpdates
+                -authenticationKeyPath "$ASC_KEY_PATH"
+                -authenticationKeyID "$ASC_KEY_ID"
+                -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+          xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -archivePath build/ios/Runner.xcarchive archive "${AUTH[@]}"
+          xcodebuild -exportArchive -archivePath build/ios/Runner.xcarchive \
+            -exportOptionsPlist ios/ExportOptions.plist \
+            -exportPath build/ios/export "${AUTH[@]}"
+
+      - name: Remover chave da API
+        if: always()
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8"

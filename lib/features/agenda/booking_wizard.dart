@@ -14,14 +14,16 @@ import 'booking_logic.dart' as logic;
 final wizardApiProvider = Provider<ApiClient>((ref) => ApiClient());
 
 class BookingWizardPage extends ConsumerStatefulWidget {
-  const BookingWizardPage({super.key});
+  /// B3: agendamento a remarcar. Nulo = fluxo normal (POST).
+  final Appointment? reschedule;
+  const BookingWizardPage({super.key, this.reschedule});
 
   @override
   ConsumerState<BookingWizardPage> createState() => _BookingWizardPageState();
 }
 
 class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
-  final PageController _pageController = PageController();
+  late final PageController _pageController;
   int _step = 0;
 
   List<Client> _clients = [];
@@ -111,6 +113,15 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
   @override
   void initState() {
     super.initState();
+    // B3: modo remarcar — abre direto no passo do horário, com a data
+    // original e cliente/serviço pré-preenchidos após o carregamento.
+    final r = widget.reschedule;
+    if (r != null) {
+      _step = 2;
+      _selectedDate =
+          DateTime(r.startsAt.year, r.startsAt.month, r.startsAt.day);
+    }
+    _pageController = PageController(initialPage: _step);
     _loadAllData();
   }
 
@@ -150,8 +161,27 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     } catch (e) {
       debugPrint('[wizard] falha ao carregar dados: $e');
     }
+    // B3: modo remarcar — casa as FKs do agendamento com os registros
+    // carregados (clients/services) pra pré-selecionar.
+    final r = widget.reschedule;
+    if (r != null) {
+      _selectedClient = _clients.where((c) => c.id == r.clientId).firstOrNull;
+      _selectedService =
+          _services.where((s) => s.id == r.serviceId).firstOrNull;
+      // pré-seleciona o horário atual, que continua válido (excludeId)
+      _selectedSlot = _generateSlots(_selectedDate)
+          .where((s) => _sameHM(s, r.startsAt))
+          .firstOrNull;
+    }
     if (mounted) setState(() => _loading = false);
   }
+
+  static bool _sameHM(DateTime a, DateTime b) =>
+      a.year == b.year &&
+      a.month == b.month &&
+      a.day == b.day &&
+      a.hour == b.hour &&
+      a.minute == b.minute;
 
   List<DateTime> _generateSlots(DateTime date) {
     return logic.generateSlots(
@@ -159,6 +189,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
       workingHours: _workingHours,
       appointments: _existingAppointments,
       durationMin: _selectedService?.durationMin ?? 60,
+      excludeId: widget.reschedule?.id, // B3: não colidir consigo mesmo
     );
   }
 
@@ -186,31 +217,55 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     }
 
     setState(() => _loading = true);
+    final isReschedule = widget.reschedule != null;
+    // B3: modo remarcar → PATCH no existente (API valida overlap ignorando
+    // o próprio id); modo normal → POST. Mesmo body de startsAt/endsAt.
     final op = PendingOp(
       id: 'appt-${_selectedSlot!.millisecondsSinceEpoch}',
-      method: 'POST',
-      path: '/appointments',
-      body: {
-        'clientId': _selectedClient!.id,
-        'serviceId': _selectedService!.id,
-        'startsAt': _selectedSlot!.toIso8601String(),
-        'endsAt': _selectedSlot!
-            .add(Duration(minutes: _selectedService!.durationMin))
-            .toIso8601String(),
-      },
+      method: isReschedule ? 'PATCH' : 'POST',
+      path: isReschedule
+          ? '/appointments/${widget.reschedule!.id}'
+          : '/appointments',
+      body: isReschedule
+          ? {
+              'startsAt': _selectedSlot!.toIso8601String(),
+              'endsAt': _selectedSlot!
+                  .add(Duration(minutes: _selectedService!.durationMin))
+                  .toIso8601String(),
+            }
+          : {
+              'clientId': _selectedClient!.id,
+              'serviceId': _selectedService!.id,
+              'startsAt': _selectedSlot!.toIso8601String(),
+              'endsAt': _selectedSlot!
+                  .add(Duration(minutes: _selectedService!.durationMin))
+                  .toIso8601String(),
+            },
       queuedAt: DateTime.now(),
-      description:
-          'Agendamento de ${_selectedClient!.name} às ${DateFormat('HH:mm').format(_selectedSlot!)}',
+      description: isReschedule
+          ? 'Remarcar ${_selectedClient!.name} às ${DateFormat('HH:mm').format(_selectedSlot!)}'
+          : 'Agendamento de ${_selectedClient!.name} às ${DateFormat('HH:mm').format(_selectedSlot!)}',
     );
     try {
       final api = ref.read(wizardApiProvider);
-      await api.dio.post('/appointments', data: op.body);
+      if (isReschedule) {
+        await api.dio.patch(op.path, data: op.body);
+      } else {
+        await api.dio.post('/appointments', data: op.body);
+      }
       if (mounted) {
-        context.go('/agenda');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Horário marcado!'), backgroundColor: Colors.green),
-        );
+        if (isReschedule) {
+          // B3/RF-04: volta pra agenda sinalizando remarcação (RF-C01 avisa
+          // a cliente no WhatsApp lá) — pop(true) em vez de go()
+          context.pop(true);
+        } else {
+          context.go('/agenda');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Horário marcado!'),
+                backgroundColor: Colors.green),
+          );
+        }
       }
     } on DioException catch (e) {
       // Offline-first fase 2: falha de CONEXÃO enfileira; erro de negócio
@@ -256,11 +311,13 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text([
-          'Escolhe o cliente',
-          'Escolhe o serviço',
-          'Escolhe o horário'
-        ][_step]),
+        title: Text(widget.reschedule != null
+            ? 'Remarcar'
+            : [
+                'Escolhe o cliente',
+                'Escolhe o serviço',
+                'Escolhe o horário'
+              ][_step]),
         leading: _step > 0
             ? IconButton(
                 icon: const Icon(Icons.arrow_back), onPressed: _prevStep)
@@ -283,9 +340,13 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: FilledButton(
+                  key: const Key('wizard-save'),
                   onPressed: _canProceed() ? _nextStep : null,
-                  child:
-                      Text(_step == 2 ? 'Confirmar agendamento' : 'Continuar'),
+                  child: Text(_step == 2
+                      ? (widget.reschedule != null
+                          ? 'Salvar novo horário'
+                          : 'Confirmar agendamento')
+                      : 'Continuar'),
                 ),
               ),
             ),
@@ -761,18 +822,25 @@ class Appointment {
   final DateTime startsAt;
   final DateTime endsAt;
   final String status;
+  // B3: FKs pro modo remarcar (pré-selecionar cliente/serviço no wizard)
+  final String? clientId;
+  final String? serviceId;
 
   Appointment(
       {required this.id,
       required this.startsAt,
       required this.endsAt,
-      required this.status});
+      required this.status,
+      this.clientId,
+      this.serviceId});
 
   factory Appointment.fromJson(Map<String, dynamic> j) => Appointment(
         id: j['id'],
         startsAt: DateTime.parse(j['starts_at'] ?? j['startsAt']).toLocal(),
         endsAt: DateTime.parse(j['ends_at'] ?? j['endsAt']).toLocal(),
         status: j['status'] ?? 'pending',
+        clientId: j['client_id'] ?? j['clientId'],
+        serviceId: j['service_id'] ?? j['serviceId'],
       );
 }
 
