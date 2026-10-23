@@ -13,6 +13,7 @@ List<DateTime> generateSlots({
   required List<WorkingHour> workingHours,
   required List<Appointment> appointments,
   required int durationMin,
+  String? excludeId,
 }) {
   final weekday = date.weekday % 7; // 0=dom..6=sáb
   final dayHours = workingHours.where((h) => h.weekday == weekday).toList();
@@ -25,6 +26,9 @@ List<DateTime> generateSlots({
           a.startsAt.month == date.month &&
           a.startsAt.day == date.day)
       .where((a) => a.status == 'pending' || a.status == 'confirmed')
+      // B3: em modo remarcar, o próprio agendamento não bloqueia slots —
+      // o slot atual dele continua selecionável pra "só mudar o dia/hora"
+      .where((a) => a.id != excludeId)
       .toList();
 
   for (final wh in dayHours) {
