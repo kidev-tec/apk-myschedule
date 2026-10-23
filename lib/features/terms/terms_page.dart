@@ -67,8 +67,8 @@ no app. O uso contínuo após a mudança implica aceite.
 
 ## 9. Contato
 
-Dúvidas sobre estes termos: fale com o suporte pelo WhatsApp do
-profissional responsável pela sua instalação.
+Dúvidas sobre estes termos: fale com o suporte pelo WhatsApp (55) 98
+9209-3812.
 ''';
 
   static const _privacy = '''
@@ -146,7 +146,7 @@ responsáveis.
 
 ## 9. Contato
 
-Encarregado (DPO): suporte da AGENVA via WhatsApp.
+Encarregado (DPO): suporte da AGENVA via WhatsApp (55) 98 9209-3812.
 ''';
 
   @override
