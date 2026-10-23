@@ -11,6 +11,7 @@ import '../../core/utils/phone_br.dart';
 import '../../core/api/paywall_flag.dart';
 import '../../core/update/update_service.dart';
 import '../../theme/app_theme.dart';
+import 'booking_wizard.dart' as booking show Appointment;
 
 /// B6/DI: provider do ApiClient pra agenda — testes sobrescrevem com mock.
 final agendaApiProvider = Provider<ApiClient>((ref) => ApiClient());
@@ -916,8 +917,17 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         case 'edit':
           // remarcar: abre o wizard reaproveitando cliente+serviço
           if (!mounted) return;
+          // B3: converte pro model do wizard (classes distintas)
+          final target = booking.Appointment(
+            id: a.id,
+            startsAt: a.startsAt,
+            endsAt: a.endsAt,
+            status: a.status,
+            clientId: a.clientId,
+            serviceId: a.serviceId,
+          );
           final changed = await context
-              .push<bool>('/agenda/booking', extra: {'reschedule': a});
+              .push<bool>('/agenda/booking', extra: {'reschedule': target});
           if (changed == true) {
             // RF-C01: remarcou — oferece avisar o cliente no WhatsApp
             if (mounted && a.clientPhone.isNotEmpty) {
@@ -952,6 +962,9 @@ class Appointment {
   final String source;
   // RF-A02: motivo do bloqueio (mesma coluna de canceled_reason)
   final String? canceledReason;
+  // B3: FKs pro modo remarcar (wizard pré-preenche cliente/serviço)
+  final String? clientId;
+  final String? serviceId;
 
   bool get isBlock => source == 'block';
 
@@ -965,6 +978,8 @@ class Appointment {
     required this.status,
     this.source = 'app',
     this.canceledReason,
+    this.clientId,
+    this.serviceId,
   });
 
   factory Appointment.fromJson(Map<String, dynamic> j) => Appointment(
@@ -977,6 +992,8 @@ class Appointment {
         status: j['status'] ?? 'pending',
         source: j['source'] ?? 'app',
         canceledReason: j['canceled_reason'] ?? j['canceledReason'],
+        clientId: j['client_id'] ?? j['clientId'],
+        serviceId: j['service_id'] ?? j['serviceId'],
       );
 }
 

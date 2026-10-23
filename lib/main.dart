@@ -13,7 +13,7 @@ import 'core/segment/segment_preset.dart';
 import 'core/storage/onboarding_resolver.dart';
 import 'features/onboarding/onboarding_page.dart';
 import 'features/agenda/agenda_page.dart';
-import 'features/agenda/booking_wizard.dart';
+import 'features/agenda/booking_wizard.dart' as booking;
 import 'features/clients/clients_page.dart';
 import 'features/clients/client_form_page.dart';
 import 'features/services/services_page.dart';
@@ -100,7 +100,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: 'booking',
-            builder: (_, __) => const BookingWizardPage(),
+            builder: (_, state) => booking.BookingWizardPage(
+              // B3: agenda empurra {'reschedule': Appointment} via extra
+              reschedule: (state.extra as Map<String, dynamic>?)?['reschedule']
+                  as booking.Appointment?,
+            ),
           ),
         ],
       ),
