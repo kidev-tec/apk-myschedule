@@ -51,35 +51,9 @@ jobs:
           files: build/app/outputs/flutter-apk/app-release.apk
 
   release-ios:
-    name: Release iOS (IPA não assinado)
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: 'stable'
-          cache: true
-      - name: Get Dependencies
-        run: flutter pub get
-      - name: Generate Code
-        run: dart run build_runner build --delete-conflicting-outputs
-      # Sem conta Apple Developer: build archive SEM assinatura de código
-      # (CODE_SIGNING_ALLOWED=NO gera .xcarchive válido → ipa empacotável).
-      # Com conta Apple: adicionar segrets CERTIFICATES_P12/KEYCHAIN_PASSWORD/
-      # MOBILEPROVISION e trocar pra flutter build ipa --export-options-plist.
-      - name: Build iOS (no codesign)
-        run: |
-          flutter build ipa --release --no-codesign \
-            --dart-define=API_BASE_URL=${{ vars.API_BASE_URL_PROD }}
-      - name: Verify IPA
-        run: test -f build/ios/ipa/*.ipa
-      - name: Upload IPA to release
-        uses: softprops/action-gh-release@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          files: build/ios/ipa/*.ipa
+    name: Release iOS (TestFlight)
+    uses: ./.github/workflows/ios-testflight.yml
+    secrets: inherit
 
   validate:
     name: Validate Release Gate
