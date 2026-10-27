@@ -262,7 +262,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
             try {
               novo = Appointment.fromJson(j);
             } catch (_) {
-              novo = null; // ponytail: offline/queue segue com fallback
+              novo = null; // Resposta inválida: a agenda recarrega a lista.
             }
           }
           context.pop(novo);
@@ -272,11 +272,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
         await api.dio.post('/appointments', data: op.body);
       }
       if (mounted) {
-        if (isReschedule) {
-          // B3/RF-04: volta pra agenda sinalizando remarcação — offline
-          // (enfileirado) não tem appointment novo; pop(true) genérico.
-          context.pop(true);
-        } else {
+        if (!isReschedule) {
           context.go('/agenda');
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -288,6 +284,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     } on DioException catch (e) {
       // Offline-first fase 2: falha de CONEXÃO enfileira; erro de negócio
       // (409 conflito, 400 validação) mostra a mensagem humana na hora.
+      if (!mounted) return null;
       final queued =
           await ref.read(syncQueueProvider.notifier).enqueueIfOffline(e, op);
       if (mounted) {

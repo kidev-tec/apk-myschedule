@@ -921,15 +921,16 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           final changed = await context.push<booking.Appointment?>(
               '/agenda/booking',
               extra: {'reschedule': target});
+          if (!mounted) return;
+          await _loadAppointments();
+          if (!mounted) return;
           if (changed != null) {
             // RF-C01: remarcou — oferece avisar o cliente no WhatsApp.
             // B-remarque: `changed` é a NOVA linha (id novo da API);
-            // null = enfileirado offline → fallback texto genérico.
+            // null = retorno sem agendamento (cancelamento/offline).
             if (mounted && a.clientPhone.isNotEmpty) {
               await _notifyRescheduledOnWhatsapp(a, changed);
             }
-          } else {
-            await _loadAppointments();
           }
           return;
       }
