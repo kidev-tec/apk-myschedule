@@ -92,7 +92,12 @@ jobs:
         run: |
           BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
           CERTS=$("$BT/apksigner" verify --print-certs build/app/outputs/flutter-apk/app-release.apk)
-          SHA256=$(printf '%s\n' "$CERTS" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | tr 'A-F' 'a-f' | tr -d ':\r')
+          # build-tools <= 36 imprime "Signer #1 certificate SHA-256 digest:"; o 37 imprime
+          # "V2 Signer: certificate SHA-256 digest:". Aceita os dois e exige um único signatário.
+          DIGESTS=$(printf '%s\n' "$CERTS" | sed -n -E 's/^(Signer #1|V[0-9.]+ Signer):? certificate SHA-256 digest: //p' | tr 'A-F' 'a-f' | tr -d ':\r' | sort -u)
+          [ "$(printf '%s\n' "$DIGESTS" | grep -c .)" = 1 ] \
+            || { echo "::error::Esperado exatamente um certificado de assinatura no APK"; exit 1; }
+          SHA256=$DIGESTS
           [[ "$SHA256" =~ ^[0-9a-f]{64}$ ]] && [ "$SHA256" = "$EXPECTED_SIGNING_SHA256" ] \
             || { echo "::error::Certificado do APK difere do keystore de release"; exit 1; }
           echo "Certificado do APK corresponde ao keystore fixo"
