@@ -284,7 +284,9 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     } on DioException catch (e) {
       // Offline-first fase 2: falha de CONEXÃO enfileira; erro de negócio
       // (409 conflito, 400 validação) mostra a mensagem humana na hora.
-      if (!mounted) return null;
+      if (!mounted) {
+        return null;
+      }
       final queued =
           await ref.read(syncQueueProvider.notifier).enqueueIfOffline(e, op);
       if (mounted) {
