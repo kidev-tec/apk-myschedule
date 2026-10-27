@@ -35,6 +35,10 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
   Client? _selectedClient;
   Service? _selectedService;
   DateTime? _selectedSlot;
+  int? _durationOverrideMin;
+
+  int get _effectiveDurationMin =>
+      _durationOverrideMin ?? _selectedService?.durationMin ?? 60;
 
   bool _loading = true;
 
@@ -188,7 +192,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
       date: date,
       workingHours: _workingHours,
       appointments: _existingAppointments,
-      durationMin: _selectedService?.durationMin ?? 60,
+      durationMin: _effectiveDurationMin,
       excludeId: widget.reschedule?.id, // B3: não colidir consigo mesmo
     );
   }
@@ -229,16 +233,18 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
       body: isReschedule
           ? {
               'startsAt': _selectedSlot!.toIso8601String(),
+              'duration_min': _effectiveDurationMin,
               'endsAt': _selectedSlot!
-                  .add(Duration(minutes: _selectedService!.durationMin))
+                  .add(Duration(minutes: _effectiveDurationMin))
                   .toIso8601String(),
             }
           : {
               'clientId': _selectedClient!.id,
               'serviceId': _selectedService!.id,
               'startsAt': _selectedSlot!.toIso8601String(),
+              'duration_min': _effectiveDurationMin,
               'endsAt': _selectedSlot!
-                  .add(Duration(minutes: _selectedService!.durationMin))
+                  .add(Duration(minutes: _effectiveDurationMin))
                   .toIso8601String(),
             },
       queuedAt: DateTime.now(),
@@ -654,7 +660,10 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
             trailing: selected
                 ? Icon(Icons.check_circle, color: AppColors.primaryOf(context))
                 : null,
-            onTap: () => setState(() => _selectedService = s),
+            onTap: () => setState(() {
+              _selectedService = s;
+              _durationOverrideMin = null;
+            }),
           ),
         );
       },
@@ -685,6 +694,45 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                   icon: const Icon(Icons.chevron_right),
                   onPressed: () => setState(() => _selectedDate =
                       _selectedDate.add(const Duration(days: 1)))),
+            ],
+          ),
+        ),
+        // Duração por agendamento: ajuste simples, sempre em 15 min.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Row(
+            children: [
+              const Text('Duração:'),
+              const SizedBox(width: 12),
+              IconButton.outlined(
+                key: const Key('duration-minus'),
+                tooltip: 'Diminuir 15 minutos',
+                onPressed: _effectiveDurationMin <= 15
+                    ? null
+                    : () => setState(() {
+                        _durationOverrideMin = _effectiveDurationMin - 15;
+                        _selectedSlot = null;
+                      }),
+                icon: const Icon(Icons.remove),
+              ),
+              Expanded(
+                child: Center(
+                  child: Text('$_effectiveDurationMin min',
+                      key: const Key('duration-value'),
+                      style: Theme.of(context).textTheme.titleMedium),
+                ),
+              ),
+              IconButton.outlined(
+                key: const Key('duration-plus'),
+                tooltip: 'Aumentar 15 minutos',
+                onPressed: _effectiveDurationMin >= 480
+                    ? null
+                    : () => setState(() {
+                        _durationOverrideMin = _effectiveDurationMin + 15;
+                        _selectedSlot = null;
+                      }),
+                icon: const Icon(Icons.add),
+              ),
             ],
           ),
         ),

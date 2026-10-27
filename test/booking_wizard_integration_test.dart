@@ -147,6 +147,14 @@ void main() {
       await tester.tap(find.byIcon(Icons.chevron_right));
       await tester.pumpAndSettle();
     }
+    // Ajuste autenticado: serviço 60 → 75min; slot selecionado deve usar
+    // duração efetiva no payload, não a duração base do serviço.
+    expect(find.byKey(const Key('duration-value')), findsOneWidget);
+    expect(find.text('60 min'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('duration-plus')));
+    await tester.pump();
+    expect(find.text('75 min'), findsOneWidget);
+
     // appt 09-10 bloqueado; primeiro livre deve ser 10:00
     expect(find.text('10:00'), findsOneWidget); // pós-conflito
     await tester.tap(find.text('10:00'));
@@ -167,10 +175,11 @@ void main() {
     // source foi removido: a API só aceita 'block' ou ausente
     expect(posted.first.containsKey('source'), isFalse);
     expect(DateTime.parse(posted.first['startsAt'] as String).hour, 10);
-    // ends_at = starts_at + duração do serviço (60min)
+    expect(posted.first['duration_min'], 75);
+    // endsAt mantém compatibilidade e é coerente com duration_min.
     final start = DateTime.parse(posted.first['startsAt'] as String);
     final end = DateTime.parse(posted.first['endsAt'] as String);
-    expect(end.difference(start), const Duration(minutes: 60));
+    expect(end.difference(start), const Duration(minutes: 75));
   });
 
   testWidgets('fluxo: POST falha → SnackBar de erro, sem sucesso',
