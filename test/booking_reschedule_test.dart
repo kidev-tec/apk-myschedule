@@ -16,7 +16,7 @@ import 'package:minha_agenda/features/agenda/booking_wizard.dart';
 /// CA1 — generateSlots: excludeId libera o slot do próprio agendamento.
 /// CA2 — wizard remarcar: abre no passo do horário com cliente/serviço
 ///       pré-selecionados (título "Remarcar", sem voltar pra cliente).
-/// CA3 — salvar faz PATCH /appointments/:id (nunca POST) e pop(true).
+/// CA3 — salvar faz PATCH e devolve a nova linha para a agenda.
 /// CA4 — Appointment.fromJson parseia clientId/serviceId.
 
 void main() {
@@ -83,7 +83,8 @@ void main() {
   });
 
   group('CA2/CA3 wizard reschedule (integração)', () {
-    Widget wrapWithApi(ApiClient api, Appointment target) {
+    Widget wrapWithApi(ApiClient api, Appointment target,
+        {void Function(Appointment?)? onResult}) {
       final router = GoRouter(initialLocation: '/', routes: [
         GoRoute(
             path: '/',
@@ -91,9 +92,11 @@ void main() {
                 body: Builder(
                     builder: (ctx) => FilledButton(
                         key: const Key('open-wizard'),
-                        onPressed: () => ctx.push('/booking', extra: {
-                              'reschedule': target,
-                            }),
+                        onPressed: () async {
+                          final result = await ctx.push<Appointment>('/booking',
+                              extra: {'reschedule': target});
+                          onResult?.call(result);
+                        },
                         child: const Text('ABRIR'))))),
         GoRoute(
             path: '/booking',
@@ -156,7 +159,19 @@ void main() {
                   },
                 ],
               }));
-      adapter.onPatch('/appointments/appt-9', (s) => s.reply(200, {'ok': true}),
+      adapter.onPatch(
+          '/appointments/appt-9',
+          (s) => s.reply(200, {
+                'appointment': {
+                  'id': 'appt-new',
+                  'starts_at': '2026-10-28T11:00:00.000',
+                  'ends_at': '2026-10-28T12:00:00.000',
+                  'status': 'pending',
+                  'client_id': 'c1',
+                  'service_id': 's1',
+                },
+                'rescheduled': true,
+              }),
           data: Matchers.any);
       adapter.onPost('/appointments', (s) => s.reply(201, {'id': 'X'}),
           data: Matchers.any);
@@ -204,7 +219,9 @@ void main() {
         (tester) async {
       FlutterSecureStorage.setMockInitialValues({});
       final (api, calls) = fakeApi();
-      await tester.pumpWidget(wrapWithApi(api, target));
+      Appointment? returned;
+      await tester.pumpWidget(
+          wrapWithApi(api, target, onResult: (value) => returned = value));
       await tester.tap(find.byKey(const Key('open-wizard')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
@@ -225,7 +242,11 @@ void main() {
           reason: 'remarcar deve PATCH no próprio id');
       expect(calls.any((c) => c.key == 'POST'), isFalse,
           reason: 'remarcar deve PATCH, nunca POST');
-      // pop(true): wizard fechou e voltou pra home
+      expect(returned?.id, 'appt-new');
+      expect(returned?.startsAt, DateTime(2026, 10, 28, 11));
+      expect(logic.buildRescheduleMessage('Maria', returned),
+          contains('28/10 às 11:00'));
+      // Retorna o novo agendamento e fecha o wizard.
       expect(find.byType(BookingWizardPage), findsNothing);
       expect(find.text('ABRIR'), findsOneWidget);
     });

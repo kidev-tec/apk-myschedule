@@ -12,6 +12,7 @@ import '../../core/api/paywall_flag.dart';
 import '../../core/update/update_service.dart';
 import '../../theme/app_theme.dart';
 import 'booking_wizard.dart' as booking show Appointment;
+import 'booking_logic.dart' as booking_logic show buildRescheduleMessage;
 
 /// B6/DI: provider do ApiClient pra agenda — testes sobrescrevem com mock.
 final agendaApiProvider = Provider<ApiClient>((ref) => ApiClient());
@@ -695,25 +696,16 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   }
 
   /// RF-C01: após remarcar, oferece avisar o cliente com a NOVA data/hora.
-  Future<void> _notifyRescheduledOnWhatsapp(Appointment a) async {
-    final api = ref.read(agendaApiProvider);
-    // busca o agendamento remarcado pra pegar a nova data/hora
-    String whenText = 'o novo horário';
-    try {
-      final res = await api.dio.get('/appointments/${a.id}');
-      final j = (res.data as Map<String, dynamic>)['appointment']
-          as Map<String, dynamic>?;
-      if (j?['starts_at'] != null) {
-        final newStart = DateTime.parse(j!['starts_at'] as String).toLocal();
-        whenText = DateFormat('dd/MM "às" HH:mm', 'pt_BR').format(newStart);
-      }
-    } catch (_) {
-      // segue com texto genérico
-    }
+  /// B-remarque: recebe o appointment NOVO do wizard (resposta do PATCH) —
+  /// sem GET /appointments/:id (endpoint inexistente na API).
+  Future<void> _notifyRescheduledOnWhatsapp(
+      Appointment a, booking.Appointment? novo) async {
+    final whenText = booking_logic
+        .buildRescheduleMessage(a.clientName, novo)
+        .replaceFirst('Oi ${a.clientName}! ', '');
     if (!mounted) return;
     final msg = Uri.encodeComponent(
-        'Oi ${a.clientName}! Remarquei teu horário pra $whenText. '
-        'Confirma se esse novo horário funciona pra você? 🙂');
+        booking_logic.buildRescheduleMessage(a.clientName, novo));
     final phone = ensureDdi55(a.clientPhone);
     final ok = await showDialog<bool>(
       context: context,
@@ -926,15 +918,23 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             clientId: a.clientId,
             serviceId: a.serviceId,
           );
-          final changed = await context
-              .push<bool>('/agenda/booking', extra: {'reschedule': target});
-          if (changed == true) {
-            // RF-C01: remarcou — oferece avisar o cliente no WhatsApp
+          final changed = await context.push<booking.Appointment?>(
+              '/agenda/booking',
+              extra: {'reschedule': target});
+          if (!mounted) {
+            return;
+          }
+          await _loadAppointments();
+          if (!mounted) {
+            return;
+          }
+          if (changed != null) {
+            // RF-C01: remarcou — oferece avisar o cliente no WhatsApp.
+            // B-remarque: `changed` é a NOVA linha (id novo da API);
+            // null = retorno sem agendamento (cancelamento/offline).
             if (mounted && a.clientPhone.isNotEmpty) {
-              await _notifyRescheduledOnWhatsapp(a);
+              await _notifyRescheduledOnWhatsapp(a, changed);
             }
-          } else {
-            await _loadAppointments();
           }
           return;
       }
