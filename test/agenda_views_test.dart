@@ -13,8 +13,9 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:minha_agenda/core/api/api_client.dart';
 import 'package:minha_agenda/features/agenda/agenda_page.dart';
+import 'package:minha_agenda/features/agenda/booking_wizard.dart' as booking;
 
-Widget _wrap(ApiClient api) {
+Widget _wrap(ApiClient api, {booking.Appointment? rescheduleResult}) {
   final router = GoRouter(initialLocation: '/', routes: [
     GoRoute(
         path: '/', builder: (_, __) => AgendaPage(onCheckUpdate: () async {})),
@@ -23,7 +24,10 @@ Widget _wrap(ApiClient api) {
         builder: (_, __) => const Scaffold(body: Text('SETTINGS'))),
     GoRoute(
         path: '/agenda/booking',
-        builder: (_, __) => const Scaffold(body: Text('WIZARD'))),
+        builder: (ctx, __) => Scaffold(
+            body: FilledButton(
+                onPressed: () => ctx.pop(rescheduleResult),
+                child: const Text('SALVAR REMARCAÇÃO')))),
   ]);
   return ProviderScope(
     overrides: [agendaApiProvider.overrideWithValue(api)],
@@ -105,6 +109,33 @@ void main() {
     expect(find.text('Mês'), findsOneWidget);
     // agendamento do dia aparece (card com o nome do cliente)
     expect(find.text('Ana'), findsOneWidget);
+  });
+
+  testWidgets('remarcação recarrega agenda e oferece WhatsApp com horário novo',
+      (tester) async {
+    final novo = booking.Appointment(
+        id: 'novo-id',
+        startsAt: DateTime(2031, 1, 5, 14, 30),
+        endsAt: DateTime(2031, 1, 5, 15, 30),
+        status: 'confirmed');
+    await tester.pumpWidget(_wrap(api, rescheduleResult: novo));
+    await tester.pumpAndSettle();
+    final antes = capturedQueries.length;
+    await tester.tap(find.byType(PopupMenuButton<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remarcar'));
+    await tester.pumpAndSettle();
+    adapter.onGet('/appointments', (s) => s.reply(200, {'appointments': []}),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+    await tester.tap(find.text('SALVAR REMARCAÇÃO'));
+    await tester.pumpAndSettle();
+    expect(find.text('Avisar o cliente?'), findsOneWidget);
+    expect(find.textContaining('05/01 às 14:30'), findsOneWidget);
+    await tester.tap(find.text('Não precisa'));
+    await tester.pumpAndSettle();
+    expect(capturedQueries.length, greaterThan(antes));
+    expect(find.text('Ana'), findsNothing,
+        reason: 'a linha antiga deve sair da agenda após a remarcação');
   });
 
   testWidgets('troca pra SEMANA: janela de 7 dias, agendamento agrupado',
