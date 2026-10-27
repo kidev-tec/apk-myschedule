@@ -36,7 +36,9 @@ android {
         // Sem as envs (build local), cai no debug keystore — mesmo comportamento de antes.
         create("ci") {
             val ksPath = System.getenv("KEYSTORE_PATH")
-            if (ksPath != null && file(ksPath).exists()) {
+            if (ksPath != null) {
+                require(file(ksPath).isFile) { "Keystore de release não encontrado" }
+                require(!System.getenv("KEYSTORE_PASSWORD").isNullOrBlank()) { "Senha do keystore ausente" }
                 storeFile = file(ksPath)
                 storePassword = System.getenv("KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("KEY_ALIAS") ?: "agenva"
@@ -50,6 +52,9 @@ android {
             val ci = signingConfigs.getByName("ci")
             // Assina com o keystore de release (fixo = SHA-1 registrado no Firebase →
             // Google login funciona) quando disponível; senão usa o debug local.
+            require(System.getenv("CI") != "true" || !gradle.startParameter.taskNames.any { it.contains("release", ignoreCase = true) } || ci.storeFile != null) {
+                "Release no CI exige keystore fixo; assinatura debug não é permitida"
+            }
             signingConfig = if (ci.storeFile != null) ci else signingConfigs.getByName("debug")
         }
     }

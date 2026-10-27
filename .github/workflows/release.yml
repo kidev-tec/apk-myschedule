@@ -55,7 +55,12 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
           test -n "$KEYSTORE_BASE64" || { echo "::error::Secret KEYSTORE_BASE64 ausente"; exit 1; }
-          echo "$KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+          test -n "$KEYSTORE_PASSWORD" || { echo "::error::Secret KEYSTORE_PASSWORD ausente"; exit 1; }
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+          test -s android/app/upload-keystore.jks || { echo "::error::Keystore vazio"; exit 1; }
+          keytool -exportcert -keystore android/app/upload-keystore.jks -alias "${KEY_ALIAS:-agenva}" -storepass:env KEYSTORE_PASSWORD -file "$RUNNER_TEMP/release-cert.der"
+          EXPECTED_SHA256=$(sha256sum "$RUNNER_TEMP/release-cert.der" | cut -d ' ' -f 1)
+          echo "EXPECTED_SIGNING_SHA256=$EXPECTED_SHA256" >> "$GITHUB_ENV"
           echo "KEYSTORE_PATH=$GITHUB_WORKSPACE/android/app/upload-keystore.jks" >> "$GITHUB_ENV"
           echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
           echo "KEY_ALIAS=${KEY_ALIAS:-agenva}" >> "$GITHUB_ENV"
@@ -86,12 +91,11 @@ jobs:
       - name: Verify signing certificate
         run: |
           BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
-          $BT/apksigner verify --print-certs build/app/outputs/flutter-apk/app-release.apk
-          SHA1=$($BT/apksigner verify --print-certs build/app/outputs/flutter-apk/app-release.apk | grep 'SHA-1' | awk '{print $2}' | tr -d ':' | tr 'A-F' 'a-f')
-          if [ "$SHA1" = "a2ed26cb06b26b16fcaa88276b26c589349ac755" ]; then
-            echo "::error::APK assinado com debug keystore DA RUNNER (SHA-1 não registrado no Firebase)"; exit 1
-          fi
-          echo "SHA-1 de assinatura OK ($SHA1)"
+          CERTS=$("$BT/apksigner" verify --print-certs build/app/outputs/flutter-apk/app-release.apk)
+          SHA256=$(printf '%s\n' "$CERTS" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | tr 'A-F' 'a-f' | tr -d ':\r')
+          [[ "$SHA256" =~ ^[0-9a-f]{64}$ ]] && [ "$SHA256" = "$EXPECTED_SIGNING_SHA256" ] \
+            || { echo "::error::Certificado do APK difere do keystore de release"; exit 1; }
+          echo "Certificado do APK corresponde ao keystore fixo"
 
       - name: Upload APK to release
         uses: softprops/action-gh-release@v2
