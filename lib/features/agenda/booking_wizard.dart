@@ -209,11 +209,11 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     }
   }
 
-  Future<void> _createAppointment() async {
+  Future<Appointment?> _createAppointment() async {
     if (_selectedClient == null ||
         _selectedService == null ||
         _selectedSlot == null) {
-      return;
+      return null;
     }
 
     setState(() => _loading = true);
@@ -249,14 +249,32 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     try {
       final api = ref.read(wizardApiProvider);
       if (isReschedule) {
-        await api.dio.patch(op.path, data: op.body);
+        final res = await api.dio.patch(op.path, data: op.body);
+        if (mounted) {
+          // B-remarque: API devolve a NOVA linha (cancela a antiga e cria
+          // outra com id novo) — devolve pro chamador montar a mensagem
+          // do WhatsApp com o horário real (sem GET fantasma /:id).
+          Appointment? novo;
+          final j = res.data is Map<String, dynamic>
+              ? (res.data as Map<String, dynamic>)['appointment']
+              : null;
+          if (j is Map<String, dynamic>) {
+            try {
+              novo = Appointment.fromJson(j);
+            } catch (_) {
+              novo = null; // ponytail: offline/queue segue com fallback
+            }
+          }
+          context.pop(novo);
+          return novo;
+        }
       } else {
         await api.dio.post('/appointments', data: op.body);
       }
       if (mounted) {
         if (isReschedule) {
-          // B3/RF-04: volta pra agenda sinalizando remarcação (RF-C01 avisa
-          // a cliente no WhatsApp lá) — pop(true) em vez de go()
+          // B3/RF-04: volta pra agenda sinalizando remarcação — offline
+          // (enfileirado) não tem appointment novo; pop(true) genérico.
           context.pop(true);
         } else {
           context.go('/agenda');
@@ -301,6 +319,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
       }
     }
     if (mounted) setState(() => _loading = false);
+    return null; // falha/offline: sem appointment novo
   }
 
   @override

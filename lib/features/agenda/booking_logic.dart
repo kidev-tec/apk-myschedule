@@ -1,3 +1,5 @@
+import 'package:intl/intl.dart';
+
 import 'booking_wizard.dart' show Client, WorkingHour, Appointment;
 
 /// Lógica pura de geração de slots de agenda — extraída do BookingWizardPage
@@ -58,6 +60,18 @@ List<Client> filterClients(List<Client> clients, String query) {
           c.name.toLowerCase().contains(q) ||
           c.phoneE164.toLowerCase().contains(q))
       .toList();
+}
+
+/// B-remarque (t_b018bc6b): monta a mensagem de remarcação pro WhatsApp.
+/// Usa o startsAt do appointment NOVO (resposta do PATCH — a API cancela a
+/// linha antiga e cria outra com id novo); sem dados novos, texto genérico.
+String buildRescheduleMessage(String clientName, Appointment? novo) {
+  final when = novo == null
+      ? 'o novo horário'
+      : '${DateFormat('dd/MM', 'pt_BR').format(novo.startsAt)} '
+          'às ${DateFormat('HH:mm', 'pt_BR').format(novo.startsAt)}';
+  return 'Oi $clientName! Remarquei teu horário pra $when. '
+      'Confirma se esse novo horário funciona pra você? 🙂';
 }
 
 class BookingWizardLogic {
