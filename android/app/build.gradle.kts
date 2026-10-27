@@ -31,11 +31,31 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        // Release keystore via CI (secrets KEYSTORE_BASE64/KEYSTORE_PASSWORD/KEY_ALIAS).
+        // Sem as envs (build local), cai no debug keystore — mesmo comportamento de antes.
+        create("ci") {
+            val ksPath = System.getenv("KEYSTORE_PATH")
+            if (ksPath != null) {
+                require(file(ksPath).isFile) { "Keystore de release não encontrado" }
+                require(!System.getenv("KEYSTORE_PASSWORD").isNullOrBlank()) { "Senha do keystore ausente" }
+                storeFile = file(ksPath)
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS") ?: "agenva"
+                keyPassword = System.getenv("KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            val ci = signingConfigs.getByName("ci")
+            // Assina com o keystore de release (fixo = SHA-1 registrado no Firebase →
+            // Google login funciona) quando disponível; senão usa o debug local.
+            require(System.getenv("CI") != "true" || !gradle.startParameter.taskNames.any { it.contains("release", ignoreCase = true) } || ci.storeFile != null) {
+                "Release no CI exige keystore fixo; assinatura debug não é permitida"
+            }
+            signingConfig = if (ci.storeFile != null) ci else signingConfigs.getByName("debug")
         }
     }
 }
