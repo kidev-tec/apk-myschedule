@@ -705,7 +705,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   }
 
   /// Rodapé da semana: os 7 dias (dom..sáb) da semana em foco; o dia em
-  /// foco aparece como "dd/MM" destacado. Tocar num dia abre a visão dia.
+  /// foco aparece como "dd/MM" destacado. Tocar num dia foca nele e deixa
+  /// só ele aberto na lista da semana.
   Widget _buildWeekStrip() {
     final theme = Theme.of(context);
     final start = _windowStart();
@@ -719,7 +720,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         return Expanded(
           flex: selected ? 2 : 1,
           child: InkWell(
-            onTap: () => _openDay(day),
+            key: Key('week-strip-${DateFormat('yyyy-MM-dd').format(day)}'),
+            onTap: () => _focusWeekDay(day),
             borderRadius: BorderRadius.circular(8),
             child: Container(
               height: 40,
@@ -803,6 +805,18 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         );
       },
     );
+  }
+
+  /// Semana: foca [day] e recolhe os demais dias (mesma janela, sem refetch).
+  void _focusWeekDay(DateTime day) {
+    final start = _windowStart();
+    setState(() {
+      _focusedDay = day;
+      _collapsedDays
+        ..clear()
+        ..addAll(List.generate(7, (i) => start.add(Duration(days: i)))
+            .where((d) => d != day));
+    });
   }
 
   void _toggleDay(DateTime day) {

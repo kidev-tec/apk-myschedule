@@ -244,8 +244,7 @@ void main() {
     expect(find.text('Ana'), findsNothing);
   });
 
-  testWidgets('SEMANA: rodapé mostra os 7 dias da semana; tocar abre o dia',
-      (tester) async {
+  testWidgets('SEMANA: rodapé mostra os 7 dias da semana', (tester) async {
     await pumpPage(tester);
     await tester.tap(find.text('Semana'));
     await tester.pumpAndSettle();
@@ -264,15 +263,59 @@ void main() {
           findsOneWidget,
           reason: 'dia $label no rodapé');
     }
+  });
 
-    // toca no domingo (ou segunda, se hoje é domingo) → abre a visão dia
-    final alvo = domingo.add(Duration(days: now.weekday % 7 == 0 ? 1 : 0));
-    await tester
-        .tap(find.descendant(of: rodape, matching: find.text('${alvo.day}')));
+  testWidgets(
+      'SEMANA: tocar num dia do rodapé recolhe todos e abre só o dia tocado',
+      (tester) async {
+    final now = DateTime.now();
+    final domingo = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: now.weekday % 7));
+    final segunda = domingo.add(const Duration(days: 1));
+    Map<String, dynamic> appt(String id, String nome, DateTime inicio) => {
+          'id': id,
+          'client_name': nome,
+          'client_phone': '+5514999990001',
+          'service_name': 'Corte',
+          'starts_at': inicio.toIso8601String(),
+          'ends_at': inicio.add(const Duration(minutes: 30)).toIso8601String(),
+          'status': 'confirmed',
+          'source': 'app',
+        };
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [
+                appt('d0', 'Bruno', domingo.add(const Duration(hours: 9))),
+                appt('d1', 'Carla', segunda.add(const Duration(hours: 9))),
+              ]
+            }),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+    await pumpPage(tester);
+    await tester.tap(find.text('Semana'));
     await tester.pumpAndSettle();
-    expect(rodape, findsNothing);
-    final q = capturedQueries.last!;
-    expect(DateTime.parse(q['from'] as String), alvo);
+    expect(find.text('Bruno'), findsOneWidget);
+    expect(find.text('Carla'), findsOneWidget);
+
+    Finder diaRodape(DateTime d) =>
+        find.byKey(Key('week-strip-${DateFormat('yyyy-MM-dd').format(d)}'));
+
+    await tester.tap(diaRodape(segunda));
+    await tester.pumpAndSettle();
+    // continua na semana, só a segunda aberta e destacada no rodapé
+    expect(find.byKey(const Key('week-strip')), findsOneWidget);
+    expect(find.text('Carla'), findsOneWidget);
+    expect(find.text('Bruno'), findsNothing);
+    expect(
+        find.descendant(
+            of: diaRodape(segunda),
+            matching: find.text(DateFormat('dd/MM').format(segunda))),
+        findsOneWidget);
+
+    await tester.tap(diaRodape(domingo));
+    await tester.pumpAndSettle();
+    expect(find.text('Bruno'), findsOneWidget);
+    expect(find.text('Carla'), findsNothing);
   });
 
   testWidgets('DIA: tocar na data do rodapé abre popup com os dias do mês',
