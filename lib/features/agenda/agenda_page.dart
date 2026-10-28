@@ -703,7 +703,12 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       final res = await api.dio.get('/appointments/${a.id}');
       final j = (res.data as Map<String, dynamic>)['appointment']
           as Map<String, dynamic>?;
-      if (j?['starts_at'] != null) {
+      // Preferir starts_at_local: API já formata no fuso do NEGÓCIO,
+      // então a mensagem não depende do fuso do aparelho (fix divergência).
+      final local = j?['starts_at_local'] as String?;
+      if (local != null && local.isNotEmpty) {
+        whenText = local;
+      } else if (j?['starts_at'] != null) {
         final newStart = DateTime.parse(j!['starts_at'] as String).toLocal();
         whenText = DateFormat('dd/MM "às" HH:mm', 'pt_BR').format(newStart);
       }
