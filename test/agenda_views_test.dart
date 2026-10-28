@@ -557,6 +557,29 @@ void main() {
         findsNothing);
   });
 
+  testWidgets('erro da API ao cancelar mostra a mensagem humana, não a exceção',
+      (tester) async {
+    adapter.onPatch(
+        RegExp(r'/appointments/.*'),
+        (s) => s.reply(400, {
+              'error':
+                  'Este horário já passou — não é possível alterar o agendamento'
+            }),
+        data: Matchers.any);
+    await pumpPage(tester);
+
+    await tester.tap(find.byType(PopupMenuButton<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+
+    expect(
+        find.text('Não consegui cancelar: Este horário já passou — '
+            'não é possível alterar o agendamento'),
+        findsOneWidget);
+    expect(find.textContaining('DioException'), findsNothing);
+  });
+
   testWidgets('DIA: tocar na data do rodapé abre popup com os dias do mês',
       (tester) async {
     await pumpPage(tester);

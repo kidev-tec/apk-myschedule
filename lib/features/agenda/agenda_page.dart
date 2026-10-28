@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
+import '../../core/api/api_error.dart';
 import '../../core/storage/local_cache.dart';
 import '../../core/storage/connectivity_provider.dart';
 import '../../core/storage/sync_queue.dart';
@@ -1002,6 +1003,15 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
 
   /// Agendamento cujo horário já passou: sem cancelar/concluir/pedir
   /// confirmação (decisão de produto 21/09 — ação só com antecedência).
+  /// Verbo em PT-BR da ação do menu (os valores internos são em inglês).
+  static String _actionLabel(String action) => switch (action) {
+        'cancel' => 'cancelar',
+        'done' => 'concluir',
+        'confirm' => 'confirmar',
+        'edit' => 'remarcar',
+        _ => 'fazer isso',
+      };
+
   bool _isPast(Appointment a) => a.startsAt.isBefore(DateTime.now());
 
   /// Agendamento de hoje ou de um dia anterior (fuso do aparelho).
@@ -1232,7 +1242,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       debugPrint('[agenda] falha ao bloquear: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Não consegui bloquear: $e'),
+            content: Text('Não consegui bloquear: ${humanError(e)}'),
             backgroundColor: AppColors.error));
       }
     }
@@ -1334,7 +1344,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       debugPrint('[agenda] falha em $action: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Não consegui $action: $e'),
+            content:
+                Text('Não consegui ${_actionLabel(action)}: ${humanError(e)}'),
             backgroundColor: AppColors.error));
       }
     }
