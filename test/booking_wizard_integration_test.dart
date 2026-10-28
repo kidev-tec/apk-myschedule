@@ -166,7 +166,12 @@ void main() {
     expect(posted.first['serviceId'], 's1');
     // source foi removido: a API só aceita 'block' ou ausente
     expect(posted.first.containsKey('source'), isFalse);
-    expect(DateTime.parse(posted.first['startsAt'] as String).hour, 10);
+    // horário vai em UTC (sufixo Z): sem fuso a API (servidor em UTC)
+    // lia 10:00 de Brasília como 10:00 UTC e salvava 3h antes.
+    expect(posted.first['startsAt'] as String, endsWith('Z'));
+    expect(posted.first['endsAt'] as String, endsWith('Z'));
+    expect(
+        DateTime.parse(posted.first['startsAt'] as String).toLocal().hour, 10);
     // ends_at = starts_at + duração do serviço (60min)
     final start = DateTime.parse(posted.first['startsAt'] as String);
     final end = DateTime.parse(posted.first['endsAt'] as String);
@@ -221,6 +226,15 @@ void main() {
     // 409 é erro de negócio: mostra a mensagem humana da API na hora
     // (fase 2 do offline: só falha de CONEXÃO é que enfileira).
     expect(find.textContaining('slot já reservado'), findsOneWidget);
+
+    // Após o erro o wizard continua no passo do horário (não volta pro
+    // passo 1 com o título/estado do passo 3) e o voltar funciona.
+    expect(find.text('Escolhe o horário'), findsOneWidget);
+    expect(find.text('Confirmar agendamento'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+    expect(find.text('Escolhe o serviço'), findsOneWidget);
+    expect(find.text('Corte'), findsOneWidget);
   });
 
   testWidgets('busca filtra clientes por nome', (tester) async {
