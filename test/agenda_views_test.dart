@@ -339,6 +339,31 @@ void main() {
     expect(ant, DateTime(atual.year, atual.month, atual.day - 7));
   });
 
+  testWidgets('SEMANA: botão recolhe todos / expande todos os dias',
+      (tester) async {
+    await pumpPage(tester);
+    // só existe na semana
+    expect(find.byTooltip('Recolher todos'), findsNothing);
+    await tester.tap(find.text('Semana'));
+    await tester.pumpAndSettle();
+
+    final recolher = find.byTooltip('Recolher todos');
+    expect(recolher, findsOneWidget);
+    // à esquerda do alternador lista/grade
+    expect(tester.getCenter(recolher).dx,
+        lessThan(tester.getCenter(find.byTooltip('Lista')).dx));
+
+    await tester.tap(recolher);
+    await tester.pumpAndSettle();
+    expect(find.text('Ana'), findsNothing);
+    expect(find.byTooltip('Mostrar'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Expandir todos'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ana'), findsOneWidget);
+    expect(find.byTooltip('Recolher todos'), findsOneWidget);
+  });
+
   testWidgets('DIA: tocar na data do rodapé abre popup com os dias do mês',
       (tester) async {
     await pumpPage(tester);

@@ -395,6 +395,9 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                                   // Lista/grade não se aplicam ao mês.
                                   if (_view != _AgendaView.mes) ...[
                                     const Spacer(),
+                                    if (_view == _AgendaView.semana &&
+                                        _appointments.isNotEmpty)
+                                      _buildCollapseAllButton(),
                                     _buildLayoutToggle(_AgendaLayout.lista,
                                         Icons.view_agenda_outlined, 'Lista'),
                                     _buildLayoutToggle(_AgendaLayout.grade,
@@ -823,6 +826,28 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         ..addAll(List.generate(7, (i) => start.add(Duration(days: i)))
             .where((d) => d != day));
     });
+  }
+
+  /// Dias da semana que têm agendamento (os que aparecem na lista).
+  Set<DateTime> get _weekDaysWithAppointments => _appointments
+      .map((a) => DateTime(a.startsAt.year, a.startsAt.month, a.startsAt.day))
+      .toSet();
+
+  /// Semana: se algum dia está aberto recolhe todos; senão expande todos.
+  Widget _buildCollapseAllButton() {
+    final allCollapsed = _collapsedDays.containsAll(_weekDaysWithAppointments);
+    return IconButton(
+      onPressed: () => setState(() {
+        if (allCollapsed) {
+          _collapsedDays.clear();
+        } else {
+          _collapsedDays.addAll(_weekDaysWithAppointments);
+        }
+      }),
+      tooltip: allCollapsed ? 'Expandir todos' : 'Recolher todos',
+      icon: Icon(allCollapsed ? Icons.unfold_more : Icons.unfold_less),
+      color: AppColors.neutral,
+    );
   }
 
   void _toggleDay(DateTime day) {
