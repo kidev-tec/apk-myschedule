@@ -275,6 +275,34 @@ void main() {
     expect(DateTime.parse(q['from'] as String), alvo);
   });
 
+  testWidgets('DIA: tocar na data do rodapé abre popup com os dias do mês',
+      (tester) async {
+    await pumpPage(tester);
+    final now = DateTime.now();
+    final hoje = DateFormat('dd/MM').format(now);
+
+    await tester.tap(find.text(hoje));
+    await tester.pumpAndSettle();
+    final popup = find.byKey(const Key('day-picker'));
+    expect(popup, findsOneWidget);
+
+    // todos os dias do mês, do 1 ao último
+    final ultimo = DateTime(now.year, now.month + 1, 0).day;
+    expect(
+        find.descendant(of: popup, matching: find.text('1')), findsOneWidget);
+    expect(find.descendant(of: popup, matching: find.text('$ultimo')),
+        findsOneWidget);
+
+    final alvo = now.day == 15 ? 16 : 15;
+    await tester.tap(find.descendant(of: popup, matching: find.text('$alvo')));
+    await tester.pumpAndSettle();
+    expect(popup, findsNothing);
+    final q = capturedQueries.last!;
+    expect(DateTime.parse(q['from'] as String),
+        DateTime(now.year, now.month, alvo));
+    expect(find.text('Dia'), findsOneWidget);
+  });
+
   testWidgets('SEMANA lista os dias do mais recente para o mais antigo',
       (tester) async {
     final now = DateTime.now();

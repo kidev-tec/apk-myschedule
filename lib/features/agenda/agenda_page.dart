@@ -644,6 +644,22 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             ),
             if (_view == _AgendaView.semana)
               Expanded(child: _buildWeekStrip())
+            else if (_view == _AgendaView.dia)
+              // Dia: tocar na data abre o seletor de dias do mês.
+              TextButton.icon(
+                onPressed: _pickDayOfMonth,
+                iconAlignment: IconAlignment.end,
+                icon: const Icon(Icons.arrow_drop_down),
+                label: Text(DateFormat('dd/MM').format(_focusedDay)),
+                style: TextButton.styleFrom(
+                  foregroundColor:
+                      Theme.of(context).textTheme.titleMedium?.color,
+                  textStyle: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+              )
             else
               Text(
                 _view == _AgendaView.mes
@@ -667,6 +683,25 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         ),
       ),
     );
+  }
+
+  /// Visão dia: popup acima do rodapé com os dias do mês em foco.
+  Future<void> _pickDayOfMonth() async {
+    final picked = await showDialog<DateTime>(
+      context: context,
+      builder: (_) => Dialog(
+        alignment: Alignment.bottomCenter,
+        insetPadding: const EdgeInsets.fromLTRB(16, 24, 16, 72),
+        child: _DayOfMonthPicker(
+          month: DateTime(_focusedDay.year, _focusedDay.month, 1),
+          selectedDay: _focusedDay,
+        ),
+      ),
+    );
+    if (picked != null && mounted) {
+      setState(() => _focusedDay = picked);
+      _loadAppointments();
+    }
   }
 
   /// Rodapé da semana: os 7 dias (dom..sáb) da semana em foco; o dia em
@@ -1347,6 +1382,91 @@ class _MonthGrid extends StatelessWidget {
           color: canceled ? AppColors.neutral : AppColors.primaryOf(context),
           decoration: canceled ? TextDecoration.lineThrough : null,
         ),
+      ),
+    );
+  }
+}
+
+/// Seletor compacto dos dias de um mês (popup da visão dia).
+class _DayOfMonthPicker extends StatelessWidget {
+  final DateTime month;
+  final DateTime selectedDay;
+
+  const _DayOfMonthPicker({required this.month, required this.selectedDay});
+
+  static const _weekdays = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final firstWeekday = month.weekday % 7; // domingo = 0
+    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+    final rows = (firstWeekday + daysInMonth + 6) ~/ 7;
+    final now = DateTime.now();
+
+    return Padding(
+      key: const Key('day-picker'),
+      padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(DateFormat("MMMM 'de' yyyy", 'pt_BR').format(month).capitalize(),
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 12),
+          Row(
+            children: _weekdays
+                .map((w) => Expanded(
+                      child: Center(
+                        child: Text(w,
+                            style: theme.textTheme.labelSmall
+                                ?.copyWith(color: AppColors.neutral)),
+                      ),
+                    ))
+                .toList(),
+          ),
+          const SizedBox(height: 4),
+          ...List.generate(rows, (week) {
+            return Row(
+              children: List.generate(7, (col) {
+                final dayNum = week * 7 + col - firstWeekday + 1;
+                if (dayNum < 1 || dayNum > daysInMonth) {
+                  return const Expanded(child: SizedBox(height: 40));
+                }
+                final day = DateTime(month.year, month.month, dayNum);
+                final selected = dayNum == selectedDay.day;
+                final isToday = day.year == now.year &&
+                    day.month == now.month &&
+                    day.day == now.day;
+                return Expanded(
+                  child: InkWell(
+                    onTap: () => Navigator.pop(context, day),
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      height: 40,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: selected ? AppColors.primaryOf(context) : null,
+                        border: isToday && !selected
+                            ? Border.all(color: AppColors.primaryOf(context))
+                            : null,
+                      ),
+                      child: Text(
+                        '$dayNum',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight:
+                              selected ? FontWeight.w700 : FontWeight.w500,
+                          color: selected ? Colors.white : null,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            );
+          }),
+        ],
       ),
     );
   }
