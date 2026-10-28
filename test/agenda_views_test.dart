@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
 
 import 'package:minha_agenda/core/api/api_client.dart';
 import 'package:minha_agenda/features/agenda/agenda_page.dart';
@@ -241,6 +242,37 @@ void main() {
     await tester.tap(find.byTooltip('Recolher'));
     await tester.pumpAndSettle();
     expect(find.text('Ana'), findsNothing);
+  });
+
+  testWidgets('SEMANA: rodapé mostra os 7 dias da semana; tocar abre o dia',
+      (tester) async {
+    await pumpPage(tester);
+    await tester.tap(find.text('Semana'));
+    await tester.pumpAndSettle();
+
+    final now = DateTime.now();
+    final domingo = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: now.weekday % 7));
+    final rodape = find.byKey(const Key('week-strip'));
+    expect(rodape, findsOneWidget);
+    for (var i = 0; i < 7; i++) {
+      final d = domingo.add(Duration(days: i));
+      final label = d.day == now.day && d.month == now.month
+          ? DateFormat('dd/MM').format(d)
+          : '${d.day}';
+      expect(find.descendant(of: rodape, matching: find.text(label)),
+          findsOneWidget,
+          reason: 'dia $label no rodapé');
+    }
+
+    // toca no domingo (ou segunda, se hoje é domingo) → abre a visão dia
+    final alvo = domingo.add(Duration(days: now.weekday % 7 == 0 ? 1 : 0));
+    await tester
+        .tap(find.descendant(of: rodape, matching: find.text('${alvo.day}')));
+    await tester.pumpAndSettle();
+    expect(rodape, findsNothing);
+    final q = capturedQueries.last!;
+    expect(DateTime.parse(q['from'] as String), alvo);
   });
 
   testWidgets('SEMANA lista os dias do mais recente para o mais antigo',

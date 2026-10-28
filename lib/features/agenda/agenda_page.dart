@@ -642,17 +642,20 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                   backgroundColor: AppColors.softOf(context),
                   foregroundColor: AppColors.primaryOf(context)),
             ),
-            Text(
-              _view == _AgendaView.mes
-                  ? DateFormat("MMMM 'de' yyyy", 'pt_BR')
-                      .format(_focusedDay)
-                      .capitalize()
-                  : DateFormat('dd/MM').format(_focusedDay),
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
-            ),
+            if (_view == _AgendaView.semana)
+              Expanded(child: _buildWeekStrip())
+            else
+              Text(
+                _view == _AgendaView.mes
+                    ? DateFormat("MMMM 'de' yyyy", 'pt_BR')
+                        .format(_focusedDay)
+                        .capitalize()
+                    : DateFormat('dd/MM').format(_focusedDay),
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
             IconButton.filled(
               onPressed: () => _shiftWindow(1),
               icon: const Icon(Icons.chevron_right),
@@ -663,6 +666,49 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           ],
         ),
       ),
+    );
+  }
+
+  /// Rodapé da semana: os 7 dias (dom..sáb) da semana em foco; o dia em
+  /// foco aparece como "dd/MM" destacado. Tocar num dia abre a visão dia.
+  Widget _buildWeekStrip() {
+    final theme = Theme.of(context);
+    final start = _windowStart();
+    final focus =
+        DateTime(_focusedDay.year, _focusedDay.month, _focusedDay.day);
+    return Row(
+      key: const Key('week-strip'),
+      children: List.generate(7, (i) {
+        final day = start.add(Duration(days: i));
+        final selected = day == focus;
+        return Expanded(
+          flex: selected ? 2 : 1,
+          child: InkWell(
+            onTap: () => _openDay(day),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              height: 40,
+              margin: const EdgeInsets.symmetric(horizontal: 1),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: selected ? AppColors.softOf(context) : null,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                selected ? DateFormat('dd/MM').format(day) : '${day.day}',
+                maxLines: 1,
+                style: (selected
+                        ? theme.textTheme.titleMedium
+                        : theme.textTheme.bodyMedium)
+                    ?.copyWith(
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: selected ? AppColors.primaryOf(context) : null,
+                ),
+              ),
+            ),
+          ),
+        );
+      }),
     );
   }
 
