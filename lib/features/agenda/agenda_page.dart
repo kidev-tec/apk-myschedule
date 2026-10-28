@@ -611,6 +611,15 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             .read(agendaApiProvider)
             .dio
             .patch('/appointments/${a.id}', data: {'notes': notes}),
+        loadClientNotes: a.clientId == null
+            ? null
+            : () async {
+                final r = await ref
+                    .read(agendaApiProvider)
+                    .dio
+                    .get('/clients/${a.clientId}');
+                return (r.data as Map<String, dynamic>)['notes'] as String?;
+              },
       ),
     );
     if (saved == true && mounted) {
@@ -1745,10 +1754,14 @@ class _AppointmentDetailsSheet extends StatefulWidget {
   final String statusLabel;
   final Future<void> Function(String notes) onSave;
 
+  /// Busca as informações do CLIENTE (cadastro), só quando pedidas.
+  final Future<String?> Function()? loadClientNotes;
+
   const _AppointmentDetailsSheet({
     required this.appointment,
     required this.statusLabel,
     required this.onSave,
+    this.loadClientNotes,
   });
 
   @override
@@ -1762,6 +1775,10 @@ class _AppointmentDetailsSheetState extends State<_AppointmentDetailsSheet> {
   bool _editing = false;
   bool _saving = false;
   String? _error;
+
+  /// Informações do cliente: escondidas até o toque no botão.
+  bool _clientInfoOpen = false;
+  Future<String?>? _clientNotes;
 
   @override
   void dispose() {
@@ -1816,6 +1833,61 @@ class _AppointmentDetailsSheetState extends State<_AppointmentDetailsSheet> {
             row(Icons.content_cut, a.serviceName),
             row(Icons.info_outline, widget.statusLabel),
             if (a.clientPhone.isNotEmpty) row(Icons.phone, a.clientPhone),
+            if (widget.loadClientNotes != null) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('details-client-info'),
+                  onPressed: () => setState(() {
+                    _clientInfoOpen = !_clientInfoOpen;
+                    _clientNotes ??= widget.loadClientNotes!();
+                  }),
+                  icon: Icon(_clientInfoOpen
+                      ? Icons.expand_less
+                      : Icons.person_search_outlined),
+                  label: Text(_clientInfoOpen
+                      ? 'Ocultar informações do cliente'
+                      : 'Ver informações do cliente'),
+                ),
+              ),
+              if (_clientInfoOpen)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.softOf(context),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: FutureBuilder<String?>(
+                    future: _clientNotes,
+                    builder: (_, snap) {
+                      if (snap.connectionState != ConnectionState.done) {
+                        return const Center(
+                            child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2)));
+                      }
+                      if (snap.hasError) {
+                        return Text(
+                            'Não consegui carregar: ${humanError(snap.error!)}',
+                            style: const TextStyle(color: AppColors.error));
+                      }
+                      final info = snap.data ?? '';
+                      return Text(
+                        info.isEmpty
+                            ? 'Nenhuma informação cadastrada para este cliente'
+                            : info,
+                        style: info.isEmpty
+                            ? theme.textTheme.bodyMedium
+                                ?.copyWith(color: AppColors.neutral)
+                            : theme.textTheme.bodyLarge,
+                      );
+                    },
+                  ),
+                ),
+            ],
             const Divider(height: 24),
             Row(children: [
               Text('Detalhes / Observações', style: theme.textTheme.titleSmall),
