@@ -112,13 +112,13 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     try {
       final api = ref.read(agendaApiProvider);
       // B6: janela conforme a visão — dia = 1 dia; semana = dom..sáb da semana
-      // do dia focado (preserva foco ao alternar visões).
-      final start = _view == _AgendaView.semana
-          ? _focusedDay.subtract(Duration(days: _focusedDay.weekday % 7))
-          : _focusedDay;
-      final windowStart = DateTime(start.year, start.month, start.day);
-      final days = _view == _AgendaView.semana ? 7 : 1;
-      final end = windowStart.add(Duration(days: days));
+      // do dia focado; mês = dia 1 até o dia 1 do mês seguinte.
+      final windowStart = _windowStart();
+      final end = switch (_view) {
+        _AgendaView.mes => DateTime(windowStart.year, windowStart.month + 1, 1),
+        _AgendaView.semana => windowStart.add(const Duration(days: 7)),
+        _AgendaView.dia => windowStart.add(const Duration(days: 1)),
+      };
       final resp = await api.dio.get('/appointments', queryParameters: {
         'from': windowStart.toIso8601String(),
         'to': end.toIso8601String(),
@@ -151,16 +151,28 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     if (mounted) setState(() => _loading = false);
   }
 
-  /// Chave de cache da janela visível (dia/semana do dia focado).
+  /// Início da janela visível: dia focado, domingo da semana ou dia 1 do mês.
+  DateTime _windowStart() {
+    final start = switch (_view) {
+      _AgendaView.semana =>
+        _focusedDay.subtract(Duration(days: _focusedDay.weekday % 7)),
+      _AgendaView.mes => DateTime(_focusedDay.year, _focusedDay.month, 1),
+      _AgendaView.dia => _focusedDay,
+    };
+    return DateTime(start.year, start.month, start.day);
+  }
+
+  /// Chave de cache da janela visível (dia/semana/mês do dia focado).
   String _cacheKeyForWindow() {
-    final start = _view == _AgendaView.semana
-        ? _focusedDay.subtract(Duration(days: _focusedDay.weekday % 7))
-        : _focusedDay;
+    final start = _windowStart();
     return 'appointments_${_view.name}_${start.year}-${start.month}-${start.day}';
   }
 
-  void _shiftWindow(int days) => setState(() {
-        _focusedDay = _focusedDay.add(Duration(days: days));
+  /// Setas do rodapé: no mês avançam/voltam um mês; nas demais, um dia.
+  void _shiftWindow(int delta) => setState(() {
+        _focusedDay = _view == _AgendaView.mes
+            ? DateTime(_focusedDay.year, _focusedDay.month + delta, 1)
+            : _focusedDay.add(Duration(days: delta));
         _loadAppointments();
       });
 
@@ -171,65 +183,27 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
 
   bool get _isToday {
     final now = DateTime.now();
-    return _focusedDay.year == now.year &&
-        _focusedDay.month == now.month &&
-        _focusedDay.day == now.day;
+    final sameMonth =
+        _focusedDay.year == now.year && _focusedDay.month == now.month;
+    // No mês, "hoje" = estar no mês corrente.
+    return _view == _AgendaView.mes
+        ? sameMonth
+        : sameMonth && _focusedDay.day == now.day;
   }
 
-  /// B6: alterna dia/semana preservando a data em foco.
+  /// B6: alterna dia/semana/mês preservando a data em foco.
   void _switchView(_AgendaView v) {
-    if (v == _AgendaView.mes) {
-      _openMonthView();
-      return;
-    }
     setState(() => _view = v);
     _loadAppointments();
   }
 
-  /// Visão mensal: bottom sheet com grid do mês, marca dias com agendamentos
-  /// e permite pular pro dia tocado. Carrega o mês inteiro numa query.
-  Future<void> _openMonthView() async {
-    setState(() => _loading = true);
-    final monthStart = DateTime(_focusedDay.year, _focusedDay.month, 1);
-    final monthEnd = DateTime(_focusedDay.year, _focusedDay.month + 1, 1);
-    Map<DateTime, List<Appointment>> byDay = {};
-    try {
-      final api = ref.read(agendaApiProvider);
-      final resp = await api.dio.get('/appointments', queryParameters: {
-        'from': monthStart.toIso8601String(),
-        'to': monthEnd.toIso8601String(),
-      });
-      final rawList = resp.data is List
-          ? resp.data as List
-          : (resp.data as Map<String, dynamic>)['appointments'] as List? ?? [];
-      final all = rawList
-          .map((j) => Appointment.fromJson(j as Map<String, dynamic>))
-          .toList();
-      for (final a in all) {
-        final d = DateTime(a.startsAt.year, a.startsAt.month, a.startsAt.day);
-        (byDay[d] ??= []).add(a);
-      }
-    } catch (e) {
-      debugPrint('[agenda] falha na view mensal: $e');
-    }
-    if (mounted) setState(() => _loading = false);
-
-    if (!mounted) return;
-    // B6: o mês tem SEMPRE os dias visíveis (dots indicam agendamentos),
-    // então não usa empty state textual — o picker já é a "mensagem" visual.
-    final picked = await showModalBottomSheet<DateTime>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => _MonthPicker(
-        initialMonth: monthStart,
-        eventsByDay: byDay,
-        selectedDay: _focusedDay,
-      ),
-    );
-    if (picked != null) {
-      setState(() => _focusedDay = picked);
-      _loadAppointments();
-    }
+  /// Mês: tocar num dia abre a visão dia daquela data.
+  void _openDay(DateTime day) {
+    setState(() {
+      _view = _AgendaView.dia;
+      _focusedDay = day;
+    });
+    _loadAppointments();
   }
 
   @override
@@ -412,30 +386,42 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                                     tooltip: 'Bloquear horário',
                                     icon: const Icon(Icons.lock_outline),
                                   ),
-                                  const Spacer(),
-                                  _buildLayoutToggle(_AgendaLayout.lista,
-                                      Icons.view_agenda_outlined, 'Lista'),
-                                  _buildLayoutToggle(_AgendaLayout.grade,
-                                      Icons.grid_view_outlined, 'Grade'),
+                                  // Lista/grade não se aplicam ao mês.
+                                  if (_view != _AgendaView.mes) ...[
+                                    const Spacer(),
+                                    _buildLayoutToggle(_AgendaLayout.lista,
+                                        Icons.view_agenda_outlined, 'Lista'),
+                                    _buildLayoutToggle(_AgendaLayout.grade,
+                                        Icons.grid_view_outlined, 'Grade'),
+                                  ],
                                 ],
                               ),
                             ),
                             const SizedBox(height: 8),
                             Expanded(
-                              child: _appointments.isEmpty
-                                  ? _buildEmptyState(context)
-                                  : _view == _AgendaView.semana
-                                      ? _buildWeekList(timeFmt)
-                                      : _layout == _AgendaLayout.grade
-                                          ? _buildGrid(_appointments, timeFmt)
-                                          : ListView.builder(
-                                              padding: const EdgeInsets.all(16),
-                                              itemCount: _appointments.length,
-                                              itemBuilder: (_, i) =>
-                                                  _buildAppointmentCard(
-                                                      _appointments[i],
-                                                      timeFmt),
-                                            ),
+                              child: _view == _AgendaView.mes
+                                  ? _MonthGrid(
+                                      month: _windowStart(),
+                                      appointments: _appointments,
+                                      onDayTap: _openDay,
+                                    )
+                                  : _appointments.isEmpty
+                                      ? _buildEmptyState(context)
+                                      : _view == _AgendaView.semana
+                                          ? _buildWeekList(timeFmt)
+                                          : _layout == _AgendaLayout.grade
+                                              ? _buildGrid(
+                                                  _appointments, timeFmt)
+                                              : ListView.builder(
+                                                  padding:
+                                                      const EdgeInsets.all(16),
+                                                  itemCount:
+                                                      _appointments.length,
+                                                  itemBuilder: (_, i) =>
+                                                      _buildAppointmentCard(
+                                                          _appointments[i],
+                                                          timeFmt),
+                                                ),
                             ),
                           ],
                         ),
@@ -657,7 +643,11 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                   foregroundColor: AppColors.primaryOf(context)),
             ),
             Text(
-              DateFormat('dd/MM').format(_focusedDay),
+              _view == _AgendaView.mes
+                  ? DateFormat("MMMM 'de' yyyy", 'pt_BR')
+                      .format(_focusedDay)
+                      .capitalize()
+                  : DateFormat('dd/MM').format(_focusedDay),
               style: Theme.of(context)
                   .textTheme
                   .titleMedium
@@ -1141,160 +1131,182 @@ class Appointment {
 
 /// Calendário mensal em bottom sheet: dias com eventos têm bolinha na cor
 /// primária; tocar num dia fecha e navega a agenda diária pra ele.
-class _MonthPicker extends StatefulWidget {
-  final DateTime initialMonth;
-  final Map<DateTime, List<Appointment>> eventsByDay;
-  final DateTime selectedDay;
+/// Visão mês: calendário ocupando a tela, com os agendamentos de cada dia
+/// listados dentro da célula (nome do cliente, em ordem de horário).
+class _MonthGrid extends StatelessWidget {
+  final DateTime month;
+  final List<Appointment> appointments;
+  final ValueChanged<DateTime> onDayTap;
 
-  const _MonthPicker({
-    required this.initialMonth,
-    required this.eventsByDay,
-    required this.selectedDay,
+  const _MonthGrid({
+    required this.month,
+    required this.appointments,
+    required this.onDayTap,
   });
 
-  @override
-  State<_MonthPicker> createState() => _MonthPickerState();
-}
-
-class _MonthPickerState extends State<_MonthPicker> {
-  late DateTime _month =
-      DateTime(widget.initialMonth.year, widget.initialMonth.month, 1);
-  static const _weekdays = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'];
-
-  void _shiftMonth(int delta) =>
-      setState(() => _month = DateTime(_month.year, _month.month + delta, 1));
+  static const _weekdays = [
+    'DOM.',
+    'SEG.',
+    'TER.',
+    'QUA.',
+    'QUI.',
+    'SEX.',
+    'SÁB.'
+  ];
+  static const _minCellHeight = 96.0;
+  static const _dayNumberHeight = 30.0;
+  static const _chipHeight = 16.0;
 
   @override
   Widget build(BuildContext context) {
-    final monthFmt = DateFormat("MMMM 'de' yyyy", 'pt_BR');
-    final firstWeekday = (_month.weekday % 7); // domingo = 0
-    final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
-    final today = DateTime.now();
-    final today0 = DateTime(today.year, today.month, today.day);
-    final sel0 = DateTime(widget.selectedDay.year, widget.selectedDay.month,
-        widget.selectedDay.day);
+    final theme = Theme.of(context);
+    final byDay = <DateTime, List<Appointment>>{};
+    for (final a in appointments) {
+      final d = DateTime(a.startsAt.year, a.startsAt.month, a.startsAt.day);
+      (byDay[d] ??= []).add(a);
+    }
+    for (final list in byDay.values) {
+      list.sort((a, b) => a.startsAt.compareTo(b.startsAt));
+    }
+    final firstWeekday = month.weekday % 7; // domingo = 0
+    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+    final rows = (firstWeekday + daysInMonth + 6) ~/ 7;
 
-    final hasAnyEvent =
-        widget.eventsByDay.values.any((list) => list.isNotEmpty);
-
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(
-                    icon: const Icon(Icons.chevron_left),
-                    onPressed: () => _shiftMonth(-1)),
-                Text(monthFmt.format(_month).capitalize(),
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w600)),
-                IconButton(
-                    icon: const Icon(Icons.chevron_right),
-                    onPressed: () => _shiftMonth(1)),
-              ],
-            ),
-            if (!hasAnyEvent) ...[
-              const SizedBox(height: 8),
-              // Empty state do mês: texto discreto só quando NENHUM dia tem dot
-              Text('Nada agendado neste mês',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.neutral, fontStyle: FontStyle.italic)),
-            ],
-            const SizedBox(height: 8),
-            Row(
-              children: _weekdays
-                  .map((w) => Expanded(
-                        child: Center(
-                          child: Text(w,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(fontWeight: FontWeight.w600)),
-                        ),
-                      ))
-                  .toList(),
-            ),
-            const SizedBox(height: 4),
-            ...List.generate((firstWeekday + daysInMonth + 6) ~/ 7, (week) {
-              return Row(
-                children: List.generate(7, (col) {
-                  final dayNum = week * 7 + col - firstWeekday + 1;
-                  if (dayNum < 1 || dayNum > daysInMonth) {
-                    return const Expanded(child: SizedBox(height: 44));
-                  }
-                  final day = DateTime(_month.year, _month.month, dayNum);
-                  final hasEvents =
-                      (widget.eventsByDay[day]?.isNotEmpty ?? false);
-                  final isToday = day == today0;
-                  final isSelected = day == sel0;
-                  return Expanded(
-                    child: SizedBox(
-                      height: 44,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(22),
-                        onTap: () => Navigator.pop(context, day),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              width: 32,
-                              height: 32,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: isSelected
-                                    ? AppColors.primaryOf(context)
-                                    : isToday
-                                        ? AppColors.primaryOf(context)
-                                            .withValues(alpha: 0.15)
-                                        : null,
-                              ),
-                              child: Text(
-                                '$dayNum',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                      fontWeight: isToday || isSelected
-                                          ? FontWeight.w700
-                                          : FontWeight.w400,
-                                      color: isSelected ? Colors.white : null,
-                                    ),
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Container(
-                              width: 5,
-                              height: 5,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: hasEvents
-                                    ? AppColors.primaryOf(context)
-                                    : Colors.transparent,
-                              ),
-                            ),
-                          ],
-                        ),
+    return Column(
+      children: [
+        if (appointments.isEmpty)
+          // Empty state do mês: texto discreto, o calendário continua visível.
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text('Nada agendado neste mês',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.neutral, fontStyle: FontStyle.italic)),
+          ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(
+            children: _weekdays
+                .map((w) => Expanded(
+                      child: Center(
+                        child: Text(w,
+                            style: theme.textTheme.labelSmall
+                                ?.copyWith(color: AppColors.neutral)),
                       ),
-                    ),
+                    ))
+                .toList(),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Expanded(
+          child: LayoutBuilder(builder: (context, constraints) {
+            final cellHeight = (constraints.maxHeight / rows) < _minCellHeight
+                ? _minCellHeight
+                : constraints.maxHeight / rows;
+            return SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Column(
+                children: List.generate(rows, (week) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: List.generate(7, (col) {
+                      final dayNum = week * 7 + col - firstWeekday + 1;
+                      if (dayNum < 1 || dayNum > daysInMonth) {
+                        return Expanded(child: SizedBox(height: cellHeight));
+                      }
+                      final day = DateTime(month.year, month.month, dayNum);
+                      return Expanded(
+                        child: _buildDay(
+                            context, day, byDay[day] ?? const [], cellHeight),
+                      );
+                    }),
                   );
                 }),
-              );
-            }),
+              ),
+            );
+          }),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDay(BuildContext context, DateTime day, List<Appointment> events,
+      double height) {
+    final theme = Theme.of(context);
+    final now = DateTime.now();
+    final isToday =
+        day.year == now.year && day.month == now.month && day.day == now.day;
+    // Quantos nomes cabem; o excedente vira "+N".
+    final fit = ((height - _dayNumberHeight - 4) / _chipHeight).floor();
+    final overflow = events.length > fit;
+    final shown = overflow ? events.take(fit - 1).toList() : events;
+
+    return InkWell(
+      onTap: () => onDayTap(day),
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        height: height,
+        child: Column(
+          children: [
+            Container(
+              width: 26,
+              height: 26,
+              margin: const EdgeInsets.only(top: 2, bottom: 2),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: isToday ? AppColors.primaryOf(context) : null,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '${day.day}',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
+                  color: isToday ? Colors.white : null,
+                ),
+              ),
+            ),
+            ...shown.map((a) => _buildChip(context, a)),
+            if (overflow)
+              Text('+${events.length - shown.length}',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      fontSize: 10, color: AppColors.primaryOf(context))),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChip(BuildContext context, Appointment a) {
+    final canceled = a.status == 'canceled';
+    final label =
+        a.isBlock ? '🔒 ${a.canceledReason ?? 'Bloqueado'}' : a.clientName;
+    return Container(
+      height: _chipHeight - 2,
+      margin: const EdgeInsets.only(bottom: 2, left: 2, right: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 3),
+      alignment: Alignment.centerLeft,
+      decoration: BoxDecoration(
+        // softOf já é translúcida; cancelado fica num cinza neutro.
+        color: canceled
+            ? AppColors.neutral.withValues(alpha: 0.12)
+            : AppColors.softOf(context),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 9,
+          height: 1.1,
+          color: canceled ? AppColors.neutral : AppColors.primaryOf(context),
+          decoration: canceled ? TextDecoration.lineThrough : null,
         ),
       ),
     );
   }
 }
 
-/// B6: visões da agenda. `mes` abre o bottom sheet e volta pro `dia`.
+/// B6: visões da agenda (dia, semana e mês).
 enum _AgendaView { dia, semana, mes }
 
 enum _AgendaLayout { lista, grade }

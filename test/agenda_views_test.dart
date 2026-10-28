@@ -279,19 +279,57 @@ void main() {
         reason: 'segunda (mais recente) vem antes do domingo');
   });
 
-  testWidgets('MÊS abre o picker com dias e volta pra visão dia',
+  testWidgets('MÊS mostra o calendário na própria tela com os agendamentos',
       (tester) async {
     await pumpPage(tester);
     await tester.tap(find.text('Mês'));
     await tester.pumpAndSettle();
 
-    // bottom sheet do mês: dia 1 existe sempre no grid
-    expect(find.text('1'), findsWidgets);
+    // carrega o mês inteiro: do dia 1 ao dia 1 do mês seguinte
+    final q = capturedQueries.last!;
+    final from = DateTime.parse(q['from'] as String);
+    final to = DateTime.parse(q['to'] as String);
+    expect(from.day, 1);
+    expect(to.day, 1);
+    expect(to.month, from.month == 12 ? 1 : from.month + 1);
 
-    // toca num dia → fecha o sheet e volta pra agenda diária
+    // grade do mês na tela (sem bottom sheet), cabeçalho DOM..SÁB
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.text('DOM.'), findsOneWidget);
+    expect(find.text('SÁB.'), findsOneWidget);
+    // agendamento aparece dentro do dia
+    expect(find.text('Ana'), findsOneWidget);
+    // lista/grade não se aplicam ao mês
+    expect(find.byTooltip('Grade'), findsNothing);
+    expect(find.text('Marcar horário'), findsOneWidget);
+  });
+
+  testWidgets('MÊS: setas navegam de mês em mês', (tester) async {
+    await pumpPage(tester);
+    await tester.tap(find.text('Mês'));
+    await tester.pumpAndSettle();
+    final atual = DateTime.parse(capturedQueries.last!['from'] as String);
+
+    await tester.tap(find.byIcon(Icons.chevron_right));
+    await tester.pumpAndSettle();
+    final prox = DateTime.parse(capturedQueries.last!['from'] as String);
+    expect(prox, DateTime(atual.year, atual.month + 1, 1));
+    expect(find.text('DOM.'), findsOneWidget);
+  });
+
+  testWidgets('MÊS: tocar num dia abre a visão dia daquela data',
+      (tester) async {
+    await pumpPage(tester);
+    await tester.tap(find.text('Mês'));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('15').first);
     await tester.pumpAndSettle();
-    expect(find.text('Dia'), findsOneWidget);
+    expect(find.text('DOM.'), findsNothing);
+    final q = capturedQueries.last!;
+    final from = DateTime.parse(q['from'] as String);
+    expect(from.day, 15);
+    expect(DateTime.parse(q['to'] as String).difference(from).inDays, 1);
   });
 
   testWidgets('navegação de dias mantém a visão corrente', (tester) async {
@@ -323,8 +361,7 @@ void main() {
     expect(find.byTooltip('Hoje'), findsNothing);
   });
 
-  testWidgets('picker do mês vazio mostra "Nada agendado neste mês"',
-      (tester) async {
+  testWidgets('mês vazio mostra "Nada agendado neste mês"', (tester) async {
     // nenhum evento no mês
     adapter.onGet(
         '/appointments',
@@ -340,8 +377,7 @@ void main() {
     expect(find.text('Nada agendado neste mês'), findsOneWidget);
   });
 
-  testWidgets('picker do mês COM eventos não mostra texto de vazio',
-      (tester) async {
+  testWidgets('mês COM eventos não mostra texto de vazio', (tester) async {
     await pumpPage(tester);
     await tester.tap(find.text('Mês'));
     await tester.pumpAndSettle();
