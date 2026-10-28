@@ -274,20 +274,28 @@ void main() {
     expect(find.text('Nenhum cliente encontrado'), findsOneWidget);
     expect(find.text('Adicionar cliente'), findsOneWidget);
 
+    // POST só responde se as informações do cliente forem junto (aparadas)
     adapter.onPost(
         '/clients',
         (s) => s.reply(201,
             {'id': 'c-novo', 'name': 'Zé Novato', 'phone_e164': '+5514999977'}),
-        data: Matchers.any);
+        data: {
+          'name': 'Zé Novato',
+          'phone_e164': Matchers.any,
+          'notes': 'cliente novo, indicado pela Ana',
+        });
 
     await tester.tap(find.text('Adicionar cliente'));
     await tester.pumpAndSettle();
 
-    // bottom sheet: preenche nome + telefone e salva
+    // bottom sheet: preenche nome + telefone + informações e salva
     await tester.enterText(
         find.widgetWithText(TextFormField, 'Nome *'), 'Zé Novato');
     await tester.enterText(
         find.widgetWithText(TextFormField, 'WhatsApp *'), '+5514999977');
+    await tester.enterText(find.byKey(const Key('add-client-notes')),
+        ' cliente novo, indicado pela Ana ');
+    await tester.ensureVisible(find.text('Criar e usar'));
     await tester.tap(find.text('Criar e usar'));
     await tester.pumpAndSettle();
 

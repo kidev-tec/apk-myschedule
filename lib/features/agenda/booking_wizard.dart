@@ -430,6 +430,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController(text: _query.trim());
     final emailCtrl = TextEditingController();
+    final notesCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
     bool saving = false;
     String? duplicateError;
@@ -454,6 +455,8 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                   'phone_e164': normalizePhoneBr(phoneCtrl.text),
                   if (emailCtrl.text.trim().isNotEmpty)
                     'email': emailCtrl.text.trim(),
+                  if (notesCtrl.text.trim().isNotEmpty)
+                    'notes': notesCtrl.text.trim(),
                 });
                 if (sheetContext.mounted) {
                   Navigator.pop(sheetContext, Client.fromJson(resp.data));
@@ -544,6 +547,20 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                       decoration: const InputDecoration(
                         labelText: 'E-mail (opcional)',
                         prefixIcon: Icon(Icons.email_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      key: const Key('add-client-notes'),
+                      controller: notesCtrl,
+                      minLines: 1,
+                      maxLines: 3,
+                      maxLength: 1000,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: const InputDecoration(
+                        labelText: 'Informações / Observações (opcional)',
+                        helperText: 'Sobre o cliente. Só você vê.',
+                        prefixIcon: Icon(Icons.person_search_outlined),
                       ),
                     ),
                     if (duplicateError != null) ...[
