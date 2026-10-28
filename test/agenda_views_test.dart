@@ -364,6 +364,72 @@ void main() {
     expect(find.byTooltip('Recolher todos'), findsOneWidget);
   });
 
+  testWidgets(
+      'SEMANA: semáforo por dia (confirmado/cancelado/remarcado) e cor do horário',
+      (tester) async {
+    final now = DateTime.now();
+    final hoje = DateTime(now.year, now.month, now.day);
+    Map<String, dynamic> appt(String id, int hora, String status,
+            [String? motivo]) =>
+        {
+          'id': id,
+          'client_name': 'Cliente $id',
+          'client_phone': '+5514999990001',
+          'service_name': 'Corte',
+          'starts_at': hoje.add(Duration(hours: hora)).toIso8601String(),
+          'ends_at':
+              hoje.add(Duration(hours: hora, minutes: 30)).toIso8601String(),
+          'status': status,
+          'source': 'app',
+          'canceled_reason': motivo,
+        };
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [
+                appt('c1', 8, 'confirmed'),
+                appt('c2', 9, 'confirmed'),
+                appt('c3', 10, 'confirmed'),
+                appt('x1', 11, 'canceled'),
+                appt('r1', 12, 'canceled', 'remarcado'),
+                appt('r2', 13, 'canceled', 'remarcado'),
+              ]
+            }),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+    await pumpPage(tester);
+    await tester.tap(find.text('Semana'));
+    await tester.pumpAndSettle();
+
+    String contagem(String tipo) => (tester
+        .widget<Text>(find.descendant(
+            of: find.byKey(Key('semaforo-$tipo')), matching: find.byType(Text)))
+        .data)!;
+    expect(contagem('confirmado'), '3');
+    expect(contagem('cancelado'), '1');
+    expect(contagem('remarcado'), '2');
+
+    // ordem: verde, vermelho, amarelo
+    final xC =
+        tester.getCenter(find.byKey(const Key('semaforo-confirmado'))).dx;
+    final xX = tester.getCenter(find.byKey(const Key('semaforo-cancelado'))).dx;
+    final xR = tester.getCenter(find.byKey(const Key('semaforo-remarcado'))).dx;
+    expect(xC < xX && xX < xR, isTrue);
+
+    // remarcado aparece como "Remarcado" (não "Cancelado")
+    expect(find.text('Corte • Remarcado'), findsNWidgets(2));
+
+    Color fundoHorario(String id) =>
+        ((tester.widget<Container>(find.byKey(Key('hora-$id'))).decoration
+                as BoxDecoration)
+            .color)!;
+    expect(fundoHorario('c1').withValues(alpha: 1),
+        const Color(0xFF2E7D32)); // verde
+    expect(fundoHorario('x1').withValues(alpha: 1),
+        const Color(0xFFC62828)); // vermelho
+    expect(fundoHorario('r1').withValues(alpha: 1),
+        const Color(0xFFF9A825)); // amarelo
+  });
+
   testWidgets('DIA: tocar na data do rodapé abre popup com os dias do mês',
       (tester) async {
     await pumpPage(tester);

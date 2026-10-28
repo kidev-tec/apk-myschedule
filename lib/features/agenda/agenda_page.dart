@@ -480,10 +480,11 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
         leading: Container(
+          key: Key('hora-${a.id}'),
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: AppColors.softOf(context),
+            color: _timeBackground(a),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Center(
@@ -492,7 +493,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
               style: Theme.of(context)
                   .textTheme
                   .labelLarge
-                  ?.copyWith(color: AppColors.primaryOf(context)),
+                  ?.copyWith(color: _timeForeground(a)),
             ),
           ),
         ),
@@ -502,7 +503,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         subtitle: Text(
             a.isBlock
                 ? '🔒 Bloqueado • ${_statusLabel(a.status)}'
-                : '${a.serviceName} • ${_statusLabel(a.status)}',
+                : '${a.serviceName} • ${_displayStatus(a)}',
             style: a.isBlock
                 ? const TextStyle(fontStyle: FontStyle.italic)
                 : null),
@@ -591,16 +592,17 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             Row(
               children: [
                 Container(
+                  key: Key('hora-${a.id}'),
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.softOf(context),
+                    color: _timeBackground(a),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     timeFmt.format(a.startsAt),
                     style: theme.textTheme.labelLarge
-                        ?.copyWith(color: AppColors.primaryOf(context)),
+                        ?.copyWith(color: _timeForeground(a)),
                   ),
                 ),
                 const Spacer(),
@@ -623,7 +625,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
               child: Text(
                 a.isBlock
                     ? '🔒 ${_statusLabel(a.status)}'
-                    : '${a.serviceName} • ${_statusLabel(a.status)}',
+                    : '${a.serviceName} • ${_displayStatus(a)}',
                 style: theme.textTheme.bodySmall
                     ?.copyWith(fontStyle: a.isBlock ? FontStyle.italic : null),
                 maxLines: 2,
@@ -802,6 +804,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                       icon: Icon(
                           collapsed ? Icons.expand_more : Icons.expand_less),
                     ),
+                    const Spacer(),
+                    _buildStatusSemaphore(items),
                   ],
                 ),
               ),
@@ -856,6 +860,91 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         _collapsedDays.add(day);
       }
     });
+  }
+
+  /// Classificação visual do status. Remarcar cancela a linha original com
+  /// motivo "remarcado" (API B5) — ela aparece como remarcada, não cancelada.
+  _StatusKind _statusKind(Appointment a) {
+    if (a.isBlock) return _StatusKind.outro;
+    if (a.status == 'confirmed') return _StatusKind.confirmado;
+    if (a.status == 'canceled') {
+      return a.canceledReason == 'remarcado'
+          ? _StatusKind.remarcado
+          : _StatusKind.cancelado;
+    }
+    return _StatusKind.outro;
+  }
+
+  static Color? _statusColor(_StatusKind k) => switch (k) {
+        _StatusKind.confirmado => AppColors.success,
+        _StatusKind.cancelado => AppColors.error,
+        _StatusKind.remarcado => AppColors.warning,
+        _StatusKind.outro => null,
+      };
+
+  /// Fundo do horário na cor do status (demais status: tom do tema).
+  Color _timeBackground(Appointment a) =>
+      _statusColor(_statusKind(a))?.withValues(alpha: 0.18) ??
+      AppColors.softOf(context);
+
+  Color _timeForeground(Appointment a) => switch (_statusKind(a)) {
+        // amarelo puro some no fundo claro: texto em âmbar escuro
+        _StatusKind.remarcado => const Color(0xFF8A5A00),
+        final k => _statusColor(k) ?? AppColors.primaryOf(context),
+      };
+
+  String _displayStatus(Appointment a) =>
+      _statusKind(a) == _StatusKind.remarcado
+          ? 'Remarcado'
+          : _statusLabel(a.status);
+
+  /// Semáforo do dia: bolinhas verde/vermelha/amarela com a quantidade de
+  /// confirmados, cancelados e remarcados (só as que têm ao menos 1).
+  Widget _buildStatusSemaphore(List<Appointment> items) {
+    final counts = <_StatusKind, int>{};
+    for (final a in items) {
+      final k = _statusKind(a);
+      if (k != _StatusKind.outro) counts[k] = (counts[k] ?? 0) + 1;
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final k in const [
+          _StatusKind.confirmado,
+          _StatusKind.cancelado,
+          _StatusKind.remarcado,
+        ])
+          if ((counts[k] ?? 0) > 0)
+            Tooltip(
+              message: switch (k) {
+                _StatusKind.confirmado => 'Confirmados',
+                _StatusKind.cancelado => 'Cancelados',
+                _ => 'Remarcados',
+              },
+              child: Container(
+                key: Key('semaforo-${k.name}'),
+                width: 22,
+                height: 22,
+                margin: const EdgeInsets.only(left: 6),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _statusColor(k),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  '${counts[k]}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: k == _StatusKind.remarcado
+                        ? AppColors.neutral
+                        : Colors.white,
+                  ),
+                ),
+              ),
+            ),
+      ],
+    );
   }
 
   String _statusLabel(String status) {
@@ -1521,6 +1610,8 @@ class _DayOfMonthPicker extends StatelessWidget {
 enum _AgendaView { dia, semana, mes }
 
 enum _AgendaLayout { lista, grade }
+
+enum _StatusKind { confirmado, cancelado, remarcado, outro }
 
 extension StringExtension on String {
   String capitalize() =>
