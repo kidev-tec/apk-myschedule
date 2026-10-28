@@ -168,11 +168,17 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     return 'appointments_${_view.name}_${start.year}-${start.month}-${start.day}';
   }
 
-  /// Setas do rodapé: no mês avançam/voltam um mês; nas demais, um dia.
+  /// Setas do rodapé: andam um mês, uma semana ou um dia, conforme a visão.
   void _shiftWindow(int delta) => setState(() {
-        _focusedDay = _view == _AgendaView.mes
-            ? DateTime(_focusedDay.year, _focusedDay.month + delta, 1)
-            : _focusedDay.add(Duration(days: delta));
+        _focusedDay = switch (_view) {
+          _AgendaView.mes =>
+            DateTime(_focusedDay.year, _focusedDay.month + delta, 1),
+          _AgendaView.semana => DateTime(
+              _focusedDay.year, _focusedDay.month, _focusedDay.day + 7 * delta),
+          _AgendaView.dia => _focusedDay.add(Duration(days: delta)),
+        };
+        // Semana nova começa com todos os dias abertos.
+        _collapsedDays.clear();
         _loadAppointments();
       });
 

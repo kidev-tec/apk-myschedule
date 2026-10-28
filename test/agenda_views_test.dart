@@ -318,6 +318,27 @@ void main() {
     expect(find.text('Carla'), findsNothing);
   });
 
+  testWidgets('SEMANA: setas do rodapé vão para a semana seguinte/anterior',
+      (tester) async {
+    await pumpPage(tester);
+    await tester.tap(find.text('Semana'));
+    await tester.pumpAndSettle();
+    final atual = DateTime.parse(capturedQueries.last!['from'] as String);
+
+    await tester.tap(find.byIcon(Icons.chevron_right));
+    await tester.pumpAndSettle();
+    final prox = DateTime.parse(capturedQueries.last!['from'] as String);
+    expect(prox, DateTime(atual.year, atual.month, atual.day + 7));
+    expect(prox.weekday, DateTime.sunday);
+
+    await tester.tap(find.byIcon(Icons.chevron_left));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.chevron_left));
+    await tester.pumpAndSettle();
+    final ant = DateTime.parse(capturedQueries.last!['from'] as String);
+    expect(ant, DateTime(atual.year, atual.month, atual.day - 7));
+  });
+
   testWidgets('DIA: tocar na data do rodapé abre popup com os dias do mês',
       (tester) async {
     await pumpPage(tester);
