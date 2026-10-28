@@ -373,7 +373,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                             Padding(
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 16),
-                              child: Row(
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 4,
+                                crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
                                   FilledButton.icon(
                                     onPressed: _openBooking,
@@ -385,7 +388,6 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                                       foregroundColor: Colors.white,
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
                                   IconButton.filledTonal(
                                     onPressed: _showBlockSheet,
                                     tooltip: 'Bloquear horário',
@@ -393,7 +395,6 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                                   ),
                                   // Lista/grade não se aplicam ao mês.
                                   if (_view != _AgendaView.mes) ...[
-                                    const Spacer(),
                                     if (_view == _AgendaView.semana &&
                                         _appointments.isNotEmpty)
                                       _buildCollapseAllButton(),
@@ -701,7 +702,11 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     final created = await context.push<booking.Appointment?>('/agenda/booking');
     if (!mounted) return;
     if (created != null) {
-      setState(() => _focusedDay = created.startsAt);
+      final day = created.startsAt.toLocal();
+      setState(() {
+        _focusedDay = day;
+        _collapsedDays.remove(DateTime(day.year, day.month, day.day));
+      });
     }
     _loadAppointments();
   }
