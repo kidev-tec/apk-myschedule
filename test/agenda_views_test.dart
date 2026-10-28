@@ -156,6 +156,42 @@ void main() {
     expect(find.text('Ana'), findsOneWidget);
   });
 
+  testWidgets('SEMANA lista os dias do mais recente para o mais antigo',
+      (tester) async {
+    final now = DateTime.now();
+    final domingo = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: now.weekday % 7));
+    Map<String, dynamic> appt(String id, String nome, DateTime inicio) => {
+          'id': id,
+          'client_name': nome,
+          'client_phone': '+5514999990001',
+          'service_name': 'Corte',
+          'starts_at': inicio.toIso8601String(),
+          'ends_at': inicio.add(const Duration(minutes: 30)).toIso8601String(),
+          'status': 'confirmed',
+          'source': 'app',
+        };
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [
+                appt('d0', 'Bruno', domingo.add(const Duration(hours: 9))),
+                appt('d1', 'Carla',
+                    domingo.add(const Duration(days: 1, hours: 9))),
+              ]
+            }),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+
+    await pumpPage(tester);
+    await tester.tap(find.text('Semana'));
+    await tester.pumpAndSettle();
+
+    final yCarla = tester.getTopLeft(find.text('Carla')).dy;
+    final yBruno = tester.getTopLeft(find.text('Bruno')).dy;
+    expect(yCarla, lessThan(yBruno),
+        reason: 'segunda (mais recente) vem antes do domingo');
+  });
+
   testWidgets('MÊS abre o picker com dias e volta pra visão dia',
       (tester) async {
     await pumpPage(tester);

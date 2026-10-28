@@ -564,7 +564,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   }
 
   /// B6: lista da semana — agrupa por dia com cabeçalho ("segunda, 15"),
-  /// ordenada por horário dentro de cada dia.
+  /// dias do mais recente para o mais antigo; horário crescente dentro do dia.
   Widget _buildWeekList(DateFormat timeFmt) {
     final dayFmt = DateFormat('EEEE, d', 'pt_BR');
     final byDay = <DateTime, List<Appointment>>{};
@@ -572,7 +572,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       final d = DateTime(a.startsAt.year, a.startsAt.month, a.startsAt.day);
       (byDay[d] ??= []).add(a);
     }
-    final days = byDay.keys.toList()..sort();
+    final days = byDay.keys.toList()..sort((a, b) => b.compareTo(a));
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: days.length,
