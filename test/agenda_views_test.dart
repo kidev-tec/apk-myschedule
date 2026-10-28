@@ -488,6 +488,62 @@ void main() {
     expect(DateTime.parse(q['from'] as String).toLocal(), DateTime(2031, 1, 5));
   });
 
+  testWidgets(
+      'menu ⋮: Remarcar/Cancelar em todos; Concluir só até hoje e se não concluído',
+      (tester) async {
+    final now = DateTime.now();
+    final hoje = DateTime(now.year, now.month, now.day);
+    Map<String, dynamic> appt(String nome, DateTime inicio, String status) => {
+          'id': nome,
+          'client_name': nome,
+          'client_phone': '+5514999990001',
+          'service_name': 'Corte',
+          'starts_at': inicio.toIso8601String(),
+          'ends_at': inicio.add(const Duration(minutes: 30)).toIso8601String(),
+          'status': status,
+          'source': 'app',
+        };
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [
+                appt('Ontem', hoje.subtract(const Duration(hours: 10)),
+                    'confirmed'),
+                appt('Amanha', hoje.add(const Duration(days: 1, hours: 10)),
+                    'confirmed'),
+                appt('Feito', hoje.subtract(const Duration(hours: 9)), 'done'),
+                appt('Cancel', hoje.subtract(const Duration(hours: 8)),
+                    'canceled'),
+              ]
+            }),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+    await pumpPage(tester);
+
+    Future<List<String>> opcoes(String nome) async {
+      final card =
+          find.ancestor(of: find.text(nome), matching: find.byType(Card));
+      await tester.tap(find.descendant(
+          of: card, matching: find.byType(PopupMenuButton<String>)));
+      await tester.pumpAndSettle();
+      final itens = tester
+          .widgetList<PopupMenuItem<String>>(find.byType(PopupMenuItem<String>))
+          .map((i) => (i.child as Text).data!)
+          .toList();
+      await tester.tapAt(const Offset(5, 5)); // fecha o menu
+      await tester.pumpAndSettle();
+      return itens;
+    }
+
+    // passado: tudo disponível
+    expect(await opcoes('Ontem'), ['Remarcar', 'Concluir', 'Cancelar']);
+    // dia futuro: sem Concluir
+    expect(await opcoes('Amanha'), ['Remarcar', 'Cancelar']);
+    // já concluído: sem Concluir de novo
+    expect(await opcoes('Feito'), ['Remarcar', 'Cancelar']);
+    // já cancelado: sem Cancelar nem Concluir
+    expect(await opcoes('Cancel'), ['Remarcar']);
+  });
+
   testWidgets('DIA: tocar na data do rodapé abre popup com os dias do mês',
       (tester) async {
     await pumpPage(tester);

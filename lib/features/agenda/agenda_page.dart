@@ -526,19 +526,23 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         : PopupMenuButton<String>(
             onSelected: (v) => _handleAppointmentAction(v, a),
             itemBuilder: (_) => [
-              if (a.status == 'pending')
+              // Confirmar só faz sentido antes do horário (API recusa depois).
+              if (a.status == 'pending' && !_isPast(a)) ...[
                 const PopupMenuItem(value: 'confirm', child: Text('Confirmar')),
-              if (a.status == 'pending' && !_isPast(a))
                 const PopupMenuItem(
                     value: 'askConfirm',
                     child: Text('Pedir confirmação no WhatsApp')),
-              const PopupMenuItem(value: 'edit', child: Text('Remarcar')),
-              // Passou do horário: sem concluir/cancelar (decisão de
-              // produto — ações de agendamento só com antecedência).
-              if (!_isPast(a)) ...[
-                const PopupMenuItem(value: 'done', child: Text('Concluir')),
-                const PopupMenuItem(value: 'cancel', child: Text('Cancelar')),
               ],
+              // Remarcar e Cancelar valem para qualquer agendamento (passado
+              // remarcado vira cancelado "remarcado" + novo confirmado).
+              const PopupMenuItem(value: 'edit', child: Text('Remarcar')),
+              // Concluir: só até hoje (dia futuro não aconteceu ainda).
+              if (_isOnOrBeforeToday(a) &&
+                  a.status != 'done' &&
+                  a.status != 'canceled')
+                const PopupMenuItem(value: 'done', child: Text('Concluir')),
+              if (a.status != 'canceled')
+                const PopupMenuItem(value: 'cancel', child: Text('Cancelar')),
             ],
           );
   }
@@ -1000,6 +1004,14 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   /// Agendamento cujo horário já passou: sem cancelar/concluir/pedir
   /// confirmação (decisão de produto 21/09 — ação só com antecedência).
   bool _isPast(Appointment a) => a.startsAt.isBefore(DateTime.now());
+
+  /// Agendamento de hoje ou de um dia anterior (fuso do aparelho).
+  bool _isOnOrBeforeToday(Appointment a) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(a.startsAt.year, a.startsAt.month, a.startsAt.day);
+    return !day.isAfter(today);
+  }
 
   /// Ao cancelar, abre o WhatsApp do cliente com mensagem pronta.
   /// O cliente não tem app — WhatsApp é o canal onde ele já está.

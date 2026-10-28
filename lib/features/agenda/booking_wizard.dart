@@ -16,7 +16,11 @@ final wizardApiProvider = Provider<ApiClient>((ref) => ApiClient());
 class BookingWizardPage extends ConsumerStatefulWidget {
   /// B3: agendamento a remarcar. Nulo = fluxo normal (POST).
   final Appointment? reschedule;
-  const BookingWizardPage({super.key, this.reschedule});
+
+  /// Relógio (injetável em teste). Padrão: [DateTime.now].
+  final DateTime Function() clock;
+  const BookingWizardPage(
+      {super.key, this.reschedule, this.clock = DateTime.now});
 
   @override
   ConsumerState<BookingWizardPage> createState() => _BookingWizardPageState();
@@ -30,7 +34,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
   List<Service> _services = [];
   List<WorkingHour> _workingHours = [];
   List<Appointment> _existingAppointments = [];
-  DateTime _selectedDate = DateTime.now();
+  late DateTime _selectedDate;
 
   Client? _selectedClient;
   Service? _selectedService;
@@ -118,8 +122,12 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     final r = widget.reschedule;
     if (r != null) {
       _step = 2;
-      _selectedDate =
+      // Atrasado (dia anterior a hoje) abre em hoje: não se remarca pro passado.
+      final original =
           DateTime(r.startsAt.year, r.startsAt.month, r.startsAt.day);
+      _selectedDate = original.isBefore(_today) ? _today : original;
+    } else {
+      _selectedDate = _today;
     }
     _pageController = PageController(initialPage: _step);
     _loadAllData();
@@ -180,6 +188,11 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     if (mounted) setState(() => _loading = false);
   }
 
+  DateTime get _today {
+    final n = widget.clock();
+    return DateTime(n.year, n.month, n.day);
+  }
+
   static bool _sameHM(DateTime a, DateTime b) =>
       a.year == b.year &&
       a.month == b.month &&
@@ -194,6 +207,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
       appointments: _existingAppointments,
       durationMin: _selectedService?.durationMin ?? 60,
       excludeId: widget.reschedule?.id, // B3: não colidir consigo mesmo
+      notBefore: widget.clock(), // horário que já passou não é oferecido
     );
   }
 
@@ -706,8 +720,11 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
             children: [
               IconButton(
                   icon: const Icon(Icons.chevron_left),
-                  onPressed: () => setState(() => _selectedDate =
-                      _selectedDate.subtract(const Duration(days: 1)))),
+                  // não navega pra dias passados
+                  onPressed: _selectedDate.isAfter(_today)
+                      ? () => setState(() => _selectedDate =
+                          _selectedDate.subtract(const Duration(days: 1)))
+                      : null),
               Text(dateFmt.format(_selectedDate).capitalize(),
                   style: Theme.of(context).textTheme.titleMedium),
               IconButton(

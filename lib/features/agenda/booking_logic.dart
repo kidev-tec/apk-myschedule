@@ -16,6 +16,7 @@ List<DateTime> generateSlots({
   required List<Appointment> appointments,
   required int durationMin,
   String? excludeId,
+  DateTime? notBefore,
 }) {
   final weekday = date.weekday % 7; // 0=dom..6=sáb
   final dayHours = workingHours.where((h) => h.weekday == weekday).toList();
@@ -44,7 +45,9 @@ List<DateTime> generateSlots({
       final slotEnd = cursor.add(Duration(minutes: durationMin));
       final overlaps = dayAppointments
           .any((a) => a.startsAt.isBefore(slotEnd) && a.endsAt.isAfter(cursor));
-      if (!overlaps) slots.add(cursor);
+      // notBefore: horário que já passou não é oferecido.
+      final past = notBefore != null && cursor.isBefore(notBefore);
+      if (!overlaps && !past) slots.add(cursor);
       cursor = cursor.add(const Duration(minutes: 15)); // step 15 min
     }
   }
