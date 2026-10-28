@@ -393,6 +393,7 @@ void main() {
                 appt('x1', 11, 'canceled'),
                 appt('r1', 12, 'canceled', 'remarcado'),
                 appt('r2', 13, 'canceled', 'remarcado'),
+                appt('d1', 14, 'done'),
               ]
             }),
         queryParameters: {'from': Matchers.any, 'to': Matchers.any});
@@ -407,6 +408,7 @@ void main() {
     expect(contagem('confirmado'), '3');
     expect(contagem('cancelado'), '1');
     expect(contagem('remarcado'), '2');
+    expect(contagem('concluido'), '1');
 
     // ordem: verde, vermelho, amarelo
     final xC =
@@ -414,6 +416,9 @@ void main() {
     final xX = tester.getCenter(find.byKey(const Key('semaforo-cancelado'))).dx;
     final xR = tester.getCenter(find.byKey(const Key('semaforo-remarcado'))).dx;
     expect(xC < xX && xX < xR, isTrue);
+    // concluído (azul) vem antes do verde
+    final xD = tester.getCenter(find.byKey(const Key('semaforo-concluido'))).dx;
+    expect(xD, lessThan(xC));
 
     // remarcado aparece como "Remarcado" (não "Cancelado")
     expect(find.text('Corte • Remarcado'), findsNWidgets(2));
@@ -428,6 +433,13 @@ void main() {
         const Color(0xFFC62828)); // vermelho
     expect(fundoHorario('r1').withValues(alpha: 1),
         const Color(0xFFF9A825)); // amarelo
+    expect(fundoHorario('d1').withValues(alpha: 1),
+        const Color(0xFF1E96E8)); // azul
+
+    // concluído ganha check azul junto do texto
+    final check = find.byKey(const Key('check-concluido-d1'));
+    expect(check, findsOneWidget);
+    expect(tester.widget<Icon>(check).color, const Color(0xFF1E96E8));
   });
 
   testWidgets('DIA: tocar na data do rodapé abre popup com os dias do mês',

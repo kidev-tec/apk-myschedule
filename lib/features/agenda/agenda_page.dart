@@ -500,10 +500,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         title: Text(
             a.isBlock ? (a.canceledReason ?? 'Bloqueado') : a.clientName,
             style: Theme.of(context).textTheme.titleMedium),
-        subtitle: Text(
+        subtitle: Text.rich(
             a.isBlock
-                ? '🔒 Bloqueado • ${_statusLabel(a.status)}'
-                : '${a.serviceName} • ${_displayStatus(a)}',
+                ? TextSpan(text: '🔒 Bloqueado • ${_statusLabel(a.status)}')
+                : _statusSubtitle(a),
             style: a.isBlock
                 ? const TextStyle(fontStyle: FontStyle.italic)
                 : null),
@@ -622,10 +622,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             const SizedBox(height: 2),
             Padding(
               padding: const EdgeInsets.only(right: 12),
-              child: Text(
+              child: Text.rich(
                 a.isBlock
-                    ? '🔒 ${_statusLabel(a.status)}'
-                    : '${a.serviceName} • ${_displayStatus(a)}',
+                    ? TextSpan(text: '🔒 ${_statusLabel(a.status)}')
+                    : _statusSubtitle(a),
                 style: theme.textTheme.bodySmall
                     ?.copyWith(fontStyle: a.isBlock ? FontStyle.italic : null),
                 maxLines: 2,
@@ -866,6 +866,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   /// motivo "remarcado" (API B5) — ela aparece como remarcada, não cancelada.
   _StatusKind _statusKind(Appointment a) {
     if (a.isBlock) return _StatusKind.outro;
+    if (a.status == 'done') return _StatusKind.concluido;
     if (a.status == 'confirmed') return _StatusKind.confirmado;
     if (a.status == 'canceled') {
       return a.canceledReason == 'remarcado'
@@ -876,6 +877,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   }
 
   static Color? _statusColor(_StatusKind k) => switch (k) {
+        _StatusKind.concluido => AppColors.agenvaBlue,
         _StatusKind.confirmado => AppColors.success,
         _StatusKind.cancelado => AppColors.error,
         _StatusKind.remarcado => AppColors.warning,
@@ -893,13 +895,32 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         final k => _statusColor(k) ?? AppColors.primaryOf(context),
       };
 
+  /// "Serviço • Status"; concluído leva um check azul antes do status.
+  InlineSpan _statusSubtitle(Appointment a) => TextSpan(
+        text: '${a.serviceName} • ',
+        children: [
+          if (_statusKind(a) == _StatusKind.concluido)
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 3),
+                child: Icon(Icons.check_circle,
+                    key: Key('check-concluido-${a.id}'),
+                    size: 15,
+                    color: AppColors.agenvaBlue),
+              ),
+            ),
+          TextSpan(text: _displayStatus(a)),
+        ],
+      );
+
   String _displayStatus(Appointment a) =>
       _statusKind(a) == _StatusKind.remarcado
           ? 'Remarcado'
           : _statusLabel(a.status);
 
-  /// Semáforo do dia: bolinhas verde/vermelha/amarela com a quantidade de
-  /// confirmados, cancelados e remarcados (só as que têm ao menos 1).
+  /// Semáforo do dia: bolinhas azul/verde/vermelha/amarela com a quantidade
+  /// de concluídos, confirmados, cancelados e remarcados (só as que têm 1+).
   Widget _buildStatusSemaphore(List<Appointment> items) {
     final counts = <_StatusKind, int>{};
     for (final a in items) {
@@ -910,6 +931,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       mainAxisSize: MainAxisSize.min,
       children: [
         for (final k in const [
+          _StatusKind.concluido,
           _StatusKind.confirmado,
           _StatusKind.cancelado,
           _StatusKind.remarcado,
@@ -917,6 +939,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           if ((counts[k] ?? 0) > 0)
             Tooltip(
               message: switch (k) {
+                _StatusKind.concluido => 'Concluídos',
                 _StatusKind.confirmado => 'Confirmados',
                 _StatusKind.cancelado => 'Cancelados',
                 _ => 'Remarcados',
@@ -1611,7 +1634,7 @@ enum _AgendaView { dia, semana, mes }
 
 enum _AgendaLayout { lista, grade }
 
-enum _StatusKind { confirmado, cancelado, remarcado, outro }
+enum _StatusKind { concluido, confirmado, cancelado, remarcado, outro }
 
 extension StringExtension on String {
   String capitalize() =>
