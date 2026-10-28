@@ -68,11 +68,14 @@ List<Client> filterClients(List<Client> clients, String query) {
 /// B-remarque (t_b018bc6b): monta a mensagem de remarcação pro WhatsApp.
 /// Usa o startsAt do appointment NOVO (resposta do PATCH — a API cancela a
 /// linha antiga e cria outra com id novo); sem dados novos, texto genérico.
+/// "27/10 às 09:00" — data/hora das mensagens de WhatsApp pro cliente.
+/// (No DateFormat, literal vai entre aspas SIMPLES: com aspas duplas o "s"
+/// de "às" virava o campo segundos e saía "à0".)
+String formatWhen(DateTime d) =>
+    DateFormat("dd/MM 'às' HH:mm", 'pt_BR').format(d);
+
 String buildRescheduleMessage(String clientName, Appointment? novo) {
-  final when = novo == null
-      ? 'o novo horário'
-      : '${DateFormat('dd/MM', 'pt_BR').format(novo.startsAt)} '
-          'às ${DateFormat('HH:mm', 'pt_BR').format(novo.startsAt)}';
+  final when = novo == null ? 'o novo horário' : formatWhen(novo.startsAt);
   return 'Oi $clientName! Remarquei teu horário pra $when. '
       'Confirma se esse novo horário funciona pra você? 🙂';
 }

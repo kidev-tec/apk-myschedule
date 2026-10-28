@@ -13,7 +13,8 @@ import '../../core/api/paywall_flag.dart';
 import '../../core/update/update_service.dart';
 import '../../theme/app_theme.dart';
 import 'booking_wizard.dart' as booking show Appointment;
-import 'booking_logic.dart' as booking_logic show buildRescheduleMessage;
+import 'booking_logic.dart' as booking_logic
+    show buildRescheduleMessage, formatWhen;
 
 /// B6/DI: provider do ApiClient pra agenda — testes sobrescrevem com mock.
 final agendaApiProvider = Provider<ApiClient>((ref) => ApiClient());
@@ -1025,7 +1026,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   /// Ao cancelar, abre o WhatsApp do cliente com mensagem pronta.
   /// O cliente não tem app — WhatsApp é o canal onde ele já está.
   Future<void> _notifyCancelOnWhatsapp(Appointment a) async {
-    final when = DateFormat('dd/MM "às" HH:mm', 'pt_BR').format(a.startsAt);
+    final when = booking_logic.formatWhen(a.startsAt);
     final msg = Uri.encodeComponent(
         'Oi ${a.clientName}! Tive que remanejar teu horário de $when. '
         'Me chama pra combinarmos outro horário! 🙂');
@@ -1055,7 +1056,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   /// RF-B01: pede confirmação do cliente — abre o WhatsApp com mensagem pronta
   /// contendo data/hora + link pessoal de confirmação (token HMAC do agendamento).
   Future<void> _askConfirmationOnWhatsapp(Appointment a) async {
-    final when = DateFormat('dd/MM "às" HH:mm', 'pt_BR').format(a.startsAt);
+    final when = booking_logic.formatWhen(a.startsAt);
     final link = await _confirmationLink(a);
     final msg = Uri.encodeComponent(
         'Oi ${a.clientName}! Confirmando teu horário de $when. '
