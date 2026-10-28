@@ -136,8 +136,12 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
         api.dio.get('/appointments', queryParameters: {
           'from': DateTime.now()
               .subtract(const Duration(days: 30))
+              .toUtc()
               .toIso8601String(),
-          'to': DateTime.now().add(const Duration(days: 90)).toIso8601String(),
+          'to': DateTime.now()
+              .add(const Duration(days: 90))
+              .toUtc()
+              .toIso8601String(),
         }),
       ]);
       List<dynamic> listOf(dynamic data, [String? key]) {
@@ -228,17 +232,19 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
           : '/appointments',
       body: isReschedule
           ? {
-              'startsAt': _selectedSlot!.toIso8601String(),
+              'startsAt': _selectedSlot!.toUtc().toIso8601String(),
               'endsAt': _selectedSlot!
                   .add(Duration(minutes: _selectedService!.durationMin))
+                  .toUtc()
                   .toIso8601String(),
             }
           : {
               'clientId': _selectedClient!.id,
               'serviceId': _selectedService!.id,
-              'startsAt': _selectedSlot!.toIso8601String(),
+              'startsAt': _selectedSlot!.toUtc().toIso8601String(),
               'endsAt': _selectedSlot!
                   .add(Duration(minutes: _selectedService!.durationMin))
+                  .toUtc()
                   .toIso8601String(),
             },
       queuedAt: DateTime.now(),

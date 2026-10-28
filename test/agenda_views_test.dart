@@ -139,6 +139,17 @@ void main() {
         reason: 'a linha antiga deve sair da agenda após a remarcação');
   });
 
+  testWidgets('consulta da agenda envia o período em UTC (sufixo Z)',
+      (tester) async {
+    await pumpPage(tester);
+    final q = capturedQueries.last!;
+    expect(q['from'] as String, endsWith('Z'));
+    expect(q['to'] as String, endsWith('Z'));
+    final hoje = DateTime.now();
+    expect(DateTime.parse(q['from'] as String).toLocal(),
+        DateTime(hoje.year, hoje.month, hoje.day));
+  });
+
   testWidgets('troca pra SEMANA: janela de 7 dias, agendamento agrupado',
       (tester) async {
     await pumpPage(tester);
@@ -149,8 +160,8 @@ void main() {
     // consulta refeita com janela de 7 dias (to - from == 7d)
     expect(capturedQueries.length, greaterThan(diaQueries));
     final q = capturedQueries.last;
-    final from = DateTime.parse(q!['from'] as String);
-    final to = DateTime.parse(q['to'] as String);
+    final from = DateTime.parse(q!['from'] as String).toLocal();
+    final to = DateTime.parse(q['to'] as String).toLocal();
     expect(to.difference(from).inDays, 7);
     // começa no domingo da semana do dia focado
     expect(from.weekday, DateTime.sunday);
@@ -323,11 +334,13 @@ void main() {
     await pumpPage(tester);
     await tester.tap(find.text('Semana'));
     await tester.pumpAndSettle();
-    final atual = DateTime.parse(capturedQueries.last!['from'] as String);
+    final atual =
+        DateTime.parse(capturedQueries.last!['from'] as String).toLocal();
 
     await tester.tap(find.byIcon(Icons.chevron_right));
     await tester.pumpAndSettle();
-    final prox = DateTime.parse(capturedQueries.last!['from'] as String);
+    final prox =
+        DateTime.parse(capturedQueries.last!['from'] as String).toLocal();
     expect(prox, DateTime(atual.year, atual.month, atual.day + 7));
     expect(prox.weekday, DateTime.sunday);
 
@@ -335,7 +348,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.chevron_left));
     await tester.pumpAndSettle();
-    final ant = DateTime.parse(capturedQueries.last!['from'] as String);
+    final ant =
+        DateTime.parse(capturedQueries.last!['from'] as String).toLocal();
     expect(ant, DateTime(atual.year, atual.month, atual.day - 7));
   });
 
@@ -471,7 +485,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final q = capturedQueries.last!;
-    expect(DateTime.parse(q['from'] as String), DateTime(2031, 1, 5));
+    expect(DateTime.parse(q['from'] as String).toLocal(), DateTime(2031, 1, 5));
   });
 
   testWidgets('DIA: tocar na data do rodapé abre popup com os dias do mês',
@@ -497,7 +511,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(popup, findsNothing);
     final q = capturedQueries.last!;
-    expect(DateTime.parse(q['from'] as String),
+    expect(DateTime.parse(q['from'] as String).toLocal(),
         DateTime(now.year, now.month, alvo));
     expect(find.text('Dia'), findsOneWidget);
   });
@@ -546,8 +560,8 @@ void main() {
 
     // carrega o mês inteiro: do dia 1 ao dia 1 do mês seguinte
     final q = capturedQueries.last!;
-    final from = DateTime.parse(q['from'] as String);
-    final to = DateTime.parse(q['to'] as String);
+    final from = DateTime.parse(q['from'] as String).toLocal();
+    final to = DateTime.parse(q['to'] as String).toLocal();
     expect(from.day, 1);
     expect(to.day, 1);
     expect(to.month, from.month == 12 ? 1 : from.month + 1);
@@ -567,11 +581,13 @@ void main() {
     await pumpPage(tester);
     await tester.tap(find.text('Mês'));
     await tester.pumpAndSettle();
-    final atual = DateTime.parse(capturedQueries.last!['from'] as String);
+    final atual =
+        DateTime.parse(capturedQueries.last!['from'] as String).toLocal();
 
     await tester.tap(find.byIcon(Icons.chevron_right));
     await tester.pumpAndSettle();
-    final prox = DateTime.parse(capturedQueries.last!['from'] as String);
+    final prox =
+        DateTime.parse(capturedQueries.last!['from'] as String).toLocal();
     expect(prox, DateTime(atual.year, atual.month + 1, 1));
     expect(find.text('DOM.'), findsOneWidget);
   });
@@ -586,9 +602,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('DOM.'), findsNothing);
     final q = capturedQueries.last!;
-    final from = DateTime.parse(q['from'] as String);
+    final from = DateTime.parse(q['from'] as String).toLocal();
     expect(from.day, 15);
-    expect(DateTime.parse(q['to'] as String).difference(from).inDays, 1);
+    expect(
+        DateTime.parse(q['to'] as String).toLocal().difference(from).inDays, 1);
   });
 
   testWidgets('navegação de dias mantém a visão corrente', (tester) async {

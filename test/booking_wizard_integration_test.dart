@@ -166,7 +166,12 @@ void main() {
     expect(posted.first['serviceId'], 's1');
     // source foi removido: a API só aceita 'block' ou ausente
     expect(posted.first.containsKey('source'), isFalse);
-    expect(DateTime.parse(posted.first['startsAt'] as String).hour, 10);
+    // horário vai em UTC (sufixo Z): sem fuso a API (servidor em UTC)
+    // lia 10:00 de Brasília como 10:00 UTC e salvava 3h antes.
+    expect(posted.first['startsAt'] as String, endsWith('Z'));
+    expect(posted.first['endsAt'] as String, endsWith('Z'));
+    expect(
+        DateTime.parse(posted.first['startsAt'] as String).toLocal().hour, 10);
     // ends_at = starts_at + duração do serviço (60min)
     final start = DateTime.parse(posted.first['startsAt'] as String);
     final end = DateTime.parse(posted.first['endsAt'] as String);

@@ -120,8 +120,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         _AgendaView.dia => windowStart.add(const Duration(days: 1)),
       };
       final resp = await api.dio.get('/appointments', queryParameters: {
-        'from': windowStart.toIso8601String(),
-        'to': end.toIso8601String(),
+        'from': windowStart.toUtc().toIso8601String(),
+        'to': end.toUtc().toIso8601String(),
       });
       final list = resp.data is List
           ? resp.data as List
@@ -1206,8 +1206,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       await api.dio.post('/appointments', data: {
         'clientId': blockIds['clientId'],
         'serviceId': blockIds['serviceId'],
-        'startsAt': startDt.toIso8601String(),
-        'endsAt': endDt.toIso8601String(),
+        'startsAt': startDt.toUtc().toIso8601String(),
+        'endsAt': endDt.toUtc().toIso8601String(),
         'source': 'block',
         if (reasonCtrl.text.trim().isNotEmpty)
           'canceledReason': reasonCtrl.text.trim(),
