@@ -317,4 +317,28 @@ void main() {
     expect(find.text('ABRIR FORM'), findsOneWidget);
     expect(find.text('LISTA CLIENTES'), findsNothing);
   });
+
+  testWidgets('CEP e CPF só aceitam dígitos/máscara e no tamanho certo',
+      (tester) async {
+    _tall(tester);
+    final router = GoRouter(initialLocation: '/clients/new', routes: [
+      GoRoute(
+          path: '/clients/new',
+          builder: (_, __) => ClientFormPage(
+              api: api,
+              cepService: CepService(lookupOverride: (_) async => null))),
+    ]);
+    await tester.pumpWidget(
+        ProviderScope(child: MaterialApp.router(routerConfig: router)));
+    await tester.pumpAndSettle();
+    String txt(String k) =>
+        tester.widget<TextFormField>(find.byKey(Key(k))).controller!.text;
+
+    await tester.enterText(
+        find.byKey(const Key('client-zip')), '1198888777701310100');
+    expect(txt('client-zip'), '11988-887');
+    await tester.enterText(
+        find.byKey(const Key('client-cpf')), '529982247251234abc');
+    expect(txt('client-cpf'), '529.982.247-25');
+  });
 }

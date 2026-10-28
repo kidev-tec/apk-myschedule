@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/cep/cep_service.dart';
 import '../../core/utils/cpf.dart';
@@ -11,6 +12,37 @@ const referralSources = <String, String>{
   'passou_na_frente': 'Passou na frente',
   'outro': 'Outro',
 };
+
+/// Máscara de dígitos: mantém só números (até [maxDigits]) e formata com
+/// [format] — ex.: CEP 00000-000, CPF 000.000.000-00.
+class _DigitsMask extends TextInputFormatter {
+  final int maxDigits;
+  final String Function(String digits) format;
+  _DigitsMask(this.maxDigits, this.format);
+
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    var d = onlyDigits(newValue.text);
+    if (d.length > maxDigits) d = d.substring(0, maxDigits);
+    final t = format(d);
+    return TextEditingValue(
+        text: t, selection: TextSelection.collapsed(offset: t.length));
+  }
+}
+
+String _maskCep(String d) =>
+    d.length <= 5 ? d : '${d.substring(0, 5)}-${d.substring(5)}';
+
+String _maskCpf(String d) {
+  final b = StringBuffer();
+  for (var i = 0; i < d.length; i++) {
+    if (i == 3 || i == 6) b.write('.');
+    if (i == 9) b.write('-');
+    b.write(d[i]);
+  }
+  return b.toString();
+}
 
 /// Estado do cadastro complementar do cliente (aniversário, apelido, CPF,
 /// como conheceu, consentimento e endereço). Compartilhado entre o
@@ -196,6 +228,7 @@ class _ClientProfileFieldsState extends State<ClientProfileFields> {
           key: const Key('client-cpf'),
           controller: d.cpf,
           keyboardType: TextInputType.number,
+          inputFormatters: [_DigitsMask(11, _maskCpf)],
           decoration: const InputDecoration(
             labelText: 'CPF (opcional)',
             prefixIcon: Icon(Icons.assignment_ind_outlined),
@@ -226,6 +259,7 @@ class _ClientProfileFieldsState extends State<ClientProfileFields> {
           key: const Key('client-zip'),
           controller: d.zip,
           keyboardType: TextInputType.number,
+          inputFormatters: [_DigitsMask(8, _maskCep)],
           onChanged: (v) {
             if (onlyDigits(v).length == 8) _lookupCep();
           },
