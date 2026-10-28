@@ -128,6 +128,7 @@ void main() {
 
     // nenhum card de negócio ainda
     expect(find.text('Meus serviços'), findsNothing);
+    expect(find.text('Meus clientes'), findsNothing);
     expect(find.text('Google Calendar'), findsNothing);
     expect(find.text('Segmento'), findsNothing);
     expect(find.text('Teu link de agendamento'), findsNothing);
@@ -167,5 +168,7 @@ void main() {
     expect(find.textContaining('Não consegui carregar'), findsNothing);
     expect(find.text('Meus serviços'), findsOneWidget);
     expect(find.text('Segmento'), findsOneWidget);
+    // cadastro de clientes acessível pelas Configurações
+    expect(find.text('Meus clientes'), findsOneWidget);
   });
 }

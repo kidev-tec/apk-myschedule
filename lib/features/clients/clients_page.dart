@@ -22,6 +22,12 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
     _loadClients();
   }
 
+  /// Abre o formulário (novo ou edição) e recarrega a lista ao voltar.
+  Future<void> _openForm([String? id]) async {
+    await context.push(id == null ? '/clients/new' : '/clients/$id/edit');
+    if (mounted) _loadClients();
+  }
+
   Future<void> _loadClients() async {
     setState(() => _loading = true);
     try {
@@ -78,7 +84,7 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () => context.push('/clients/new'),
+            onPressed: _openForm,
           ),
         ],
       ),
@@ -140,7 +146,7 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
                       trailing: PopupMenuButton<String>(
                         onSelected: (v) {
                           if (v == 'edit') {
-                            context.push('/clients/${c.id}/edit');
+                            _openForm(c.id);
                           }
                           if (v == 'delete') _deleteClient(c);
                         },
@@ -159,7 +165,7 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push('/clients/new'),
+        onPressed: _openForm,
         child: const Icon(Icons.add),
       ),
     );

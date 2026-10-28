@@ -308,6 +308,46 @@ void main() {
     expect(btn.onPressed, isNotNull);
   });
 
+  testWidgets('Adicionar cliente: "Mais dados" abre apelido, aniversário etc.',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 6000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(_wrapWithApi(api));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pumpAndSettle();
+
+    adapter.onPost(
+        '/clients',
+        (s) => s.reply(
+            201, {'id': 'c-2', 'name': 'Lia', 'phone_e164': '5514999990008'}),
+        data: Matchers.any);
+    await tester.tap(find.text('Adicionar cliente'));
+    await tester.pumpAndSettle();
+
+    // curto por padrão: e-mail e demais campos ficam no "Mais dados"
+    expect(find.byKey(const Key('client-nickname')), findsNothing);
+    expect(
+        find.widgetWithText(TextFormField, 'E-mail (opcional)'), findsNothing);
+
+    await tester.enterText(find.widgetWithText(TextFormField, 'Nome *'), 'Lia');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'WhatsApp *'), '14999990008');
+    await tester.tap(find.text('Mais dados'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('client-birthday')), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('client-nickname')), 'Li');
+    await tester.ensureVisible(find.text('Criar e usar'));
+    await tester.tap(find.text('Criar e usar'));
+    await tester.pumpAndSettle();
+
+    final body = posted.last;
+    expect(body['name'], 'Lia');
+    expect(body['nickname'], 'Li');
+    expect(body['marketing_consent'], isFalse);
+  });
+
   testWidgets(
       'criar cliente com telefone duplicado (409) → oferece selecionar existente',
       (tester) async {
