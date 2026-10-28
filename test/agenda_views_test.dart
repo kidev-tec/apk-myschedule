@@ -424,7 +424,7 @@ void main() {
     expect(contagem('remarcado'), '2');
     expect(contagem('concluido'), '1');
 
-    // ordem: verde, vermelho, amarelo
+    // ordem: verde, vermelho, roxo
     final xC =
         tester.getCenter(find.byKey(const Key('semaforo-confirmado'))).dx;
     final xX = tester.getCenter(find.byKey(const Key('semaforo-cancelado'))).dx;
@@ -434,8 +434,8 @@ void main() {
     final xD = tester.getCenter(find.byKey(const Key('semaforo-concluido'))).dx;
     expect(xD, lessThan(xC));
 
-    // remarcado aparece como "Remarcado" (não "Cancelado")
-    expect(find.text('Corte • Remarcado'), findsNWidgets(2));
+    // remarcado aparece como "Cancelado/Remarcado"
+    expect(find.text('Corte • Cancelado/Remarcado'), findsNWidgets(2));
 
     Color fundoHorario(String id) =>
         ((tester.widget<Container>(find.byKey(Key('hora-$id'))).decoration
@@ -446,7 +446,7 @@ void main() {
     expect(fundoHorario('x1').withValues(alpha: 1),
         const Color(0xFFC62828)); // vermelho
     expect(fundoHorario('r1').withValues(alpha: 1),
-        const Color(0xFFF9A825)); // amarelo
+        const Color(0xFF7B1FA2)); // roxo
     expect(fundoHorario('d1').withValues(alpha: 1),
         const Color(0xFF1E96E8)); // azul
 
@@ -514,6 +514,11 @@ void main() {
                 appt('Feito', hoje.subtract(const Duration(hours: 9)), 'done'),
                 appt('Cancel', hoje.subtract(const Duration(hours: 8)),
                     'canceled'),
+                {
+                  ...appt('Remarc', hoje.subtract(const Duration(hours: 7)),
+                      'canceled'),
+                  'canceled_reason': 'remarcado',
+                },
               ]
             }),
         queryParameters: {'from': Matchers.any, 'to': Matchers.any});
@@ -542,6 +547,14 @@ void main() {
     expect(await opcoes('Feito'), ['Remarcar', 'Cancelar']);
     // já cancelado: sem Cancelar nem Concluir
     expect(await opcoes('Cancel'), ['Remarcar']);
+
+    // já remarcado: vira histórico, sem menu (o novo agendamento já existe)
+    expect(
+        find.descendant(
+            of: find.ancestor(
+                of: find.text('Remarc'), matching: find.byType(Card)),
+            matching: find.byType(PopupMenuButton<String>)),
+        findsNothing);
   });
 
   testWidgets('DIA: tocar na data do rodapé abre popup com os dias do mês',

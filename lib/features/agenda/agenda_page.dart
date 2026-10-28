@@ -512,7 +512,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   }
 
   /// Menu "⋮" de ações do agendamento (compartilhado entre lista e grade).
-  Widget _buildActionsMenu(Appointment a) {
+  /// Remarcado não tem menu: é histórico — o agendamento novo já existe e
+  /// remarcar de novo criaria um duplicado.
+  Widget? _buildActionsMenu(Appointment a) {
+    if (_statusKind(a) == _StatusKind.remarcado) return null;
     return a.isBlock
         ? PopupMenuButton<String>(
             onSelected: (v) => _handleAppointmentAction(v, a),
@@ -609,7 +612,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                   ),
                 ),
                 const Spacer(),
-                _buildActionsMenu(a),
+                // sem menu (remarcado): mantém a altura da linha
+                _buildActionsMenu(a) ?? const SizedBox(height: 48),
               ],
             ),
             const Spacer(),
@@ -894,7 +898,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         _StatusKind.concluido => AppColors.agenvaBlue,
         _StatusKind.confirmado => AppColors.success,
         _StatusKind.cancelado => AppColors.error,
-        _StatusKind.remarcado => AppColors.warning,
+        _StatusKind.remarcado => AppColors.rescheduled,
         _StatusKind.outro => null,
       };
 
@@ -903,11 +907,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       _statusColor(_statusKind(a))?.withValues(alpha: 0.18) ??
       AppColors.softOf(context);
 
-  Color _timeForeground(Appointment a) => switch (_statusKind(a)) {
-        // amarelo puro some no fundo claro: texto em âmbar escuro
-        _StatusKind.remarcado => const Color(0xFF8A5A00),
-        final k => _statusColor(k) ?? AppColors.primaryOf(context),
-      };
+  Color _timeForeground(Appointment a) =>
+      _statusColor(_statusKind(a)) ?? AppColors.primaryOf(context);
 
   /// "Serviço • Status"; concluído leva um check azul antes do status.
   InlineSpan _statusSubtitle(Appointment a) => TextSpan(
@@ -930,10 +931,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
 
   String _displayStatus(Appointment a) =>
       _statusKind(a) == _StatusKind.remarcado
-          ? 'Remarcado'
+          ? 'Cancelado/Remarcado'
           : _statusLabel(a.status);
 
-  /// Semáforo do dia: bolinhas azul/verde/vermelha/amarela com a quantidade
+  /// Semáforo do dia: bolinhas azul/verde/vermelha/roxa com a quantidade
   /// de concluídos, confirmados, cancelados e remarcados (só as que têm 1+).
   Widget _buildStatusSemaphore(List<Appointment> items) {
     final counts = <_StatusKind, int>{};
@@ -970,12 +971,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                 ),
                 child: Text(
                   '${counts[k]}',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: k == _StatusKind.remarcado
-                        ? AppColors.neutral
-                        : Colors.white,
+                    color: Colors.white,
                   ),
                 ),
               ),
