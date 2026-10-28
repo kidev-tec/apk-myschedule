@@ -180,6 +180,42 @@ void main() {
         lessThan(8));
   });
 
+  testWidgets('alterna entre LISTA (padrão) e GRADE, no dia e na semana',
+      (tester) async {
+    await pumpPage(tester);
+    final lista = find.byTooltip('Lista');
+    final grade = find.byTooltip('Grade');
+    expect(lista, findsOneWidget);
+    expect(grade, findsOneWidget);
+
+    // padrão: lista
+    expect(find.byType(GridView), findsNothing);
+    expect(find.text('Ana'), findsOneWidget);
+
+    // botões à direita do cadeado, na mesma linha
+    expect(tester.getCenter(lista).dx,
+        greaterThan(tester.getCenter(find.byTooltip('Bloquear horário')).dx));
+    expect(tester.getCenter(grade).dx, greaterThan(tester.getCenter(lista).dx));
+
+    await tester.tap(grade);
+    await tester.pumpAndSettle();
+    expect(find.byType(GridView), findsOneWidget);
+    expect(find.text('Ana'), findsOneWidget);
+    // ações do agendamento continuam disponíveis na grade
+    expect(find.byType(PopupMenuButton<String>), findsOneWidget);
+
+    // grade se mantém ao trocar pra semana
+    await tester.tap(find.text('Semana'));
+    await tester.pumpAndSettle();
+    expect(find.byType(GridView), findsOneWidget);
+    expect(find.text('Ana'), findsOneWidget);
+
+    await tester.tap(lista);
+    await tester.pumpAndSettle();
+    expect(find.byType(GridView), findsNothing);
+    expect(find.text('Ana'), findsOneWidget);
+  });
+
   testWidgets('SEMANA lista os dias do mais recente para o mais antigo',
       (tester) async {
     final now = DateTime.now();

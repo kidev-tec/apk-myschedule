@@ -33,6 +33,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   bool _loading = true;
   // B6: visão corrente — dia (default), semana ou mês (via bottom sheet)
   _AgendaView _view = _AgendaView.dia;
+  // Exibição dos agendamentos: lista (padrão) ou grade de 2 colunas.
+  _AgendaLayout _layout = _AgendaLayout.lista;
 
   final ValueNotifier<bool> _updateBanner = ValueNotifier(false);
   bool _downloading = false;
@@ -408,6 +410,11 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                                     tooltip: 'Bloquear horário',
                                     icon: const Icon(Icons.lock_outline),
                                   ),
+                                  const Spacer(),
+                                  _buildLayoutToggle(_AgendaLayout.lista,
+                                      Icons.view_agenda_outlined, 'Lista'),
+                                  _buildLayoutToggle(_AgendaLayout.grade,
+                                      Icons.grid_view_outlined, 'Grade'),
                                 ],
                               ),
                             ),
@@ -417,13 +424,16 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                                   ? _buildEmptyState(context)
                                   : _view == _AgendaView.semana
                                       ? _buildWeekList(timeFmt)
-                                      : ListView.builder(
-                                          padding: const EdgeInsets.all(16),
-                                          itemCount: _appointments.length,
-                                          itemBuilder: (_, i) =>
-                                              _buildAppointmentCard(
-                                                  _appointments[i], timeFmt),
-                                        ),
+                                      : _layout == _AgendaLayout.grade
+                                          ? _buildGrid(_appointments, timeFmt)
+                                          : ListView.builder(
+                                              padding: const EdgeInsets.all(16),
+                                              itemCount: _appointments.length,
+                                              itemBuilder: (_, i) =>
+                                                  _buildAppointmentCard(
+                                                      _appointments[i],
+                                                      timeFmt),
+                                            ),
                             ),
                           ],
                         ),
@@ -499,36 +509,132 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             style: a.isBlock
                 ? const TextStyle(fontStyle: FontStyle.italic)
                 : null),
-        trailing: a.isBlock
-            ? PopupMenuButton<String>(
-                onSelected: (v) => _handleAppointmentAction(v, a),
-                itemBuilder: (_) => [
-                  // Horário já passou: sem ações (nada a liberar).
-                  if (!_isPast(a))
-                    const PopupMenuItem(
-                        value: 'cancel', child: Text('Liberar horário')),
-                ],
-              )
-            : PopupMenuButton<String>(
-                onSelected: (v) => _handleAppointmentAction(v, a),
-                itemBuilder: (_) => [
-                  if (a.status == 'pending')
-                    const PopupMenuItem(
-                        value: 'confirm', child: Text('Confirmar')),
-                  if (a.status == 'pending' && !_isPast(a))
-                    const PopupMenuItem(
-                        value: 'askConfirm',
-                        child: Text('Pedir confirmação no WhatsApp')),
-                  const PopupMenuItem(value: 'edit', child: Text('Remarcar')),
-                  // Passou do horário: sem concluir/cancelar (decisão de
-                  // produto — ações de agendamento só com antecedência).
-                  if (!_isPast(a)) ...[
-                    const PopupMenuItem(value: 'done', child: Text('Concluir')),
-                    const PopupMenuItem(
-                        value: 'cancel', child: Text('Cancelar')),
-                  ],
-                ],
+        trailing: _buildActionsMenu(a),
+      ),
+    );
+  }
+
+  /// Menu "⋮" de ações do agendamento (compartilhado entre lista e grade).
+  Widget _buildActionsMenu(Appointment a) {
+    return a.isBlock
+        ? PopupMenuButton<String>(
+            onSelected: (v) => _handleAppointmentAction(v, a),
+            itemBuilder: (_) => [
+              // Horário já passou: sem ações (nada a liberar).
+              if (!_isPast(a))
+                const PopupMenuItem(
+                    value: 'cancel', child: Text('Liberar horário')),
+            ],
+          )
+        : PopupMenuButton<String>(
+            onSelected: (v) => _handleAppointmentAction(v, a),
+            itemBuilder: (_) => [
+              if (a.status == 'pending')
+                const PopupMenuItem(value: 'confirm', child: Text('Confirmar')),
+              if (a.status == 'pending' && !_isPast(a))
+                const PopupMenuItem(
+                    value: 'askConfirm',
+                    child: Text('Pedir confirmação no WhatsApp')),
+              const PopupMenuItem(value: 'edit', child: Text('Remarcar')),
+              // Passou do horário: sem concluir/cancelar (decisão de
+              // produto — ações de agendamento só com antecedência).
+              if (!_isPast(a)) ...[
+                const PopupMenuItem(value: 'done', child: Text('Concluir')),
+                const PopupMenuItem(value: 'cancel', child: Text('Cancelar')),
+              ],
+            ],
+          );
+  }
+
+  /// Botão do alternador lista/grade; destacado quando é o layout atual.
+  Widget _buildLayoutToggle(_AgendaLayout layout, IconData icon, String label) {
+    final selected = _layout == layout;
+    return IconButton(
+      onPressed: () => setState(() => _layout = layout),
+      tooltip: label,
+      isSelected: selected,
+      icon: Icon(icon),
+      style: IconButton.styleFrom(
+        backgroundColor: selected ? AppColors.softOf(context) : null,
+        foregroundColor:
+            selected ? AppColors.primaryOf(context) : AppColors.neutral,
+      ),
+    );
+  }
+
+  /// Grade de 2 colunas. [embedded] = dentro da lista da semana (sem
+  /// scroll próprio; quem rola é a lista de dias).
+  Widget _buildGrid(List<Appointment> items, DateFormat timeFmt,
+      {bool embedded = false}) {
+    return GridView.builder(
+      padding: embedded ? EdgeInsets.zero : const EdgeInsets.all(16),
+      shrinkWrap: embedded,
+      physics: embedded ? const NeverScrollableScrollPhysics() : null,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        mainAxisExtent: 124,
+      ),
+      itemCount: items.length,
+      itemBuilder: (_, i) => _buildAppointmentTile(items[i], timeFmt),
+    );
+  }
+
+  /// Card compacto da grade: horário + menu no topo, cliente e serviço abaixo.
+  Widget _buildAppointmentTile(Appointment a, DateFormat timeFmt) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 4, 0, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.softOf(context),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    timeFmt.format(a.startsAt),
+                    style: theme.textTheme.labelLarge
+                        ?.copyWith(color: AppColors.primaryOf(context)),
+                  ),
+                ),
+                const Spacer(),
+                _buildActionsMenu(a),
+              ],
+            ),
+            const Spacer(),
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Text(
+                a.isBlock ? (a.canceledReason ?? 'Bloqueado') : a.clientName,
+                style: theme.textTheme.titleSmall,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
+            ),
+            const SizedBox(height: 2),
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Text(
+                a.isBlock
+                    ? '🔒 ${_statusLabel(a.status)}'
+                    : '${a.serviceName} • ${_statusLabel(a.status)}',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(fontStyle: a.isBlock ? FontStyle.italic : null),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -598,7 +704,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                     ?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
-            ...items.map((a) => _buildAppointmentCard(a, timeFmt)),
+            if (_layout == _AgendaLayout.grade)
+              _buildGrid(items, timeFmt, embedded: true)
+            else
+              ...items.map((a) => _buildAppointmentCard(a, timeFmt)),
           ],
         );
       },
@@ -1159,6 +1268,8 @@ class _MonthPickerState extends State<_MonthPicker> {
 
 /// B6: visões da agenda. `mes` abre o bottom sheet e volta pro `dia`.
 enum _AgendaView { dia, semana, mes }
+
+enum _AgendaLayout { lista, grade }
 
 extension StringExtension on String {
   String capitalize() =>
