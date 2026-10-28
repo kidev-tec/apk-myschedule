@@ -156,6 +156,30 @@ void main() {
     expect(find.text('Ana'), findsOneWidget);
   });
 
+  testWidgets(
+      'Marcar horário e Bloquear ficam no topo, abaixo do seletor, sem FAB',
+      (tester) async {
+    await pumpPage(tester);
+    expect(find.byType(FloatingActionButton), findsNothing);
+
+    final marcar = find.text('Marcar horário');
+    final bloquear = find.byTooltip('Bloquear horário');
+    expect(marcar, findsOneWidget);
+    expect(bloquear, findsOneWidget);
+
+    // abaixo do seletor Dia/Semana/Mês e acima da lista
+    final ySeletor = tester.getBottomLeft(find.text('Semana')).dy;
+    expect(tester.getTopLeft(marcar).dy, greaterThan(ySeletor));
+    expect(tester.getTopLeft(marcar).dy,
+        lessThan(tester.getTopLeft(find.text('Ana')).dy));
+
+    // bloquear vem logo em seguida, na mesma linha
+    expect(tester.getCenter(bloquear).dx,
+        greaterThan(tester.getCenter(marcar).dx));
+    expect((tester.getCenter(bloquear).dy - tester.getCenter(marcar).dy).abs(),
+        lessThan(8));
+  });
+
   testWidgets('SEMANA lista os dias do mais recente para o mais antigo',
       (tester) async {
     final now = DateTime.now();

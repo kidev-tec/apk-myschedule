@@ -384,6 +384,34 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                               ),
                             ),
                             const SizedBox(height: 8),
+                            // Ações no topo (antes eram FABs sobre a lista):
+                            // marcar horário + bloquear horário (RF-A01).
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              child: Row(
+                                children: [
+                                  FilledButton.icon(
+                                    onPressed: () =>
+                                        context.push('/agenda/booking'),
+                                    icon: const Icon(Icons.add),
+                                    label: const Text('Marcar horário'),
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor:
+                                          AppColors.primaryOf(context),
+                                      foregroundColor: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton.filledTonal(
+                                    onPressed: _showBlockSheet,
+                                    tooltip: 'Bloquear horário',
+                                    icon: const Icon(Icons.lock_outline),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
                             Expanded(
                               child: _appointments.isEmpty
                                   ? _buildEmptyState(context)
@@ -402,29 +430,6 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                 ),
               ],
             ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // RF-A01: bloquear horário (compromisso externo)
-          FloatingActionButton.small(
-            heroTag: 'btn-block',
-            onPressed: _showBlockSheet,
-            tooltip: 'Bloquear horário',
-            backgroundColor:
-                Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: const Icon(Icons.lock_outline),
-          ),
-          const SizedBox(height: 12),
-          FloatingActionButton.extended(
-            heroTag: 'btn-book',
-            onPressed: () => context.push('/agenda/booking'),
-            icon: const Icon(Icons.add),
-            label: const Text('Marcar horário'),
-            backgroundColor: AppColors.primaryOf(context),
-            foregroundColor: Colors.white,
-          ),
-        ],
-      ),
       bottomNavigationBar: _buildDayNavigator(),
     );
   }
