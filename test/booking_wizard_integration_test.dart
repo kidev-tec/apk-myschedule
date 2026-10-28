@@ -149,7 +149,13 @@ void main() {
     }
     // appt 09-10 bloqueado; primeiro livre deve ser 10:00
     expect(find.text('10:00'), findsOneWidget); // pós-conflito
+    // observações só aparecem depois de escolher o horário
+    expect(find.byKey(const Key('wizard-notes')), findsNothing);
     await tester.tap(find.text('10:00'));
+    await tester.pump();
+    expect(find.byKey(const Key('wizard-notes')), findsOneWidget);
+    await tester.enterText(
+        find.byKey(const Key('wizard-notes')), '  pediu degradê baixo ');
     await tester.pump();
 
     await tester.ensureVisible(find.text('Confirmar agendamento'));
@@ -166,6 +172,8 @@ void main() {
     expect(posted.first['serviceId'], 's1');
     // source foi removido: a API só aceita 'block' ou ausente
     expect(posted.first.containsKey('source'), isFalse);
+    // observações vão aparadas no POST
+    expect(posted.first['notes'], 'pediu degradê baixo');
     // horário vai em UTC (sufixo Z): sem fuso a API (servidor em UTC)
     // lia 10:00 de Brasília como 10:00 UTC e salvava 3h antes.
     expect(posted.first['startsAt'] as String, endsWith('Z'));

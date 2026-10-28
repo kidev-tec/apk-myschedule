@@ -501,13 +501,40 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         title: Text(
             a.isBlock ? (a.canceledReason ?? 'Bloqueado') : a.clientName,
             style: Theme.of(context).textTheme.titleMedium),
-        subtitle: Text.rich(
-            a.isBlock
-                ? TextSpan(text: '🔒 Bloqueado • ${_statusLabel(a.status)}')
-                : _statusSubtitle(a),
-            style: a.isBlock
-                ? const TextStyle(fontStyle: FontStyle.italic)
-                : null),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text.rich(
+                a.isBlock
+                    ? TextSpan(text: '🔒 Bloqueado • ${_statusLabel(a.status)}')
+                    : _statusSubtitle(a),
+                style: a.isBlock
+                    ? const TextStyle(fontStyle: FontStyle.italic)
+                    : null),
+            // observações do prestador (privadas)
+            if (a.notes != null && a.notes!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.sticky_note_2_outlined,
+                        size: 14, color: AppColors.midOf(context)),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(a.notes!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(fontStyle: FontStyle.italic)),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
         trailing: _buildActionsMenu(a),
       ),
     );
@@ -614,6 +641,14 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                   ),
                 ),
                 const Spacer(),
+                // observações: ícone; toque longo/hover mostra o texto
+                if (a.notes != null && a.notes!.isNotEmpty)
+                  Tooltip(
+                    message: a.notes!,
+                    triggerMode: TooltipTriggerMode.tap,
+                    child: Icon(Icons.sticky_note_2_outlined,
+                        size: 18, color: AppColors.midOf(context)),
+                  ),
                 // sem menu (remarcado): mantém a altura da linha
                 _buildActionsMenu(a) ?? const SizedBox(height: 48),
               ],
@@ -1319,6 +1354,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             status: a.status,
             clientId: a.clientId,
             serviceId: a.serviceId,
+            notes: a.notes,
           );
           final changed = await context.push<booking.Appointment?>(
               '/agenda/booking',
@@ -1365,6 +1401,9 @@ class Appointment {
   final String source;
   // RF-A02: motivo do bloqueio (mesma coluna de canceled_reason)
   final String? canceledReason;
+
+  /// Observações do prestador (privadas).
+  final String? notes;
   // B3: FKs pro modo remarcar (wizard pré-preenche cliente/serviço)
   final String? clientId;
   final String? serviceId;
@@ -1381,6 +1420,7 @@ class Appointment {
     required this.status,
     this.source = 'app',
     this.canceledReason,
+    this.notes,
     this.clientId,
     this.serviceId,
   });
@@ -1395,6 +1435,7 @@ class Appointment {
         status: j['status'] ?? 'pending',
         source: j['source'] ?? 'app',
         canceledReason: j['canceled_reason'] ?? j['canceledReason'],
+        notes: j['notes'] as String?,
         clientId: j['client_id'] ?? j['clientId'],
         serviceId: j['service_id'] ?? j['serviceId'],
       );

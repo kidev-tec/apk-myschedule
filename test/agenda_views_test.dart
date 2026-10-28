@@ -580,6 +580,36 @@ void main() {
     expect(find.textContaining('DioException'), findsNothing);
   });
 
+  testWidgets('card mostra as observações do agendamento (lista e grade)',
+      (tester) async {
+    final inicio = DateTime.now().add(const Duration(hours: 1));
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [
+                {
+                  'id': 'n1',
+                  'client_name': 'Ana',
+                  'client_phone': '+5514999990001',
+                  'service_name': 'Corte',
+                  'starts_at': inicio.toIso8601String(),
+                  'ends_at':
+                      inicio.add(const Duration(minutes: 30)).toIso8601String(),
+                  'status': 'confirmed',
+                  'source': 'app',
+                  'notes': 'alergia a pomada',
+                },
+              ]
+            }),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+    await pumpPage(tester);
+    expect(find.text('alergia a pomada'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Grade'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('alergia a pomada'), findsOneWidget);
+  });
+
   testWidgets('DIA: tocar na data do rodapé abre popup com os dias do mês',
       (tester) async {
     await pumpPage(tester);

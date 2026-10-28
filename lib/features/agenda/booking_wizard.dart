@@ -36,6 +36,9 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
   List<Appointment> _existingAppointments = [];
   late DateTime _selectedDate;
 
+  /// Observações do prestador (só ele vê). Aparece após escolher o horário.
+  final _notesCtrl = TextEditingController();
+
   Client? _selectedClient;
   Service? _selectedService;
   DateTime? _selectedSlot;
@@ -115,6 +118,13 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
   }
 
   @override
+  void dispose() {
+    _notesCtrl.dispose();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
   void initState() {
     super.initState();
     // B3: modo remarcar — abre direto no passo do horário, com a data
@@ -126,6 +136,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
       final original =
           DateTime(r.startsAt.year, r.startsAt.month, r.startsAt.day);
       _selectedDate = original.isBefore(_today) ? _today : original;
+      _notesCtrl.text = r.notes ?? '';
     } else {
       _selectedDate = _today;
     }
@@ -246,6 +257,8 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
           : '/appointments',
       body: isReschedule
           ? {
+              // remarcar: envia sempre (vazio apaga)
+              'notes': _notesCtrl.text.trim(),
               'startsAt': _selectedSlot!.toUtc().toIso8601String(),
               'endsAt': _selectedSlot!
                   .add(Duration(minutes: _selectedService!.durationMin))
@@ -255,6 +268,8 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
           : {
               'clientId': _selectedClient!.id,
               'serviceId': _selectedService!.id,
+              if (_notesCtrl.text.trim().isNotEmpty)
+                'notes': _notesCtrl.text.trim(),
               'startsAt': _selectedSlot!.toUtc().toIso8601String(),
               'endsAt': _selectedSlot!
                   .add(Duration(minutes: _selectedService!.durationMin))
@@ -799,6 +814,24 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
               },
             ),
           ),
+        // Observações: só depois de escolher o horário; privadas do prestador.
+        if (_selectedSlot != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: TextField(
+              key: const Key('wizard-notes'),
+              controller: _notesCtrl,
+              minLines: 1,
+              maxLines: 3,
+              maxLength: 1000,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Detalhes / Observações',
+                helperText: 'Só você vê — o cliente não recebe.',
+                prefixIcon: Icon(Icons.sticky_note_2_outlined),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -872,13 +905,17 @@ class Appointment {
   final String? clientId;
   final String? serviceId;
 
+  /// Observações do prestador (privadas).
+  final String? notes;
+
   Appointment(
       {required this.id,
       required this.startsAt,
       required this.endsAt,
       required this.status,
       this.clientId,
-      this.serviceId});
+      this.serviceId,
+      this.notes});
 
   factory Appointment.fromJson(Map<String, dynamic> j) => Appointment(
         id: j['id'],
@@ -887,6 +924,7 @@ class Appointment {
         status: j['status'] ?? 'pending',
         clientId: j['client_id'] ?? j['clientId'],
         serviceId: j['service_id'] ?? j['serviceId'],
+        notes: j['notes'] as String?,
       );
 }
 
