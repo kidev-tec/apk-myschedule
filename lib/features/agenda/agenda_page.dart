@@ -535,7 +535,13 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
               ),
           ],
         ),
-        trailing: _buildActionsMenu(a),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!a.isBlock) _buildDetailsButton(a),
+            _buildActionsMenu(a) ?? const SizedBox(width: 48),
+          ],
+        ),
       ),
     );
   }
@@ -577,6 +583,41 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                 const PopupMenuItem(value: 'cancel', child: Text('Cancelar')),
             ],
           );
+  }
+
+  /// Abre o painel de detalhes; ícone preenchido quando há observação.
+  Widget _buildDetailsButton(Appointment a) {
+    final hasNotes = a.notes != null && a.notes!.isNotEmpty;
+    return IconButton(
+      tooltip: 'Detalhes e observações',
+      visualDensity: VisualDensity.compact,
+      color: hasNotes ? AppColors.primaryOf(context) : AppColors.midOf(context),
+      icon: Icon(hasNotes ? Icons.sticky_note_2 : Icons.sticky_note_2_outlined),
+      onPressed: () => _showDetails(a),
+    );
+  }
+
+  /// Painel com os dados do agendamento e as observações (privadas do
+  /// prestador), com edição da observação no próprio painel.
+  Future<void> _showDetails(Appointment a) async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _AppointmentDetailsSheet(
+        appointment: a,
+        statusLabel: _displayStatus(a),
+        onSave: (notes) => ref
+            .read(agendaApiProvider)
+            .dio
+            .patch('/appointments/${a.id}', data: {'notes': notes}),
+      ),
+    );
+    if (saved == true && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Observação salva')));
+      await _loadAppointments();
+    }
   }
 
   /// Botão do alternador lista/grade; destacado quando é o layout atual.
@@ -641,14 +682,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                   ),
                 ),
                 const Spacer(),
-                // observações: ícone; toque longo/hover mostra o texto
-                if (a.notes != null && a.notes!.isNotEmpty)
-                  Tooltip(
-                    message: a.notes!,
-                    triggerMode: TooltipTriggerMode.tap,
-                    child: Icon(Icons.sticky_note_2_outlined,
-                        size: 18, color: AppColors.midOf(context)),
-                  ),
+                if (!a.isBlock) _buildDetailsButton(a),
                 // sem menu (remarcado): mantém a altura da linha
                 _buildActionsMenu(a) ?? const SizedBox(height: 48),
               ],
@@ -1698,6 +1732,158 @@ class _DayOfMonthPicker extends StatelessWidget {
             );
           }),
         ],
+      ),
+    );
+  }
+}
+
+/// Painel de detalhes do agendamento: dados + observações, com edição.
+/// Widget próprio pra que o controller do texto viva enquanto o painel
+/// existir (inclusive durante a animação de fechar).
+class _AppointmentDetailsSheet extends StatefulWidget {
+  final Appointment appointment;
+  final String statusLabel;
+  final Future<void> Function(String notes) onSave;
+
+  const _AppointmentDetailsSheet({
+    required this.appointment,
+    required this.statusLabel,
+    required this.onSave,
+  });
+
+  @override
+  State<_AppointmentDetailsSheet> createState() =>
+      _AppointmentDetailsSheetState();
+}
+
+class _AppointmentDetailsSheetState extends State<_AppointmentDetailsSheet> {
+  late final _ctrl =
+      TextEditingController(text: widget.appointment.notes ?? '');
+  bool _editing = false;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await widget.onSave(_ctrl.text.trim());
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = 'Não consegui salvar: ${humanError(e)}';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final a = widget.appointment;
+    final theme = Theme.of(context);
+    final notes = a.notes ?? '';
+    Widget row(IconData icon, String text) => Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(children: [
+            Icon(icon, size: 18, color: AppColors.midOf(context)),
+            const SizedBox(width: 8),
+            Expanded(child: Text(text, style: theme.textTheme.bodyLarge)),
+          ]),
+        );
+
+    return Padding(
+      key: const Key('details-sheet'),
+      padding: EdgeInsets.fromLTRB(
+          20, 0, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(a.clientName, style: theme.textTheme.titleLarge),
+            const SizedBox(height: 12),
+            row(Icons.event, booking_logic.formatWhen(a.startsAt)),
+            row(Icons.content_cut, a.serviceName),
+            row(Icons.info_outline, widget.statusLabel),
+            if (a.clientPhone.isNotEmpty) row(Icons.phone, a.clientPhone),
+            const Divider(height: 24),
+            Row(children: [
+              Text('Detalhes / Observações', style: theme.textTheme.titleSmall),
+              const Spacer(),
+              if (!_editing)
+                TextButton.icon(
+                  key: const Key('details-edit'),
+                  onPressed: () => setState(() => _editing = true),
+                  icon: const Icon(Icons.edit, size: 18),
+                  label: const Text('Editar'),
+                ),
+            ]),
+            const SizedBox(height: 4),
+            if (!_editing)
+              Text(
+                notes.isEmpty ? 'Sem observações' : notes,
+                style: notes.isEmpty
+                    ? theme.textTheme.bodyMedium
+                        ?.copyWith(color: AppColors.neutral)
+                    : theme.textTheme.bodyLarge,
+              )
+            else ...[
+              TextField(
+                key: const Key('details-notes-field'),
+                controller: _ctrl,
+                autofocus: true,
+                minLines: 2,
+                maxLines: 5,
+                maxLength: 1000,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                    helperText: 'Só você vê — o cliente não recebe.'),
+              ),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(_error!,
+                      style: const TextStyle(color: AppColors.error)),
+                ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: _saving
+                        ? null
+                        : () => setState(() {
+                              _editing = false;
+                              _ctrl.text = notes;
+                            }),
+                    child: const Text('Cancelar'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    key: const Key('details-save'),
+                    onPressed: _saving ? null : _save,
+                    child: _saving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Text('Salvar'),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
