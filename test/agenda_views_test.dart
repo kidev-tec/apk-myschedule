@@ -216,6 +216,33 @@ void main() {
     expect(find.text('Ana'), findsOneWidget);
   });
 
+  testWidgets('SEMANA: seta no cabeçalho do dia recolhe e mostra agendamentos',
+      (tester) async {
+    await pumpPage(tester);
+    await tester.tap(find.text('Semana'));
+    await tester.pumpAndSettle();
+
+    // aberto por padrão: seta pra cima (recolher)
+    expect(find.text('Ana'), findsOneWidget);
+    expect(find.byTooltip('Recolher'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Recolher'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ana'), findsNothing);
+    expect(find.byTooltip('Mostrar'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Mostrar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ana'), findsOneWidget);
+
+    // também funciona na grade
+    await tester.tap(find.byTooltip('Grade'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Recolher'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ana'), findsNothing);
+  });
+
   testWidgets('SEMANA lista os dias do mais recente para o mais antigo',
       (tester) async {
     final now = DateTime.now();

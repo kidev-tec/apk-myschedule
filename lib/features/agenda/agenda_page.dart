@@ -35,6 +35,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   _AgendaView _view = _AgendaView.dia;
   // Exibição dos agendamentos: lista (padrão) ou grade de 2 colunas.
   _AgendaLayout _layout = _AgendaLayout.lista;
+  // Visão semana: dias recolhidos pelo usuário (aberto por padrão).
+  final Set<DateTime> _collapsedDays = {};
 
   final ValueNotifier<bool> _updateBanner = ValueNotifier(false);
   bool _downloading = false;
@@ -691,27 +693,53 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         final day = days[i];
         final items = byDay[day]!
           ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+        final collapsed = _collapsedDays.contains(day);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 8, bottom: 4),
-              child: Text(
-                dayFmt.format(day).capitalize(),
-                style: Theme.of(context)
-                    .textTheme
-                    .titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w700),
+            // Cabeçalho do dia: toque (ou seta) recolhe/mostra os agendamentos.
+            InkWell(
+              onTap: () => _toggleDay(day),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 4),
+                child: Row(
+                  children: [
+                    Text(
+                      dayFmt.format(day).capitalize(),
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    IconButton(
+                      onPressed: () => _toggleDay(day),
+                      tooltip: collapsed ? 'Mostrar' : 'Recolher',
+                      visualDensity: VisualDensity.compact,
+                      color: AppColors.primaryOf(context),
+                      icon: Icon(
+                          collapsed ? Icons.expand_more : Icons.expand_less),
+                    ),
+                  ],
+                ),
               ),
             ),
-            if (_layout == _AgendaLayout.grade)
+            if (!collapsed && _layout == _AgendaLayout.grade)
               _buildGrid(items, timeFmt, embedded: true)
-            else
+            else if (!collapsed)
               ...items.map((a) => _buildAppointmentCard(a, timeFmt)),
           ],
         );
       },
     );
+  }
+
+  void _toggleDay(DateTime day) {
+    setState(() {
+      if (!_collapsedDays.remove(day)) {
+        _collapsedDays.add(day);
+      }
+    });
   }
 
   String _statusLabel(String status) {
