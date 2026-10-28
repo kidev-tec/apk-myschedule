@@ -226,6 +226,15 @@ void main() {
     // 409 é erro de negócio: mostra a mensagem humana da API na hora
     // (fase 2 do offline: só falha de CONEXÃO é que enfileira).
     expect(find.textContaining('slot já reservado'), findsOneWidget);
+
+    // Após o erro o wizard continua no passo do horário (não volta pro
+    // passo 1 com o título/estado do passo 3) e o voltar funciona.
+    expect(find.text('Escolhe o horário'), findsOneWidget);
+    expect(find.text('Confirmar agendamento'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+    expect(find.text('Escolhe o serviço'), findsOneWidget);
+    expect(find.text('Corte'), findsOneWidget);
   });
 
   testWidgets('busca filtra clientes por nome', (tester) async {
