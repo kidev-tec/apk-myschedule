@@ -442,6 +442,38 @@ void main() {
     expect(tester.widget<Icon>(check).color, const Color(0xFF1E96E8));
   });
 
+  testWidgets('Marcar horário: ao voltar recarrega a lista', (tester) async {
+    await tester.pumpWidget(_wrap(api)); // stub do wizard volta sem resultado
+    await tester.pumpAndSettle();
+    final antes = capturedQueries.length;
+
+    await tester.tap(find.text('Marcar horário'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SALVAR REMARCAÇÃO'));
+    await tester.pumpAndSettle();
+
+    expect(capturedQueries.length, greaterThan(antes));
+  });
+
+  testWidgets('Marcar horário: vai para o dia do agendamento criado',
+      (tester) async {
+    final novo = booking.Appointment(
+        id: 'criado',
+        startsAt: DateTime(2031, 1, 5, 14, 30),
+        endsAt: DateTime(2031, 1, 5, 15, 30),
+        status: 'confirmed');
+    await tester.pumpWidget(_wrap(api, rescheduleResult: novo));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Marcar horário'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SALVAR REMARCAÇÃO'));
+    await tester.pumpAndSettle();
+
+    final q = capturedQueries.last!;
+    expect(DateTime.parse(q['from'] as String), DateTime(2031, 1, 5));
+  });
+
   testWidgets('DIA: tocar na data do rodapé abre popup com os dias do mês',
       (tester) async {
     await pumpPage(tester);

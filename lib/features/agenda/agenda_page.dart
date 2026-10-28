@@ -376,8 +376,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                               child: Row(
                                 children: [
                                   FilledButton.icon(
-                                    onPressed: () =>
-                                        context.push('/agenda/booking'),
+                                    onPressed: _openBooking,
                                     icon: const Icon(Icons.add),
                                     label: const Text('Marcar horário'),
                                     style: FilledButton.styleFrom(
@@ -694,6 +693,17 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         ),
       ),
     );
+  }
+
+  /// Abre o wizard de agendamento e, ao voltar, recarrega a lista. Se o
+  /// wizard devolver o agendamento criado, foca no dia dele pra que apareça.
+  Future<void> _openBooking() async {
+    final created = await context.push<booking.Appointment?>('/agenda/booking');
+    if (!mounted) return;
+    if (created != null) {
+      setState(() => _focusedDay = created.startsAt);
+    }
+    _loadAppointments();
   }
 
   /// Visão dia: popup acima do rodapé com os dias do mês em foco.

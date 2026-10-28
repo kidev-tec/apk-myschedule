@@ -254,31 +254,24 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
           // B-remarque: API devolve a NOVA linha (cancela a antiga e cria
           // outra com id novo) — devolve pro chamador montar a mensagem
           // do WhatsApp com o horário real (sem GET fantasma /:id).
-          Appointment? novo;
-          final j = res.data is Map<String, dynamic>
-              ? (res.data as Map<String, dynamic>)['appointment']
-              : null;
-          if (j is Map<String, dynamic>) {
-            try {
-              novo = Appointment.fromJson(j);
-            } catch (_) {
-              novo = null; // Resposta inválida: a agenda recarrega a lista.
-            }
-          }
+          final novo = _appointmentFrom(res.data);
           context.pop(novo);
           return novo;
         }
       } else {
-        await api.dio.post('/appointments', data: op.body);
-      }
-      if (mounted) {
-        if (!isReschedule) {
-          context.go('/agenda');
+        final res = await api.dio.post('/appointments', data: op.body);
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
                 content: Text('Horário marcado!'),
                 backgroundColor: Colors.green),
           );
+          // Devolve o criado pra agenda recarregar e focar no dia dele.
+          if (context.canPop()) {
+            context.pop(_appointmentFrom(res.data));
+          } else {
+            context.go('/agenda');
+          }
         }
       }
     } on DioException catch (e) {
@@ -319,6 +312,18 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     }
     if (mounted) setState(() => _loading = false);
     return null; // falha/offline: sem appointment novo
+  }
+
+  /// Lê `{appointment: {...}}` da resposta da API; null se vier inválida
+  /// (a agenda recarrega a lista de qualquer forma).
+  Appointment? _appointmentFrom(dynamic data) {
+    final j = data is Map<String, dynamic> ? data['appointment'] : null;
+    if (j is! Map<String, dynamic>) return null;
+    try {
+      return Appointment.fromJson(j);
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
