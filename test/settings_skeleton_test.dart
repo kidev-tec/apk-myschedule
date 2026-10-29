@@ -141,6 +141,10 @@ void main() {
 
   testWidgets('B2: /me falha → mensagem + Tentar de novo; retry recupera',
       (tester) async {
+    // Configurações é uma lista longa: tela alta pra todos os cards montarem
+    tester.view.physicalSize = const Size(1080, 6000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
     // Script: 1ª chamada 500, 2ª (retry) 200 com /me válido.
     final scripted = ApiClient(
       // ignore: unused_local_variable — script define respostas em fila
