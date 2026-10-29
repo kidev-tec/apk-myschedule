@@ -424,7 +424,7 @@ void main() {
     expect(contagem('remarcado'), '2');
     expect(contagem('concluido'), '1');
 
-    // ordem: verde, vermelho, amarelo
+    // ordem: verde, vermelho, roxo
     final xC =
         tester.getCenter(find.byKey(const Key('semaforo-confirmado'))).dx;
     final xX = tester.getCenter(find.byKey(const Key('semaforo-cancelado'))).dx;
@@ -434,8 +434,8 @@ void main() {
     final xD = tester.getCenter(find.byKey(const Key('semaforo-concluido'))).dx;
     expect(xD, lessThan(xC));
 
-    // remarcado aparece como "Remarcado" (não "Cancelado")
-    expect(find.text('Corte • Remarcado'), findsNWidgets(2));
+    // remarcado aparece como "Cancelado/Remarcado"
+    expect(find.text('Corte • Cancelado/Remarcado'), findsNWidgets(2));
 
     Color fundoHorario(String id) =>
         ((tester.widget<Container>(find.byKey(Key('hora-$id'))).decoration
@@ -446,7 +446,7 @@ void main() {
     expect(fundoHorario('x1').withValues(alpha: 1),
         const Color(0xFFC62828)); // vermelho
     expect(fundoHorario('r1').withValues(alpha: 1),
-        const Color(0xFFF9A825)); // amarelo
+        const Color(0xFF7B1FA2)); // roxo
     expect(fundoHorario('d1').withValues(alpha: 1),
         const Color(0xFF1E96E8)); // azul
 
@@ -537,6 +537,98 @@ void main() {
 
     final q = capturedQueries.last!;
     expect(DateTime.parse(q['from'] as String).toLocal(), DateTime(2031, 1, 5));
+  });
+
+  testWidgets(
+      'menu ⋮: Remarcar/Cancelar em todos; Concluir só até hoje e se não concluído',
+      (tester) async {
+    final now = DateTime.now();
+    final hoje = DateTime(now.year, now.month, now.day);
+    Map<String, dynamic> appt(String nome, DateTime inicio, String status) => {
+          'id': nome,
+          'client_name': nome,
+          'client_phone': '+5514999990001',
+          'service_name': 'Corte',
+          'starts_at': inicio.toIso8601String(),
+          'ends_at': inicio.add(const Duration(minutes: 30)).toIso8601String(),
+          'status': status,
+          'source': 'app',
+        };
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [
+                appt('Ontem', hoje.subtract(const Duration(hours: 10)),
+                    'confirmed'),
+                appt('Amanha', hoje.add(const Duration(days: 1, hours: 10)),
+                    'confirmed'),
+                appt('Feito', hoje.subtract(const Duration(hours: 9)), 'done'),
+                appt('Cancel', hoje.subtract(const Duration(hours: 8)),
+                    'canceled'),
+                {
+                  ...appt('Remarc', hoje.subtract(const Duration(hours: 7)),
+                      'canceled'),
+                  'canceled_reason': 'remarcado',
+                },
+              ]
+            }),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+    await pumpPage(tester);
+
+    Future<List<String>> opcoes(String nome) async {
+      final card =
+          find.ancestor(of: find.text(nome), matching: find.byType(Card));
+      await tester.tap(find.descendant(
+          of: card, matching: find.byType(PopupMenuButton<String>)));
+      await tester.pumpAndSettle();
+      final itens = tester
+          .widgetList<PopupMenuItem<String>>(find.byType(PopupMenuItem<String>))
+          .map((i) => (i.child as Text).data!)
+          .toList();
+      await tester.tapAt(const Offset(5, 5)); // fecha o menu
+      await tester.pumpAndSettle();
+      return itens;
+    }
+
+    // passado: tudo disponível
+    expect(await opcoes('Ontem'), ['Remarcar', 'Concluir', 'Cancelar']);
+    // dia futuro: sem Concluir
+    expect(await opcoes('Amanha'), ['Remarcar', 'Cancelar']);
+    // já concluído: sem Concluir de novo
+    expect(await opcoes('Feito'), ['Remarcar', 'Cancelar']);
+    // já cancelado: sem Cancelar nem Concluir
+    expect(await opcoes('Cancel'), ['Remarcar']);
+
+    // já remarcado: vira histórico, sem menu (o novo agendamento já existe)
+    expect(
+        find.descendant(
+            of: find.ancestor(
+                of: find.text('Remarc'), matching: find.byType(Card)),
+            matching: find.byType(PopupMenuButton<String>)),
+        findsNothing);
+  });
+
+  testWidgets('erro da API ao cancelar mostra a mensagem humana, não a exceção',
+      (tester) async {
+    adapter.onPatch(
+        RegExp(r'/appointments/.*'),
+        (s) => s.reply(400, {
+              'error':
+                  'Este horário já passou — não é possível alterar o agendamento'
+            }),
+        data: Matchers.any);
+    await pumpPage(tester);
+
+    await tester.tap(find.byType(PopupMenuButton<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+
+    expect(
+        find.text('Não consegui cancelar: Este horário já passou — '
+            'não é possível alterar o agendamento'),
+        findsOneWidget);
+    expect(find.textContaining('DioException'), findsNothing);
   });
 
   testWidgets('DIA: tocar na data do rodapé abre popup com os dias do mês',

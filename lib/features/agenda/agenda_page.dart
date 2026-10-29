@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
+import '../../core/api/api_error.dart';
 import '../../core/storage/local_cache.dart';
 import '../../core/storage/connectivity_provider.dart';
 import '../../core/storage/sync_queue.dart';
@@ -12,7 +13,8 @@ import '../../core/api/paywall_flag.dart';
 import '../../core/update/update_service.dart';
 import '../../theme/app_theme.dart';
 import 'booking_wizard.dart' as booking show Appointment;
-import 'booking_logic.dart' as booking_logic show buildRescheduleMessage;
+import 'booking_logic.dart' as booking_logic
+    show buildRescheduleMessage, formatWhen;
 
 /// B6/DI: provider do ApiClient pra agenda — testes sobrescrevem com mock.
 final agendaApiProvider = Provider<ApiClient>((ref) => ApiClient());
@@ -522,7 +524,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   }
 
   /// Menu "⋮" de ações do agendamento (compartilhado entre lista e grade).
-  Widget _buildActionsMenu(Appointment a) {
+  /// Remarcado não tem menu: é histórico — o agendamento novo já existe e
+  /// remarcar de novo criaria um duplicado.
+  Widget? _buildActionsMenu(Appointment a) {
+    if (_statusKind(a) == _StatusKind.remarcado) return null;
     return a.isBlock
         ? PopupMenuButton<String>(
             onSelected: (v) => _handleAppointmentAction(v, a),
@@ -536,19 +541,23 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         : PopupMenuButton<String>(
             onSelected: (v) => _handleAppointmentAction(v, a),
             itemBuilder: (_) => [
-              if (a.status == 'pending')
+              // Confirmar só faz sentido antes do horário (API recusa depois).
+              if (a.status == 'pending' && !_isPast(a)) ...[
                 const PopupMenuItem(value: 'confirm', child: Text('Confirmar')),
-              if (a.status == 'pending' && !_isPast(a))
                 const PopupMenuItem(
                     value: 'askConfirm',
                     child: Text('Pedir confirmação no WhatsApp')),
-              const PopupMenuItem(value: 'edit', child: Text('Remarcar')),
-              // Passou do horário: sem concluir/cancelar (decisão de
-              // produto — ações de agendamento só com antecedência).
-              if (!_isPast(a)) ...[
-                const PopupMenuItem(value: 'done', child: Text('Concluir')),
-                const PopupMenuItem(value: 'cancel', child: Text('Cancelar')),
               ],
+              // Remarcar e Cancelar valem para qualquer agendamento (passado
+              // remarcado vira cancelado "remarcado" + novo confirmado).
+              const PopupMenuItem(value: 'edit', child: Text('Remarcar')),
+              // Concluir: só até hoje (dia futuro não aconteceu ainda).
+              if (_isOnOrBeforeToday(a) &&
+                  a.status != 'done' &&
+                  a.status != 'canceled')
+                const PopupMenuItem(value: 'done', child: Text('Concluir')),
+              if (a.status != 'canceled')
+                const PopupMenuItem(value: 'cancel', child: Text('Cancelar')),
             ],
           );
   }
@@ -616,7 +625,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                   ),
                 ),
                 const Spacer(),
-                _buildActionsMenu(a),
+                // sem menu (remarcado): mantém a altura da linha
+                _buildActionsMenu(a) ?? const SizedBox(height: 48),
               ],
             ),
             const Spacer(),
@@ -906,7 +916,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         _StatusKind.concluido => AppColors.agenvaBlue,
         _StatusKind.confirmado => AppColors.success,
         _StatusKind.cancelado => AppColors.error,
-        _StatusKind.remarcado => AppColors.warning,
+        _StatusKind.remarcado => AppColors.rescheduled,
         _StatusKind.outro => null,
       };
 
@@ -915,11 +925,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       _statusColor(_statusKind(a))?.withValues(alpha: 0.18) ??
       AppColors.softOf(context);
 
-  Color _timeForeground(Appointment a) => switch (_statusKind(a)) {
-        // amarelo puro some no fundo claro: texto em âmbar escuro
-        _StatusKind.remarcado => const Color(0xFF8A5A00),
-        final k => _statusColor(k) ?? AppColors.primaryOf(context),
-      };
+  Color _timeForeground(Appointment a) =>
+      _statusColor(_statusKind(a)) ?? AppColors.primaryOf(context);
 
   /// "Serviço • Status"; concluído leva um check azul antes do status.
   InlineSpan _statusSubtitle(Appointment a) => TextSpan(
@@ -942,10 +949,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
 
   String _displayStatus(Appointment a) =>
       _statusKind(a) == _StatusKind.remarcado
-          ? 'Remarcado'
+          ? 'Cancelado/Remarcado'
           : _statusLabel(a.status);
 
-  /// Semáforo do dia: bolinhas azul/verde/vermelha/amarela com a quantidade
+  /// Semáforo do dia: bolinhas azul/verde/vermelha/roxa com a quantidade
   /// de concluídos, confirmados, cancelados e remarcados (só as que têm 1+).
   Widget _buildStatusSemaphore(List<Appointment> items) {
     final counts = <_StatusKind, int>{};
@@ -982,12 +989,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                 ),
                 child: Text(
                   '${counts[k]}',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: k == _StatusKind.remarcado
-                        ? AppColors.neutral
-                        : Colors.white,
+                    color: Colors.white,
                   ),
                 ),
               ),
@@ -1015,12 +1020,29 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
 
   /// Agendamento cujo horário já passou: sem cancelar/concluir/pedir
   /// confirmação (decisão de produto 21/09 — ação só com antecedência).
+  /// Verbo em PT-BR da ação do menu (os valores internos são em inglês).
+  static String _actionLabel(String action) => switch (action) {
+        'cancel' => 'cancelar',
+        'done' => 'concluir',
+        'confirm' => 'confirmar',
+        'edit' => 'remarcar',
+        _ => 'fazer isso',
+      };
+
   bool _isPast(Appointment a) => a.startsAt.isBefore(DateTime.now());
+
+  /// Agendamento de hoje ou de um dia anterior (fuso do aparelho).
+  bool _isOnOrBeforeToday(Appointment a) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(a.startsAt.year, a.startsAt.month, a.startsAt.day);
+    return !day.isAfter(today);
+  }
 
   /// Ao cancelar, abre o WhatsApp do cliente com mensagem pronta.
   /// O cliente não tem app — WhatsApp é o canal onde ele já está.
   Future<void> _notifyCancelOnWhatsapp(Appointment a) async {
-    final when = DateFormat('dd/MM "às" HH:mm', 'pt_BR').format(a.startsAt);
+    final when = booking_logic.formatWhen(a.startsAt);
     final msg = Uri.encodeComponent(
         'Oi ${a.clientName}! Tive que remanejar teu horário de $when. '
         'Me chama pra combinarmos outro horário! 🙂');
@@ -1050,7 +1072,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   /// RF-B01: pede confirmação do cliente — abre o WhatsApp com mensagem pronta
   /// contendo data/hora + link pessoal de confirmação (token HMAC do agendamento).
   Future<void> _askConfirmationOnWhatsapp(Appointment a) async {
-    final when = DateFormat('dd/MM "às" HH:mm', 'pt_BR').format(a.startsAt);
+    final when = booking_logic.formatWhen(a.startsAt);
     final link = await _confirmationLink(a);
     final msg = Uri.encodeComponent(
         'Oi ${a.clientName}! Confirmando teu horário de $when. '
@@ -1237,7 +1259,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       debugPrint('[agenda] falha ao bloquear: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Não consegui bloquear: $e'),
+            content: Text('Não consegui bloquear: ${humanError(e)}'),
             backgroundColor: AppColors.error));
       }
     }
@@ -1339,7 +1361,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       debugPrint('[agenda] falha em $action: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Não consegui $action: $e'),
+            content:
+                Text('Não consegui ${_actionLabel(action)}: ${humanError(e)}'),
             backgroundColor: AppColors.error));
       }
     }

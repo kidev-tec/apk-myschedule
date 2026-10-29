@@ -83,6 +83,10 @@ void main() {
   });
 
   group('CA2/CA3 wizard reschedule (integração)', () {
+    // Relógio fixo: 28/10/2026 08:00 — os horários de 10:00 em diante do
+    // dia ainda não passaram, qualquer que seja a hora real do teste.
+    DateTime relogio() => DateTime(2026, 10, 28, 8);
+
     Widget wrapWithApi(ApiClient api, Appointment target,
         {void Function(Appointment?)? onResult}) {
       final router = GoRouter(initialLocation: '/', routes: [
@@ -103,6 +107,7 @@ void main() {
             builder: (ctx, state) => BookingWizardPage(
                   reschedule: (state.extra
                       as Map<String, dynamic>?)?['reschedule'] as Appointment?,
+                  clock: relogio,
                 )),
       ]);
       return ProviderScope(
@@ -213,6 +218,33 @@ void main() {
       expect(find.text('Escolhe o cliente'), findsNothing);
       // grade de slots visível com o horário atual pré-selecionável
       expect(find.text('10:00'), findsWidgets);
+    });
+
+    testWidgets(
+        'remarcar agendamento atrasado abre em HOJE, sem horários passados',
+        (tester) async {
+      FlutterSecureStorage.setMockInitialValues({});
+      final (api, _) = fakeApi();
+      final atrasado = Appointment(
+          id: 'appt-old',
+          startsAt: DateTime(2026, 10, 27, 10),
+          endsAt: DateTime(2026, 10, 27, 11),
+          status: 'confirmed',
+          clientId: 'c1',
+          serviceId: 's1');
+      await tester.pumpWidget(wrapWithApi(api, atrasado));
+      await tester.tap(find.byKey(const Key('open-wizard')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pumpAndSettle();
+
+      // abre no dia de hoje (28/10), não no dia do agendamento (27/10)
+      expect(find.textContaining('28 de outubro'), findsOneWidget);
+      expect(find.textContaining('27 de outubro'), findsNothing);
+      // não volta pra dias passados
+      final voltar = tester.widget<IconButton>(
+          find.widgetWithIcon(IconButton, Icons.chevron_left));
+      expect(voltar.onPressed, isNull);
     });
 
     testWidgets('CA3 salvar faz PATCH (nunca POST) e volta pra tela anterior',
