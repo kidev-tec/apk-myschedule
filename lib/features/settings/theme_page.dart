@@ -24,13 +24,14 @@ class _ThemePageState extends ConsumerState<ThemePage> {
   bool _saving = false;
 
   Future<void> _save() async {
+    final submitted = _selected;
     setState(() => _saving = true);
     try {
       await (widget.api ?? ApiClient()).dio.patch('/me', data: {
-        'theme_color': _selected == null ? null : colorToHex(_selected!),
+        'theme_color': submitted == null ? null : colorToHex(submitted),
       });
-      ref.read(themeColorProvider.notifier).state = _selected;
       if (!mounted) return;
+      ref.read(themeColorProvider.notifier).state = submitted;
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Tema atualizado')));
       if (context.canPop()) context.pop();
