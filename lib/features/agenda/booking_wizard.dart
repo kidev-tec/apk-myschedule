@@ -7,6 +7,7 @@ import '../../core/api/api_client.dart';
 import '../../core/storage/sync_queue.dart';
 import '../../core/utils/phone_br.dart';
 import '../../theme/app_theme.dart';
+import '../clients/client_profile_fields.dart';
 import 'booking_logic.dart' as logic;
 
 /// Provider do ApiClient — DI pra testes de integração sobrescreverem
@@ -16,7 +17,11 @@ final wizardApiProvider = Provider<ApiClient>((ref) => ApiClient());
 class BookingWizardPage extends ConsumerStatefulWidget {
   /// B3: agendamento a remarcar. Nulo = fluxo normal (POST).
   final Appointment? reschedule;
-  const BookingWizardPage({super.key, this.reschedule});
+
+  /// Relógio (injetável em teste). Padrão: [DateTime.now].
+  final DateTime Function() clock;
+  const BookingWizardPage(
+      {super.key, this.reschedule, this.clock = DateTime.now});
 
   @override
   ConsumerState<BookingWizardPage> createState() => _BookingWizardPageState();
@@ -30,7 +35,10 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
   List<Service> _services = [];
   List<WorkingHour> _workingHours = [];
   List<Appointment> _existingAppointments = [];
-  DateTime _selectedDate = DateTime.now();
+  late DateTime _selectedDate;
+
+  /// Observações do prestador (só ele vê). Aparece após escolher o horário.
+  final _notesCtrl = TextEditingController();
 
   Client? _selectedClient;
   Service? _selectedService;
@@ -111,6 +119,13 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
   }
 
   @override
+  void dispose() {
+    _notesCtrl.dispose();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
   void initState() {
     super.initState();
     // B3: modo remarcar — abre direto no passo do horário, com a data
@@ -118,8 +133,13 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     final r = widget.reschedule;
     if (r != null) {
       _step = 2;
-      _selectedDate =
+      // Atrasado (dia anterior a hoje) abre em hoje: não se remarca pro passado.
+      final original =
           DateTime(r.startsAt.year, r.startsAt.month, r.startsAt.day);
+      _selectedDate = original.isBefore(_today) ? _today : original;
+      _notesCtrl.text = r.notes ?? '';
+    } else {
+      _selectedDate = _today;
     }
     _pageController = PageController(initialPage: _step);
     _loadAllData();
@@ -180,6 +200,11 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     if (mounted) setState(() => _loading = false);
   }
 
+  DateTime get _today {
+    final n = widget.clock();
+    return DateTime(n.year, n.month, n.day);
+  }
+
   static bool _sameHM(DateTime a, DateTime b) =>
       a.year == b.year &&
       a.month == b.month &&
@@ -194,6 +219,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
       appointments: _existingAppointments,
       durationMin: _selectedService?.durationMin ?? 60,
       excludeId: widget.reschedule?.id, // B3: não colidir consigo mesmo
+      notBefore: widget.clock(), // horário que já passou não é oferecido
     );
   }
 
@@ -232,6 +258,8 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
           : '/appointments',
       body: isReschedule
           ? {
+              // remarcar: envia sempre (vazio apaga)
+              'notes': _notesCtrl.text.trim(),
               'startsAt': _selectedSlot!.toUtc().toIso8601String(),
               'endsAt': _selectedSlot!
                   .add(Duration(minutes: _selectedService!.durationMin))
@@ -241,6 +269,8 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
           : {
               'clientId': _selectedClient!.id,
               'serviceId': _selectedService!.id,
+              if (_notesCtrl.text.trim().isNotEmpty)
+                'notes': _notesCtrl.text.trim(),
               'startsAt': _selectedSlot!.toUtc().toIso8601String(),
               'endsAt': _selectedSlot!
                   .add(Duration(minutes: _selectedService!.durationMin))
@@ -401,6 +431,10 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController(text: _query.trim());
     final emailCtrl = TextEditingController();
+    final notesCtrl = TextEditingController();
+    // "Mais dados": e-mail, apelido, aniversário, CPF, origem, LGPD, endereço
+    final profile = ClientProfileData();
+    var moreOpened = false;
     final formKey = GlobalKey<FormState>();
     bool saving = false;
     String? duplicateError;
@@ -425,6 +459,10 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                   'phone_e164': normalizePhoneBr(phoneCtrl.text),
                   if (emailCtrl.text.trim().isNotEmpty)
                     'email': emailCtrl.text.trim(),
+                  if (notesCtrl.text.trim().isNotEmpty)
+                    'notes': notesCtrl.text.trim(),
+                  // só manda o cadastro complementar se foi aberto
+                  if (moreOpened) ...profile.toJson(),
                 });
                 if (sheetContext.mounted) {
                   Navigator.pop(sheetContext, Client.fromJson(resp.data));
@@ -475,75 +513,107 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                   MediaQuery.of(sheetContext).viewInsets.bottom +
                       MediaQuery.of(sheetContext).padding.bottom +
                       24),
-              child: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('Adicionar cliente',
-                        style: Theme.of(sheetContext).textTheme.titleMedium),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: nameCtrl,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(
-                        labelText: 'Nome *',
-                        prefixIcon: Icon(Icons.person_outline),
-                      ),
-                      validator: (v) => v == null || v.trim().isEmpty
-                          ? 'Nome é obrigatório'
-                          : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: phoneCtrl,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        labelText: 'WhatsApp *',
-                        hintText: '(14) 99999-9999',
-                        helperText: 'Com DDD — o 55 do Brasil entra sozinho',
-                        prefixIcon: Icon(Icons.phone_outlined),
-                      ),
-                      validator: (v) => normalizePhoneBr(v ?? '').isEmpty
-                          ? 'Telefone inválido (informe DDD)'
-                          : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: emailCtrl,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'E-mail (opcional)',
-                        prefixIcon: Icon(Icons.email_outlined),
-                      ),
-                    ),
-                    if (duplicateError != null) ...[
-                      const SizedBox(height: 12),
-                      Text(duplicateError!,
-                          style: const TextStyle(color: AppColors.error)),
-                      if (duplicate != null)
-                        TextButton.icon(
-                          icon: const Icon(Icons.person_search),
-                          label: Text('Usar ${duplicate!.name}'),
-                          onPressed: () =>
-                              Navigator.pop(sheetContext, duplicate),
+              child: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Adicionar cliente',
+                          style: Theme.of(sheetContext).textTheme.titleMedium),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: nameCtrl,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(
+                          labelText: 'Nome *',
+                          prefixIcon: Icon(Icons.person_outline),
                         ),
-                    ],
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: saving ? null : save,
-                        child: saving
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2))
-                            : const Text('Criar e usar'),
+                        validator: (v) => v == null || v.trim().isEmpty
+                            ? 'Nome é obrigatório'
+                            : null,
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: phoneCtrl,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                          labelText: 'WhatsApp *',
+                          hintText: '(14) 99999-9999',
+                          helperText: 'Com DDD — o 55 do Brasil entra sozinho',
+                          prefixIcon: Icon(Icons.phone_outlined),
+                        ),
+                        validator: (v) => normalizePhoneBr(v ?? '').isEmpty
+                            ? 'Telefone inválido (informe DDD)'
+                            : null,
+                      ),
+                      const SizedBox(height: 12),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        key: const Key('add-client-notes'),
+                        controller: notesCtrl,
+                        minLines: 1,
+                        maxLines: 3,
+                        maxLength: 1000,
+                        textCapitalization: TextCapitalization.sentences,
+                        decoration: const InputDecoration(
+                          labelText: 'Informações / Observações (opcional)',
+                          helperText: 'Sobre o cliente. Só você vê.',
+                          prefixIcon: Icon(Icons.person_search_outlined),
+                        ),
+                      ),
+                      ExpansionTile(
+                        key: const Key('add-client-more'),
+                        maintainState: true,
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding: const EdgeInsets.only(bottom: 8),
+                        title: const Text('Mais dados'),
+                        subtitle:
+                            const Text('E-mail, aniversário, CPF, endereço…'),
+                        onExpansionChanged: (open) {
+                          if (open) moreOpened = true;
+                        },
+                        children: [
+                          TextFormField(
+                            controller: emailCtrl,
+                            keyboardType: TextInputType.emailAddress,
+                            decoration: const InputDecoration(
+                              labelText: 'E-mail (opcional)',
+                              prefixIcon: Icon(Icons.email_outlined),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          ClientProfileFields(data: profile),
+                        ],
+                      ),
+                      if (duplicateError != null) ...[
+                        const SizedBox(height: 12),
+                        Text(duplicateError!,
+                            style: const TextStyle(color: AppColors.error)),
+                        if (duplicate != null)
+                          TextButton.icon(
+                            icon: const Icon(Icons.person_search),
+                            label: Text('Usar ${duplicate!.name}'),
+                            onPressed: () =>
+                                Navigator.pop(sheetContext, duplicate),
+                          ),
+                      ],
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: saving ? null : save,
+                          child: saving
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2))
+                              : const Text('Criar e usar'),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -706,8 +776,11 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
             children: [
               IconButton(
                   icon: const Icon(Icons.chevron_left),
-                  onPressed: () => setState(() => _selectedDate =
-                      _selectedDate.subtract(const Duration(days: 1)))),
+                  // não navega pra dias passados
+                  onPressed: _selectedDate.isAfter(_today)
+                      ? () => setState(() => _selectedDate =
+                          _selectedDate.subtract(const Duration(days: 1)))
+                      : null),
               Text(dateFmt.format(_selectedDate).capitalize(),
                   style: Theme.of(context).textTheme.titleMedium),
               IconButton(
@@ -780,6 +853,24 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                   ),
                 );
               },
+            ),
+          ),
+        // Observações: só depois de escolher o horário; privadas do prestador.
+        if (_selectedSlot != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: TextField(
+              key: const Key('wizard-notes'),
+              controller: _notesCtrl,
+              minLines: 1,
+              maxLines: 3,
+              maxLength: 1000,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Detalhes / Observações',
+                helperText: 'Só você vê — o cliente não recebe.',
+                prefixIcon: Icon(Icons.sticky_note_2_outlined),
+              ),
             ),
           ),
       ],
@@ -855,13 +946,17 @@ class Appointment {
   final String? clientId;
   final String? serviceId;
 
+  /// Observações do prestador (privadas).
+  final String? notes;
+
   Appointment(
       {required this.id,
       required this.startsAt,
       required this.endsAt,
       required this.status,
       this.clientId,
-      this.serviceId});
+      this.serviceId,
+      this.notes});
 
   factory Appointment.fromJson(Map<String, dynamic> j) => Appointment(
         id: j['id'],
@@ -870,6 +965,7 @@ class Appointment {
         status: j['status'] ?? 'pending',
         clientId: j['client_id'] ?? j['clientId'],
         serviceId: j['service_id'] ?? j['serviceId'],
+        notes: j['notes'] as String?,
       );
 }
 

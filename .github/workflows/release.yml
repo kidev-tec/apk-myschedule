@@ -69,8 +69,16 @@ jobs:
         run: flutter pub get
       - name: Generate Code
         run: dart run build_runner build --delete-conflicting-outputs
+      # APP_VERSION é a versão que o updater compara com /v1/version.
+      # Sem ele o app se acha 1.0.0 e mostra o banner de atualização para sempre.
       - name: Build APK (release)
-        run: flutter build apk --release --dart-define=API_BASE_URL=${{ vars.API_BASE_URL_PROD }}
+        run: |
+          APP_VERSION=$(sed -n -E 's/^version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' pubspec.yaml)
+          test -n "$APP_VERSION" || { echo "::error::version do pubspec.yaml não encontrada"; exit 1; }
+          echo "APP_VERSION=$APP_VERSION"
+          flutter build apk --release \
+            --dart-define=API_BASE_URL=${{ vars.API_BASE_URL_PROD }} \
+            --dart-define=APP_VERSION=$APP_VERSION
 
       - name: Verify APK
         run: test -f build/app/outputs/flutter-apk/app-release.apk
@@ -102,11 +110,41 @@ jobs:
             || { echo "::error::Certificado do APK difere do keystore de release"; exit 1; }
           echo "Certificado do APK corresponde ao keystore fixo"
 
+      # Assets que o api/scripts/fetch-apk.sh consome na VPS:
+      #   agenva-<versão>.apk, agenva-<versão>.version.json (manifesto do
+      #   updater) e agenva-<versão>.sha256 (checksum dos dois).
+      # Changelog = corpo da release, se ela já existir com notas; senão, padrão.
+      - name: Name APK, write manifest and check tag
+        id: apk
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(sed -n -E 's/^version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' pubspec.yaml)
+          test -n "$VERSION" || { echo "::error::version do pubspec.yaml não encontrada"; exit 1; }
+          [ "$GITHUB_REF_NAME" = "v$VERSION" ] \
+            || { echo "::error::Tag $GITHUB_REF_NAME não bate com o pubspec (v$VERSION)"; exit 1; }
+          NAME="agenva-$VERSION.apk"
+          MANIFEST="agenva-$VERSION.version.json"
+          SUMS="agenva-$VERSION.sha256"
+          cp build/app/outputs/flutter-apk/app-release.apk "$RUNNER_TEMP/$NAME"
+          BODY=$(gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --json body -q .body 2>/dev/null || true)
+          [ -n "$BODY" ] || BODY="Nova versão $VERSION do Agenva."
+          jq -nc --arg v "$VERSION" --arg u "/apks/$NAME" --arg c "$BODY" \
+            '{version: $v, apk_url: $u, changelog: $c}' > "$RUNNER_TEMP/$MANIFEST"
+          cat "$RUNNER_TEMP/$MANIFEST"
+          (cd "$RUNNER_TEMP" && sha256sum "$NAME" "$MANIFEST" > "$SUMS")
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "manifest=$MANIFEST" >> "$GITHUB_OUTPUT"
+          echo "sums=$SUMS" >> "$GITHUB_OUTPUT"
+
       - name: Upload APK to release
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: |
+            ${{ runner.temp }}/${{ steps.apk.outputs.name }}
+            ${{ runner.temp }}/${{ steps.apk.outputs.manifest }}
+            ${{ runner.temp }}/${{ steps.apk.outputs.sums }}
 
   release-ios:
     name: Release iOS (TestFlight)

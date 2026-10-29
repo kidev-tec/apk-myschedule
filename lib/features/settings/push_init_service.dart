@@ -18,8 +18,11 @@ class PushInitService {
     debugPrint('[push:bg] ${message.notification?.title ?? '(sem título)'}');
   }
 
+  /// [onForegroundMessage]: push com o app aberto (título, texto, dados).
+  /// [onData]: dados de qualquer push recebido/aberto (agenda recarrega).
   Future<void> init({
     required void Function(String title, String body) onForegroundMessage,
+    void Function(Map<String, dynamic> data)? onData,
   }) async {
     try {
       final messaging = FirebaseMessaging.instance;
@@ -34,7 +37,13 @@ class PushInitService {
       FirebaseMessaging.onMessage.listen((message) {
         final n = message.notification;
         if (n != null) onForegroundMessage(n.title ?? '', n.body ?? '');
+        onData?.call(message.data);
       });
+      // Tocou na notificação com o app em 2º plano / fechado.
+      FirebaseMessaging.onMessageOpenedApp
+          .listen((message) => onData?.call(message.data));
+      final initial = await messaging.getInitialMessage();
+      if (initial != null) onData?.call(initial.data);
 
       final token = await messaging.getToken();
       if (token != null) {

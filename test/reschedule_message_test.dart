@@ -46,4 +46,15 @@ void main() {
     expect(msg, contains('o novo horário'));
     expect(msg, startsWith('Oi Kim!'));
   });
+
+  test('formatWhen: "dd/MM às HH:mm" (sem virar "à0")', () {
+    expect(logic.formatWhen(DateTime(2026, 10, 27, 9, 0)), '27/10 às 09:00');
+    expect(logic.formatWhen(DateTime(2026, 1, 5, 14, 30)), '05/01 às 14:30');
+  });
+
+  test('greetingName: usa como o cliente prefere ser chamado', () {
+    expect(logic.greetingName('Eduardo Mello', 'Dudu'), 'Dudu');
+    expect(logic.greetingName('Eduardo Mello', null), 'Eduardo Mello');
+    expect(logic.greetingName('Eduardo Mello', '  '), 'Eduardo Mello');
+  });
 }

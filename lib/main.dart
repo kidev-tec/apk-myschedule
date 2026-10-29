@@ -22,12 +22,18 @@ import 'features/settings/waitlist_page.dart';
 import 'features/settings/edit_business_page.dart';
 import 'features/services/service_form_page.dart';
 import 'features/settings/settings_page.dart';
+import 'features/settings/theme_page.dart';
 import 'features/settings/working_hours_page.dart';
 import 'features/settings/push_init_service.dart';
 import 'features/terms/terms_page.dart';
+import 'core/push/push_events.dart';
 import 'theme/app_theme.dart';
+import 'theme/theme_palette.dart';
 
 /// Segmento ativo do negócio (persistido; null = beauty default).
+/// Messenger global: avisos de push com o app aberto (fora de qualquer tela).
+final rootMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
 final segmentPresetProvider = StateProvider<SegmentPreset?>((ref) => null);
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -66,6 +72,9 @@ final routerProvider = Provider<GoRouter>((ref) {
             ref.read(segmentPresetProvider.notifier).state =
                 SegmentPreset.byId(id);
           }
+          // cor escolhida em Configurações → Tema (null = cor do segmento)
+          ref.read(themeColorProvider.notifier).state =
+              parseHexColor(r.data['theme_color'] as String?);
         }).catchError((_) {});
       }
 
@@ -158,6 +167,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/settings',
         builder: (_, __) => const SettingsPage(),
       ),
+      GoRoute(
+        path: '/theme',
+        builder: (_, __) => const ThemePage(),
+      ),
     ],
   );
 });
@@ -209,7 +222,10 @@ void main() async {
   PushInitService().init(
     onForegroundMessage: (title, body) {
       debugPrint('[push:fg] $title — $body');
+      showForegroundPush(rootMessengerKey, title, body);
     },
+    // novo agendamento pelo link → agenda aberta recarrega
+    onData: PushEvents.instance.handle,
   );
 
   // Offline-first: inicializa o cache local (best-effort — falha de storage
@@ -233,6 +249,7 @@ class MinhaAgendaApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'AGENVA',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: rootMessengerKey,
       // Conteúdo nunca fica atrás da barra de gestos (home/voltar) nem da
       // status bar — vale pra todas as telas que não usam SafeArea própria.
       builder: (context, child) {
@@ -244,8 +261,10 @@ class MinhaAgendaApp extends ConsumerWidget {
           child: child ?? const SizedBox.shrink(),
         );
       },
-      theme: buildAppTheme(ref.watch(segmentPresetProvider)),
-      darkTheme: buildAppTheme(ref.watch(segmentPresetProvider))
+      theme: buildAppTheme(applyThemeColor(
+          ref.watch(segmentPresetProvider), ref.watch(themeColorProvider))),
+      darkTheme: buildAppTheme(applyThemeColor(
+              ref.watch(segmentPresetProvider), ref.watch(themeColorProvider)))
           .copyWith(brightness: Brightness.dark),
       themeMode: ThemeMode.system,
       routerConfig: router,

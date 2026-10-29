@@ -103,6 +103,74 @@ void main() {
     }));
   });
 
+  testWidgets('Adicionar cliente permite salvar com teclado em tela pequena',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(_wrapWithApi(api));
+    await tester.pumpAndSettle();
+    adapter.onPost(
+        '/clients',
+        (s) => s.reply(
+            201, {'id': 'small', 'name': 'Lia', 'phone_e164': '5514999990008'}),
+        data: Matchers.any);
+    await tester.tap(find.text('Adicionar cliente'));
+    await tester.pumpAndSettle();
+    tester.view.viewInsets = const FakeViewPadding(bottom: 320);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    final name = find.widgetWithText(TextFormField, 'Nome *');
+    await tester.ensureVisible(name);
+    await tester.enterText(name, 'Lia');
+    final phone = find.widgetWithText(TextFormField, 'WhatsApp *');
+    await tester.ensureVisible(phone);
+    await tester.enterText(phone, '14999990008');
+    final notes = find.byKey(const Key('add-client-notes'));
+    await tester.ensureVisible(notes);
+    await tester.enterText(notes, 'Prefere café');
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Criar e usar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Criar e usar'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(posted.last['notes'], 'Prefere café');
+  });
+
+  testWidgets('CPF inválido continua bloqueando após recolher Mais dados',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 6000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(_wrapWithApi(api));
+    await tester.pumpAndSettle();
+    adapter.onPost(
+        '/clients',
+        (s) => s.reply(
+            201, {'id': 'cpf', 'name': 'Lia', 'phone_e164': '5514999990008'}),
+        data: Matchers.any);
+    await tester.tap(find.text('Adicionar cliente'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextFormField, 'Nome *'), 'Lia');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'WhatsApp *'), '14999990008');
+    await tester.tap(find.text('Mais dados'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('client-cpf')), '11111111111');
+    await tester.tap(find.text('Mais dados'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Criar e usar'));
+    await tester.tap(find.text('Criar e usar'));
+    await tester.pumpAndSettle();
+    expect(posted, isEmpty);
+    expect(find.byType(BottomSheet), findsOneWidget);
+    await tester.tap(find.text('Mais dados'));
+    await tester.pumpAndSettle();
+    expect(find.text('CPF inválido'), findsOneWidget);
+  });
+
   testWidgets('fluxo completo: cliente → serviço → slot → POST /appointments',
       (tester) async {
     await tester.pumpWidget(_wrapWithApi(api));
@@ -149,7 +217,13 @@ void main() {
     }
     // appt 09-10 bloqueado; primeiro livre deve ser 10:00
     expect(find.text('10:00'), findsOneWidget); // pós-conflito
+    // observações só aparecem depois de escolher o horário
+    expect(find.byKey(const Key('wizard-notes')), findsNothing);
     await tester.tap(find.text('10:00'));
+    await tester.pump();
+    expect(find.byKey(const Key('wizard-notes')), findsOneWidget);
+    await tester.enterText(
+        find.byKey(const Key('wizard-notes')), '  pediu degradê baixo ');
     await tester.pump();
 
     await tester.ensureVisible(find.text('Confirmar agendamento'));
@@ -166,6 +240,8 @@ void main() {
     expect(posted.first['serviceId'], 's1');
     // source foi removido: a API só aceita 'block' ou ausente
     expect(posted.first.containsKey('source'), isFalse);
+    // observações vão aparadas no POST
+    expect(posted.first['notes'], 'pediu degradê baixo');
     // horário vai em UTC (sufixo Z): sem fuso a API (servidor em UTC)
     // lia 10:00 de Brasília como 10:00 UTC e salvava 3h antes.
     expect(posted.first['startsAt'] as String, endsWith('Z'));
@@ -266,20 +342,28 @@ void main() {
     expect(find.text('Nenhum cliente encontrado'), findsOneWidget);
     expect(find.text('Adicionar cliente'), findsOneWidget);
 
+    // POST só responde se as informações do cliente forem junto (aparadas)
     adapter.onPost(
         '/clients',
         (s) => s.reply(201,
             {'id': 'c-novo', 'name': 'Zé Novato', 'phone_e164': '+5514999977'}),
-        data: Matchers.any);
+        data: {
+          'name': 'Zé Novato',
+          'phone_e164': Matchers.any,
+          'notes': 'cliente novo, indicado pela Ana',
+        });
 
     await tester.tap(find.text('Adicionar cliente'));
     await tester.pumpAndSettle();
 
-    // bottom sheet: preenche nome + telefone e salva
+    // bottom sheet: preenche nome + telefone + informações e salva
     await tester.enterText(
         find.widgetWithText(TextFormField, 'Nome *'), 'Zé Novato');
     await tester.enterText(
         find.widgetWithText(TextFormField, 'WhatsApp *'), '+5514999977');
+    await tester.enterText(find.byKey(const Key('add-client-notes')),
+        ' cliente novo, indicado pela Ana ');
+    await tester.ensureVisible(find.text('Criar e usar'));
     await tester.tap(find.text('Criar e usar'));
     await tester.pumpAndSettle();
 
@@ -290,6 +374,57 @@ void main() {
     final btn = tester
         .widget<FilledButton>(find.widgetWithText(FilledButton, 'Continuar'));
     expect(btn.onPressed, isNotNull);
+  });
+
+  testWidgets('Adicionar cliente: "Mais dados" abre apelido, aniversário etc.',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(_wrapWithApi(api));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pumpAndSettle();
+
+    adapter.onPost(
+        '/clients',
+        (s) => s.reply(
+            201, {'id': 'c-2', 'name': 'Lia', 'phone_e164': '5514999990008'}),
+        data: Matchers.any);
+    await tester.tap(find.text('Adicionar cliente'));
+    await tester.pumpAndSettle();
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 320);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    // curto por padrão: e-mail e demais campos ficam no "Mais dados"
+    expect(find.byKey(const Key('client-nickname')), findsNothing);
+    expect(
+        find.widgetWithText(TextFormField, 'E-mail (opcional)'), findsNothing);
+
+    await tester.enterText(find.widgetWithText(TextFormField, 'Nome *'), 'Lia');
+    await tester
+        .ensureVisible(find.widgetWithText(TextFormField, 'WhatsApp *'));
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'WhatsApp *'), '14999990008');
+    await tester.ensureVisible(find.text('Mais dados'));
+    await tester.tap(find.text('Mais dados'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('client-birthday')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.ensureVisible(find.byKey(const Key('client-nickname')));
+    await tester.enterText(find.byKey(const Key('client-nickname')), 'Li');
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Criar e usar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Criar e usar'));
+    await tester.pumpAndSettle();
+
+    final body = posted.last;
+    expect(body['name'], 'Lia');
+    expect(body['nickname'], 'Li');
+    expect(body['marketing_consent'], isFalse);
   });
 
   testWidgets(

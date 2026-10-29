@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
+import '../../core/api/api_error.dart';
+import '../../core/push/push_events.dart';
 import '../../core/storage/local_cache.dart';
 import '../../core/storage/connectivity_provider.dart';
 import '../../core/storage/sync_queue.dart';
@@ -12,7 +14,8 @@ import '../../core/api/paywall_flag.dart';
 import '../../core/update/update_service.dart';
 import '../../theme/app_theme.dart';
 import 'booking_wizard.dart' as booking show Appointment;
-import 'booking_logic.dart' as booking_logic show buildRescheduleMessage;
+import 'booking_logic.dart' as booking_logic
+    show buildRescheduleMessage, formatWhen, greetingName;
 
 /// B6/DI: provider do ApiClient pra agenda — testes sobrescrevem com mock.
 final agendaApiProvider = Provider<ApiClient>((ref) => ApiClient());
@@ -61,6 +64,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   @override
   void initState() {
     super.initState();
+    // Cliente agendou pelo link (push) → recarrega a agenda aberta.
+    PushEvents.instance.agendaChanged.addListener(_onPushAgendaChanged);
     (widget.onCheckUpdate ??
         () => UpdateService.check().then((info) {
               if (info != null && mounted) _updateBanner.value = true;
@@ -77,6 +82,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   @override
   void dispose() {
     _connRemove?.call();
+    PushEvents.instance.agendaChanged.removeListener(_onPushAgendaChanged);
     super.dispose();
   }
 
@@ -105,6 +111,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         _loadAppointments();
       }
     }).whenComplete(() => _syncing = false);
+  }
+
+  void _onPushAgendaChanged() {
+    if (mounted) _loadAppointments();
   }
 
   Future<void> _loadAppointments() async {
@@ -374,23 +384,32 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 16),
                               child: Wrap(
-                                spacing: 8,
+                                // compacto: botão + 4 ícones numa linha até
+                                // em 360dp; Wrap só quebra em telas menores
+                                spacing: 4,
                                 runSpacing: 4,
                                 crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
                                   FilledButton.icon(
                                     onPressed: _openBooking,
-                                    icon: const Icon(Icons.add),
+                                    icon: const Icon(Icons.add, size: 18),
                                     label: const Text('Marcar horário'),
                                     style: FilledButton.styleFrom(
                                       backgroundColor:
                                           AppColors.primaryOf(context),
                                       foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 10),
+                                      minimumSize: const Size(0, 40),
+                                      textStyle: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600),
                                     ),
                                   ),
                                   IconButton.filledTonal(
                                     onPressed: _showBlockSheet,
                                     tooltip: 'Bloquear horário',
+                                    visualDensity: VisualDensity.compact,
                                     icon: const Icon(Icons.lock_outline),
                                   ),
                                   // Lista/grade não se aplicam ao mês.
@@ -500,20 +519,56 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         title: Text(
             a.isBlock ? (a.canceledReason ?? 'Bloqueado') : a.clientName,
             style: Theme.of(context).textTheme.titleMedium),
-        subtitle: Text.rich(
-            a.isBlock
-                ? TextSpan(text: '🔒 Bloqueado • ${_statusLabel(a.status)}')
-                : _statusSubtitle(a),
-            style: a.isBlock
-                ? const TextStyle(fontStyle: FontStyle.italic)
-                : null),
-        trailing: _buildActionsMenu(a),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text.rich(
+                a.isBlock
+                    ? TextSpan(text: '🔒 Bloqueado • ${_statusLabel(a.status)}')
+                    : _statusSubtitle(a),
+                style: a.isBlock
+                    ? const TextStyle(fontStyle: FontStyle.italic)
+                    : null),
+            // observações do prestador (privadas)
+            if (a.notes != null && a.notes!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.sticky_note_2_outlined,
+                        size: 14, color: AppColors.midOf(context)),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(a.notes!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(fontStyle: FontStyle.italic)),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!a.isBlock) _buildDetailsButton(a),
+            _buildActionsMenu(a) ?? const SizedBox(width: 48),
+          ],
+        ),
       ),
     );
   }
 
   /// Menu "⋮" de ações do agendamento (compartilhado entre lista e grade).
-  Widget _buildActionsMenu(Appointment a) {
+  /// Remarcado não tem menu: é histórico — o agendamento novo já existe e
+  /// remarcar de novo criaria um duplicado.
+  Widget? _buildActionsMenu(Appointment a) {
+    if (_statusKind(a) == _StatusKind.remarcado) return null;
     return a.isBlock
         ? PopupMenuButton<String>(
             onSelected: (v) => _handleAppointmentAction(v, a),
@@ -527,27 +582,81 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         : PopupMenuButton<String>(
             onSelected: (v) => _handleAppointmentAction(v, a),
             itemBuilder: (_) => [
-              if (a.status == 'pending')
+              // Confirmar só faz sentido antes do horário (API recusa depois).
+              if (a.status == 'pending' && !_isPast(a)) ...[
                 const PopupMenuItem(value: 'confirm', child: Text('Confirmar')),
-              if (a.status == 'pending' && !_isPast(a))
                 const PopupMenuItem(
                     value: 'askConfirm',
                     child: Text('Pedir confirmação no WhatsApp')),
-              const PopupMenuItem(value: 'edit', child: Text('Remarcar')),
-              // Passou do horário: sem concluir/cancelar (decisão de
-              // produto — ações de agendamento só com antecedência).
-              if (!_isPast(a)) ...[
-                const PopupMenuItem(value: 'done', child: Text('Concluir')),
-                const PopupMenuItem(value: 'cancel', child: Text('Cancelar')),
               ],
+              // Remarcar e Cancelar valem para qualquer agendamento (passado
+              // remarcado vira cancelado "remarcado" + novo confirmado).
+              const PopupMenuItem(value: 'edit', child: Text('Remarcar')),
+              // Concluir: só até hoje (dia futuro não aconteceu ainda).
+              if (_isOnOrBeforeToday(a) &&
+                  a.status != 'done' &&
+                  a.status != 'canceled')
+                const PopupMenuItem(value: 'done', child: Text('Concluir')),
+              if (a.status != 'canceled')
+                const PopupMenuItem(value: 'cancel', child: Text('Cancelar')),
             ],
           );
+  }
+
+  /// Abre o painel de detalhes; ícone preenchido quando há observação.
+  /// [compact]: versão menor pro cartão da grade (pouca largura).
+  Widget _buildDetailsButton(Appointment a, {bool compact = false}) {
+    final hasNotes = a.notes != null && a.notes!.isNotEmpty;
+    return IconButton(
+      tooltip: 'Detalhes e observações',
+      visualDensity: VisualDensity.compact,
+      iconSize: compact ? 20 : null,
+      padding: compact ? EdgeInsets.zero : null,
+      constraints:
+          compact ? const BoxConstraints.tightFor(width: 32, height: 32) : null,
+      color: hasNotes ? AppColors.primaryOf(context) : AppColors.midOf(context),
+      icon: Icon(hasNotes ? Icons.sticky_note_2 : Icons.sticky_note_2_outlined),
+      onPressed: () => _showDetails(a),
+    );
+  }
+
+  /// Painel com os dados do agendamento e as observações (privadas do
+  /// prestador), com edição da observação no próprio painel.
+  Future<void> _showDetails(Appointment a) async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _AppointmentDetailsSheet(
+        appointment: a,
+        statusLabel: _displayStatus(a),
+        onSave: (notes) => ref
+            .read(agendaApiProvider)
+            .dio
+            .patch('/appointments/${a.id}', data: {'notes': notes}),
+        loadClientNotes: a.clientId == null
+            ? null
+            : () async {
+                final r = await ref
+                    .read(agendaApiProvider)
+                    .dio
+                    .get('/clients/${a.clientId}');
+                return (r.data as Map<String, dynamic>)['notes'] as String?;
+              },
+      ),
+    );
+    if (saved == true && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Observação salva')));
+      await _loadAppointments();
+    }
   }
 
   /// Botão do alternador lista/grade; destacado quando é o layout atual.
   Widget _buildLayoutToggle(_AgendaLayout layout, IconData icon, String label) {
     final selected = _layout == layout;
     return IconButton(
+      visualDensity: VisualDensity.compact,
       onPressed: () => setState(() => _layout = layout),
       tooltip: label,
       isSelected: selected,
@@ -591,22 +700,31 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           children: [
             Row(
               children: [
-                Container(
-                  key: Key('hora-${a.id}'),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _timeBackground(a),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    timeFmt.format(a.startsAt),
-                    style: theme.textTheme.labelLarge
-                        ?.copyWith(color: _timeForeground(a)),
+                // horário encolhe se faltar espaço (cartão estreito da grade)
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      key: Key('hora-${a.id}'),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _timeBackground(a),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        timeFmt.format(a.startsAt),
+                        style: theme.textTheme.labelLarge
+                            ?.copyWith(color: _timeForeground(a)),
+                      ),
+                    ),
                   ),
                 ),
                 const Spacer(),
-                _buildActionsMenu(a),
+                if (!a.isBlock) _buildDetailsButton(a, compact: true),
+                // sem menu (remarcado): mantém a altura da linha
+                _buildActionsMenu(a) ?? const SizedBox(height: 48),
               ],
             ),
             const Spacer(),
@@ -856,6 +974,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   Widget _buildCollapseAllButton() {
     final allCollapsed = _collapsedDays.containsAll(_weekDaysWithAppointments);
     return IconButton(
+      visualDensity: VisualDensity.compact,
       onPressed: () => setState(() {
         if (allCollapsed) {
           _collapsedDays.clear();
@@ -895,7 +1014,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         _StatusKind.concluido => AppColors.agenvaBlue,
         _StatusKind.confirmado => AppColors.success,
         _StatusKind.cancelado => AppColors.error,
-        _StatusKind.remarcado => AppColors.warning,
+        _StatusKind.remarcado => AppColors.rescheduled,
         _StatusKind.outro => null,
       };
 
@@ -904,11 +1023,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       _statusColor(_statusKind(a))?.withValues(alpha: 0.18) ??
       AppColors.softOf(context);
 
-  Color _timeForeground(Appointment a) => switch (_statusKind(a)) {
-        // amarelo puro some no fundo claro: texto em âmbar escuro
-        _StatusKind.remarcado => const Color(0xFF8A5A00),
-        final k => _statusColor(k) ?? AppColors.primaryOf(context),
-      };
+  Color _timeForeground(Appointment a) =>
+      _statusColor(_statusKind(a)) ?? AppColors.primaryOf(context);
 
   /// "Serviço • Status"; concluído leva um check azul antes do status.
   InlineSpan _statusSubtitle(Appointment a) => TextSpan(
@@ -931,10 +1047,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
 
   String _displayStatus(Appointment a) =>
       _statusKind(a) == _StatusKind.remarcado
-          ? 'Remarcado'
+          ? 'Cancelado/Remarcado'
           : _statusLabel(a.status);
 
-  /// Semáforo do dia: bolinhas azul/verde/vermelha/amarela com a quantidade
+  /// Semáforo do dia: bolinhas azul/verde/vermelha/roxa com a quantidade
   /// de concluídos, confirmados, cancelados e remarcados (só as que têm 1+).
   Widget _buildStatusSemaphore(List<Appointment> items) {
     final counts = <_StatusKind, int>{};
@@ -971,12 +1087,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                 ),
                 child: Text(
                   '${counts[k]}',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: k == _StatusKind.remarcado
-                        ? AppColors.neutral
-                        : Colors.white,
+                    color: Colors.white,
                   ),
                 ),
               ),
@@ -1004,14 +1118,35 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
 
   /// Agendamento cujo horário já passou: sem cancelar/concluir/pedir
   /// confirmação (decisão de produto 21/09 — ação só com antecedência).
+  /// Verbo em PT-BR da ação do menu (os valores internos são em inglês).
+  static String _actionLabel(String action) => switch (action) {
+        'cancel' => 'cancelar',
+        'done' => 'concluir',
+        'confirm' => 'confirmar',
+        'edit' => 'remarcar',
+        _ => 'fazer isso',
+      };
+
   bool _isPast(Appointment a) => a.startsAt.isBefore(DateTime.now());
+
+  /// Como chamar o cliente nas mensagens de WhatsApp (apelido ou nome).
+  String _greeting(Appointment a) =>
+      booking_logic.greetingName(a.clientName, a.clientNickname);
+
+  /// Agendamento de hoje ou de um dia anterior (fuso do aparelho).
+  bool _isOnOrBeforeToday(Appointment a) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(a.startsAt.year, a.startsAt.month, a.startsAt.day);
+    return !day.isAfter(today);
+  }
 
   /// Ao cancelar, abre o WhatsApp do cliente com mensagem pronta.
   /// O cliente não tem app — WhatsApp é o canal onde ele já está.
   Future<void> _notifyCancelOnWhatsapp(Appointment a) async {
-    final when = DateFormat('dd/MM "às" HH:mm', 'pt_BR').format(a.startsAt);
+    final when = booking_logic.formatWhen(a.startsAt);
     final msg = Uri.encodeComponent(
-        'Oi ${a.clientName}! Tive que remanejar teu horário de $when. '
+        'Oi ${_greeting(a)}! Tive que remanejar teu horário de $when. '
         'Me chama pra combinarmos outro horário! 🙂');
     final phone = ensureDdi55(a.clientPhone);
     final ok = await showDialog<bool>(
@@ -1039,10 +1174,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   /// RF-B01: pede confirmação do cliente — abre o WhatsApp com mensagem pronta
   /// contendo data/hora + link pessoal de confirmação (token HMAC do agendamento).
   Future<void> _askConfirmationOnWhatsapp(Appointment a) async {
-    final when = DateFormat('dd/MM "às" HH:mm', 'pt_BR').format(a.startsAt);
+    final when = booking_logic.formatWhen(a.startsAt);
     final link = await _confirmationLink(a);
     final msg = Uri.encodeComponent(
-        'Oi ${a.clientName}! Confirmando teu horário de $when. '
+        'Oi ${_greeting(a)}! Confirmando teu horário de $when. '
         'Pode confirmar tua presença aqui? $link 🙂');
     final phone = ensureDdi55(a.clientPhone);
     if (!mounted) return;
@@ -1086,11 +1221,11 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   Future<void> _notifyRescheduledOnWhatsapp(
       Appointment a, booking.Appointment? novo) async {
     final whenText = booking_logic
-        .buildRescheduleMessage(a.clientName, novo)
-        .replaceFirst('Oi ${a.clientName}! ', '');
+        .buildRescheduleMessage(_greeting(a), novo)
+        .replaceFirst('Oi ${_greeting(a)}! ', '');
     if (!mounted) return;
     final msg = Uri.encodeComponent(
-        booking_logic.buildRescheduleMessage(a.clientName, novo));
+        booking_logic.buildRescheduleMessage(_greeting(a), novo));
     final phone = ensureDdi55(a.clientPhone);
     final ok = await showDialog<bool>(
       context: context,
@@ -1226,7 +1361,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       debugPrint('[agenda] falha ao bloquear: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Não consegui bloquear: $e'),
+            content: Text('Não consegui bloquear: ${humanError(e)}'),
             backgroundColor: AppColors.error));
       }
     }
@@ -1302,6 +1437,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             status: a.status,
             clientId: a.clientId,
             serviceId: a.serviceId,
+            notes: a.notes,
           );
           final changed = await context.push<booking.Appointment?>(
               '/agenda/booking',
@@ -1328,7 +1464,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       debugPrint('[agenda] falha em $action: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Não consegui $action: $e'),
+            content:
+                Text('Não consegui ${_actionLabel(action)}: ${humanError(e)}'),
             backgroundColor: AppColors.error));
       }
     }
@@ -1347,6 +1484,12 @@ class Appointment {
   final String source;
   // RF-A02: motivo do bloqueio (mesma coluna de canceled_reason)
   final String? canceledReason;
+
+  /// Observações do prestador (privadas).
+  final String? notes;
+
+  /// Como o cliente prefere ser chamado (mensagens de WhatsApp).
+  final String? clientNickname;
   // B3: FKs pro modo remarcar (wizard pré-preenche cliente/serviço)
   final String? clientId;
   final String? serviceId;
@@ -1363,6 +1506,8 @@ class Appointment {
     required this.status,
     this.source = 'app',
     this.canceledReason,
+    this.notes,
+    this.clientNickname,
     this.clientId,
     this.serviceId,
   });
@@ -1377,6 +1522,8 @@ class Appointment {
         status: j['status'] ?? 'pending',
         source: j['source'] ?? 'app',
         canceledReason: j['canceled_reason'] ?? j['canceledReason'],
+        notes: j['notes'] as String?,
+        clientNickname: j['client_nickname'] as String?,
         clientId: j['client_id'] ?? j['clientId'],
         serviceId: j['service_id'] ?? j['serviceId'],
       );
@@ -1639,6 +1786,221 @@ class _DayOfMonthPicker extends StatelessWidget {
             );
           }),
         ],
+      ),
+    );
+  }
+}
+
+/// Painel de detalhes do agendamento: dados + observações, com edição.
+/// Widget próprio pra que o controller do texto viva enquanto o painel
+/// existir (inclusive durante a animação de fechar).
+class _AppointmentDetailsSheet extends StatefulWidget {
+  final Appointment appointment;
+  final String statusLabel;
+  final Future<void> Function(String notes) onSave;
+
+  /// Busca as informações do CLIENTE (cadastro), só quando pedidas.
+  final Future<String?> Function()? loadClientNotes;
+
+  const _AppointmentDetailsSheet({
+    required this.appointment,
+    required this.statusLabel,
+    required this.onSave,
+    this.loadClientNotes,
+  });
+
+  @override
+  State<_AppointmentDetailsSheet> createState() =>
+      _AppointmentDetailsSheetState();
+}
+
+class _AppointmentDetailsSheetState extends State<_AppointmentDetailsSheet> {
+  late final _ctrl =
+      TextEditingController(text: widget.appointment.notes ?? '');
+  bool _editing = false;
+  bool _saving = false;
+  String? _error;
+
+  /// Informações do cliente: escondidas até o toque no botão.
+  bool _clientInfoOpen = false;
+  Future<String?>? _clientNotes;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await widget.onSave(_ctrl.text.trim());
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = 'Não consegui salvar: ${humanError(e)}';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final a = widget.appointment;
+    final theme = Theme.of(context);
+    final notes = a.notes ?? '';
+    Widget row(IconData icon, String text) => Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(children: [
+            Icon(icon, size: 18, color: AppColors.midOf(context)),
+            const SizedBox(width: 8),
+            Expanded(child: Text(text, style: theme.textTheme.bodyLarge)),
+          ]),
+        );
+
+    return Padding(
+      key: const Key('details-sheet'),
+      padding: EdgeInsets.fromLTRB(
+          20, 0, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(a.clientName, style: theme.textTheme.titleLarge),
+            const SizedBox(height: 12),
+            row(Icons.event, booking_logic.formatWhen(a.startsAt)),
+            row(Icons.content_cut, a.serviceName),
+            row(Icons.info_outline, widget.statusLabel),
+            if (a.clientPhone.isNotEmpty) row(Icons.phone, a.clientPhone),
+            if (widget.loadClientNotes != null) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('details-client-info'),
+                  onPressed: () => setState(() {
+                    _clientInfoOpen = !_clientInfoOpen;
+                    _clientNotes ??= widget.loadClientNotes!();
+                  }),
+                  icon: Icon(_clientInfoOpen
+                      ? Icons.expand_less
+                      : Icons.person_search_outlined),
+                  label: Text(_clientInfoOpen
+                      ? 'Ocultar informações do cliente'
+                      : 'Ver informações do cliente'),
+                ),
+              ),
+              if (_clientInfoOpen)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.softOf(context),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: FutureBuilder<String?>(
+                    future: _clientNotes,
+                    builder: (_, snap) {
+                      if (snap.connectionState != ConnectionState.done) {
+                        return const Center(
+                            child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2)));
+                      }
+                      if (snap.hasError) {
+                        return Text(
+                            'Não consegui carregar: ${humanError(snap.error!)}',
+                            style: const TextStyle(color: AppColors.error));
+                      }
+                      final info = snap.data ?? '';
+                      return Text(
+                        info.isEmpty
+                            ? 'Nenhuma informação cadastrada para este cliente'
+                            : info,
+                        style: info.isEmpty
+                            ? theme.textTheme.bodyMedium
+                                ?.copyWith(color: AppColors.neutral)
+                            : theme.textTheme.bodyLarge,
+                      );
+                    },
+                  ),
+                ),
+            ],
+            const Divider(height: 24),
+            Row(children: [
+              Text('Detalhes / Observações', style: theme.textTheme.titleSmall),
+              const Spacer(),
+              if (!_editing)
+                TextButton.icon(
+                  key: const Key('details-edit'),
+                  onPressed: () => setState(() => _editing = true),
+                  icon: const Icon(Icons.edit, size: 18),
+                  label: const Text('Editar'),
+                ),
+            ]),
+            const SizedBox(height: 4),
+            if (!_editing)
+              Text(
+                notes.isEmpty ? 'Sem observações' : notes,
+                style: notes.isEmpty
+                    ? theme.textTheme.bodyMedium
+                        ?.copyWith(color: AppColors.neutral)
+                    : theme.textTheme.bodyLarge,
+              )
+            else ...[
+              TextField(
+                key: const Key('details-notes-field'),
+                controller: _ctrl,
+                autofocus: true,
+                minLines: 2,
+                maxLines: 5,
+                maxLength: 1000,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                    helperText: 'Só você vê — o cliente não recebe.'),
+              ),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(_error!,
+                      style: const TextStyle(color: AppColors.error)),
+                ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: _saving
+                        ? null
+                        : () => setState(() {
+                              _editing = false;
+                              _ctrl.text = notes;
+                            }),
+                    child: const Text('Cancelar'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    key: const Key('details-save'),
+                    onPressed: _saving ? null : _save,
+                    child: _saving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Text('Salvar'),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

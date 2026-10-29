@@ -13,6 +13,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 
 import 'package:minha_agenda/core/api/api_client.dart';
+import 'package:minha_agenda/core/push/push_events.dart';
 import 'package:minha_agenda/features/agenda/agenda_page.dart';
 import 'package:minha_agenda/features/agenda/booking_wizard.dart' as booking;
 
@@ -148,6 +149,15 @@ void main() {
     final hoje = DateTime.now();
     expect(DateTime.parse(q['from'] as String).toLocal(),
         DateTime(hoje.year, hoje.month, hoje.day));
+  });
+
+  testWidgets('push de novo agendamento recarrega a agenda aberta',
+      (tester) async {
+    await pumpPage(tester);
+    final antes = capturedQueries.length;
+    PushEvents.instance.handle({'type': 'new_booking', 'appointment_id': 'x'});
+    await tester.pumpAndSettle();
+    expect(capturedQueries.length, greaterThan(antes));
   });
 
   testWidgets('troca pra SEMANA: janela de 7 dias, agendamento agrupado',
@@ -424,7 +434,7 @@ void main() {
     expect(contagem('remarcado'), '2');
     expect(contagem('concluido'), '1');
 
-    // ordem: verde, vermelho, amarelo
+    // ordem: verde, vermelho, roxo
     final xC =
         tester.getCenter(find.byKey(const Key('semaforo-confirmado'))).dx;
     final xX = tester.getCenter(find.byKey(const Key('semaforo-cancelado'))).dx;
@@ -434,8 +444,8 @@ void main() {
     final xD = tester.getCenter(find.byKey(const Key('semaforo-concluido'))).dx;
     expect(xD, lessThan(xC));
 
-    // remarcado aparece como "Remarcado" (não "Cancelado")
-    expect(find.text('Corte • Remarcado'), findsNWidgets(2));
+    // remarcado aparece como "Cancelado/Remarcado"
+    expect(find.text('Corte • Cancelado/Remarcado'), findsNWidgets(2));
 
     Color fundoHorario(String id) =>
         ((tester.widget<Container>(find.byKey(Key('hora-$id'))).decoration
@@ -446,7 +456,7 @@ void main() {
     expect(fundoHorario('x1').withValues(alpha: 1),
         const Color(0xFFC62828)); // vermelho
     expect(fundoHorario('r1').withValues(alpha: 1),
-        const Color(0xFFF9A825)); // amarelo
+        const Color(0xFF7B1FA2)); // roxo
     expect(fundoHorario('d1').withValues(alpha: 1),
         const Color(0xFF1E96E8)); // azul
 
@@ -537,6 +547,246 @@ void main() {
 
     final q = capturedQueries.last!;
     expect(DateTime.parse(q['from'] as String).toLocal(), DateTime(2031, 1, 5));
+  });
+
+  testWidgets(
+      'menu ⋮: Remarcar/Cancelar em todos; Concluir só até hoje e se não concluído',
+      (tester) async {
+    final now = DateTime.now();
+    final hoje = DateTime(now.year, now.month, now.day);
+    Map<String, dynamic> appt(String nome, DateTime inicio, String status) => {
+          'id': nome,
+          'client_name': nome,
+          'client_phone': '+5514999990001',
+          'service_name': 'Corte',
+          'starts_at': inicio.toIso8601String(),
+          'ends_at': inicio.add(const Duration(minutes: 30)).toIso8601String(),
+          'status': status,
+          'source': 'app',
+        };
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [
+                appt('Ontem', hoje.subtract(const Duration(hours: 10)),
+                    'confirmed'),
+                appt('Amanha', hoje.add(const Duration(days: 1, hours: 10)),
+                    'confirmed'),
+                appt('Feito', hoje.subtract(const Duration(hours: 9)), 'done'),
+                appt('Cancel', hoje.subtract(const Duration(hours: 8)),
+                    'canceled'),
+                {
+                  ...appt('Remarc', hoje.subtract(const Duration(hours: 7)),
+                      'canceled'),
+                  'canceled_reason': 'remarcado',
+                },
+              ]
+            }),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+    await pumpPage(tester);
+
+    Future<List<String>> opcoes(String nome) async {
+      final card =
+          find.ancestor(of: find.text(nome), matching: find.byType(Card));
+      await tester.tap(find.descendant(
+          of: card, matching: find.byType(PopupMenuButton<String>)));
+      await tester.pumpAndSettle();
+      final itens = tester
+          .widgetList<PopupMenuItem<String>>(find.byType(PopupMenuItem<String>))
+          .map((i) => (i.child as Text).data!)
+          .toList();
+      await tester.tapAt(const Offset(5, 5)); // fecha o menu
+      await tester.pumpAndSettle();
+      return itens;
+    }
+
+    // passado: tudo disponível
+    expect(await opcoes('Ontem'), ['Remarcar', 'Concluir', 'Cancelar']);
+    // dia futuro: sem Concluir
+    expect(await opcoes('Amanha'), ['Remarcar', 'Cancelar']);
+    // já concluído: sem Concluir de novo
+    expect(await opcoes('Feito'), ['Remarcar', 'Cancelar']);
+    // já cancelado: sem Cancelar nem Concluir
+    expect(await opcoes('Cancel'), ['Remarcar']);
+
+    // já remarcado: vira histórico, sem menu (o novo agendamento já existe)
+    expect(
+        find.descendant(
+            of: find.ancestor(
+                of: find.text('Remarc'), matching: find.byType(Card)),
+            matching: find.byType(PopupMenuButton<String>)),
+        findsNothing);
+  });
+
+  testWidgets('erro da API ao cancelar mostra a mensagem humana, não a exceção',
+      (tester) async {
+    adapter.onPatch(
+        RegExp(r'/appointments/.*'),
+        (s) => s.reply(400, {
+              'error':
+                  'Este horário já passou — não é possível alterar o agendamento'
+            }),
+        data: Matchers.any);
+    await pumpPage(tester);
+
+    await tester.tap(find.byType(PopupMenuButton<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+
+    expect(
+        find.text('Não consegui cancelar: Este horário já passou — '
+            'não é possível alterar o agendamento'),
+        findsOneWidget);
+    expect(find.textContaining('DioException'), findsNothing);
+  });
+
+  testWidgets(
+      'card mostra as observações (lista) e o botão de detalhes (grade)',
+      (tester) async {
+    final inicio = DateTime.now().add(const Duration(hours: 1));
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [
+                {
+                  'id': 'n1',
+                  'client_name': 'Ana',
+                  'client_phone': '+5514999990001',
+                  'service_name': 'Corte',
+                  'starts_at': inicio.toIso8601String(),
+                  'ends_at':
+                      inicio.add(const Duration(minutes: 30)).toIso8601String(),
+                  'status': 'confirmed',
+                  'source': 'app',
+                  'notes': 'alergia a pomada',
+                },
+              ]
+            }),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+    await pumpPage(tester);
+    expect(find.text('alergia a pomada'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Grade'));
+    await tester.pumpAndSettle();
+    // na grade o acesso é pelo botão de detalhes
+    expect(find.byTooltip('Detalhes e observações'), findsOneWidget);
+  });
+
+  testWidgets('botão Detalhes abre o painel com a observação e permite editar',
+      (tester) async {
+    final inicio = DateTime.now().add(const Duration(hours: 1));
+    Map<String, dynamic> appt(String? notes) => {
+          'id': 'd1',
+          'client_name': 'Ana',
+          'client_phone': '+5514999990001',
+          'service_name': 'Corte',
+          'starts_at': inicio.toIso8601String(),
+          'ends_at': inicio.add(const Duration(minutes: 30)).toIso8601String(),
+          'status': 'confirmed',
+          'source': 'app',
+          'notes': notes,
+        };
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [appt('alergia a pomada')]
+            }),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+    // PATCH só responde se o body tiver a observação nova (aparada)
+    adapter.onPatch('/appointments/d1',
+        (s) => s.reply(200, {'appointment': appt('usar máquina 2')}),
+        data: {'notes': 'usar máquina 2'});
+    await pumpPage(tester);
+
+    await tester.tap(find.byTooltip('Detalhes e observações'));
+    await tester.pumpAndSettle();
+    final painel = find.byKey(const Key('details-sheet'));
+    expect(painel, findsOneWidget);
+    expect(find.descendant(of: painel, matching: find.text('Ana')),
+        findsOneWidget);
+    expect(find.descendant(of: painel, matching: find.text('alergia a pomada')),
+        findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('details-edit')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const Key('details-notes-field')), ' usar máquina 2 ');
+    // depois de salvar, a agenda recarrega com a observação nova
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [appt('usar máquina 2')]
+            }),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+    await tester.tap(find.byKey(const Key('details-save')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Observação salva'), findsOneWidget);
+    expect(painel, findsNothing);
+    expect(find.text('usar máquina 2'), findsOneWidget);
+  });
+
+  testWidgets('Detalhes: informações do CLIENTE só aparecem ao tocar no botão',
+      (tester) async {
+    final inicio = DateTime.now().add(const Duration(hours: 1));
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [
+                {
+                  'id': 'd1',
+                  'client_id': 'cli-1',
+                  'client_name': 'Ana',
+                  'client_phone': '+5514999990001',
+                  'service_name': 'Corte',
+                  'starts_at': inicio.toIso8601String(),
+                  'ends_at':
+                      inicio.add(const Duration(minutes: 30)).toIso8601String(),
+                  'status': 'confirmed',
+                  'source': 'app',
+                },
+              ]
+            }),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+    adapter.onGet(
+        '/clients/cli-1',
+        (s) => s.reply(200, {
+              'id': 'cli-1',
+              'name': 'Ana',
+              'phone_e164': '+5514999990001',
+              'notes': 'alérgica a tinta',
+            }));
+    await pumpPage(tester);
+
+    await tester.tap(find.byTooltip('Detalhes e observações'));
+    await tester.pumpAndSettle();
+    // escondido por padrão
+    expect(find.text('alérgica a tinta'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('details-client-info')));
+    await tester.pumpAndSettle();
+    expect(find.text('alérgica a tinta'), findsOneWidget);
+  });
+
+  testWidgets('Detalhes sem observação mostra "Sem observações"',
+      (tester) async {
+    await pumpPage(tester);
+    await tester.tap(find.byTooltip('Detalhes e observações'));
+    await tester.pumpAndSettle();
+    expect(find.text('Sem observações'), findsOneWidget);
+  });
+
+  testWidgets('GRADE em celular de 360dp: cartões sem estourar a largura',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await pumpPage(tester);
+    await tester.tap(find.byTooltip('Grade'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byTooltip('Detalhes e observações'), findsOneWidget);
   });
 
   testWidgets('DIA: tocar na data do rodapé abre popup com os dias do mês',
