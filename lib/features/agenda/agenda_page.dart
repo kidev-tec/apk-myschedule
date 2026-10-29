@@ -376,23 +376,32 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 16),
                               child: Wrap(
-                                spacing: 8,
+                                // compacto: botão + 4 ícones numa linha até
+                                // em 360dp; Wrap só quebra em telas menores
+                                spacing: 4,
                                 runSpacing: 4,
                                 crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
                                   FilledButton.icon(
                                     onPressed: _openBooking,
-                                    icon: const Icon(Icons.add),
+                                    icon: const Icon(Icons.add, size: 18),
                                     label: const Text('Marcar horário'),
                                     style: FilledButton.styleFrom(
                                       backgroundColor:
                                           AppColors.primaryOf(context),
                                       foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 10),
+                                      minimumSize: const Size(0, 40),
+                                      textStyle: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600),
                                     ),
                                   ),
                                   IconButton.filledTonal(
                                     onPressed: _showBlockSheet,
                                     tooltip: 'Bloquear horário',
+                                    visualDensity: VisualDensity.compact,
                                     icon: const Icon(Icons.lock_outline),
                                   ),
                                   // Lista/grade não se aplicam ao mês.
@@ -630,6 +639,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   Widget _buildLayoutToggle(_AgendaLayout layout, IconData icon, String label) {
     final selected = _layout == layout;
     return IconButton(
+      visualDensity: VisualDensity.compact,
       onPressed: () => setState(() => _layout = layout),
       tooltip: label,
       isSelected: selected,
@@ -947,6 +957,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   Widget _buildCollapseAllButton() {
     final allCollapsed = _collapsedDays.containsAll(_weekDaysWithAppointments);
     return IconButton(
+      visualDensity: VisualDensity.compact,
       onPressed: () => setState(() {
         if (allCollapsed) {
           _collapsedDays.clear();
