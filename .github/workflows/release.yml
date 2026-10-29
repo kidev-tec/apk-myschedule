@@ -110,11 +110,97 @@ jobs:
             || { echo "::error::Certificado do APK difere do keystore de release"; exit 1; }
           echo "Certificado do APK corresponde ao keystore fixo"
 
+      # Nome definitivo do asset: agenva-<versão>.apk (+ .sha256, que o
+      # api/scripts/fetch-apk.sh confere antes de publicar na VPS).
+      - name: Name APK and check tag
+        id: apk
+        run: |
+          VERSION=$(sed -n -E 's/^version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' pubspec.yaml)
+          test -n "$VERSION" || { echo "::error::version do pubspec.yaml não encontrada"; exit 1; }
+          [ "$GITHUB_REF_NAME" = "v$VERSION" ] \
+            || { echo "::error::Tag $GITHUB_REF_NAME não bate com o pubspec (v$VERSION)"; exit 1; }
+          NAME="agenva-$VERSION.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk "$RUNNER_TEMP/$NAME"
+          (cd "$RUNNER_TEMP" && sha256sum "$NAME" > "$NAME.sha256")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
       - name: Upload APK to release
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: |
+            ${{ runner.temp }}/${{ steps.apk.outputs.name }}
+            ${{ runner.temp }}/${{ steps.apk.outputs.name }}.sha256
+    outputs:
+      version: ${{ steps.apk.outputs.version }}
+
+  # Abre um PR na API (base staging) apontando o updater para o novo APK.
+  # Token cross-repo vem de um GitHub App (vars.AGENVA_BOT_APP_ID +
+  # secrets.AGENVA_BOT_PRIVATE_KEY) com Contents e Pull requests RW só no
+  # api-myschedule. Sem o App configurado o job só avisa e não bloqueia o release.
+  # Merge do PR só depois de o APK estar na VPS (api/scripts/fetch-apk.sh).
+  update-api-version:
+    name: PR do version.json na API
+    runs-on: ubuntu-latest
+    needs: release-android
+    env:
+      VERSION: ${{ needs.release-android.outputs.version }}
+      HAS_APP: ${{ vars.AGENVA_BOT_APP_ID != '' }}
+    steps:
+      - name: Skip without GitHub App
+        if: env.HAS_APP != 'true'
+        run: echo "::warning::vars.AGENVA_BOT_APP_ID não configurado — PR do version.json não foi aberto"
+
+      - name: Mint API repo token
+        if: env.HAS_APP == 'true'
+        id: token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.AGENVA_BOT_APP_ID }}
+          private-key: ${{ secrets.AGENVA_BOT_PRIVATE_KEY }}
+          owner: kidev-tec
+          repositories: api-myschedule
+
+      - name: Checkout API (staging)
+        if: env.HAS_APP == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: kidev-tec/api-myschedule
+          ref: staging
+          token: ${{ steps.token.outputs.token }}
+          path: api
+
+      - name: Write version.json and open PR
+        if: env.HAS_APP == 'true'
+        working-directory: api
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          RELEASE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BODY=$(GH_TOKEN=$RELEASE_TOKEN gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --json body -q .body || true)
+          [ -n "$BODY" ] || BODY="Nova versão $VERSION do Agenva."
+          jq -nc --arg v "$VERSION" --arg u "/apks/agenva-$VERSION.apk" --arg c "$BODY" \
+            '{version: $v, apk_url: $u, changelog: $c}' > public/version.json
+          if git diff --quiet -- public/version.json; then
+            echo "version.json já está em $VERSION"; exit 0
+          fi
+          BRANCH="feat/release-v$VERSION"
+          git switch -c "$BRANCH"
+          git -c user.email=ezequiasfonseca@gmail.com -c user.name="Ezequias Fonseca" \
+            commit -m "chore(updater): version.json para $VERSION" -- public/version.json
+          git push -u origin "$BRANCH"
+          gh pr create --base staging --head "$BRANCH" \
+            --title "chore(updater): version.json para $VERSION" \
+            --body "Aberto pelo release [$GITHUB_REF_NAME](https://github.com/$GITHUB_REPOSITORY/releases/tag/$GITHUB_REF_NAME).
+
+          **Antes do merge**, publicar o APK na VPS (nunca sobrescreve APKs antigos):
+
+          \`\`\`bash
+          ./scripts/fetch-apk.sh $VERSION
+          \`\`\`
+
+          e conferir \`curl -sI \$API_BASE_URL/v1/apks/agenva-$VERSION.apk\` → 200. Sem isso o app baixa um 404."
 
   release-ios:
     name: Release iOS (TestFlight)
