@@ -1,16 +1,23 @@
 import 'package:dio/dio.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'api_config.dart';
 import 'paywall_flag.dart';
 
+/// Fonte do ID token do Firebase. `forceRefresh` pede um token novo na rede.
+typedef IdTokenProvider = Future<String?> Function({bool forceRefresh});
+
 class ApiClient {
   final Dio _dio;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final IdTokenProvider _idToken;
 
   /// [adapter] permite injetar um mock (http_mock_adapter) nos testes.
   /// Em prod, não passar nada — usa o network real.
-  ApiClient({HttpClientAdapter? adapter})
-      : _dio = Dio(BaseOptions(
+  /// [idToken]: injetável em teste; padrão = usuário atual do Firebase.
+  ApiClient({HttpClientAdapter? adapter, IdTokenProvider? idToken})
+      : _idToken = idToken ?? _firebaseIdToken,
+        _dio = Dio(BaseOptions(
           baseUrl: ApiConfig.baseUrl,
           connectTimeout: ApiConfig.timeout,
           receiveTimeout: ApiConfig.timeout,
@@ -19,24 +26,28 @@ class ApiClient {
     if (adapter != null) _dio.httpClientAdapter = adapter;
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
-        final token = await _storage.read(key: 'access_token');
+        // retry do 401 já vem com o token renovado: não sobrescrever
+        if (options.extra[_retried] == true) return handler.next(options);
+        final token = await _currentToken();
         if (token != null) {
           options.headers[ApiConfig.authHeader] = 'Bearer $token';
         }
         handler.next(options);
       },
       onError: (error, handler) async {
-        // 401 → tentar refresh uma vez
-        if (error.response?.statusCode == 401 &&
-            !error.requestOptions.path.contains('/auth/refresh')) {
-          await _tryRefreshToken();
-          // Retry original request
-          final newToken = await _storage.read(key: 'access_token');
-          if (newToken != null) {
-            error.requestOptions.headers[ApiConfig.authHeader] =
-                'Bearer $newToken';
-            final retry = await _dio.fetch(error.requestOptions);
-            return handler.resolve(retry);
+        // 401 → o ID token do Firebase venceu (dura 1h): força um token novo
+        // e repete UMA vez. Marcado em `extra` pra nunca entrar em loop.
+        final opts = error.requestOptions;
+        if (error.response?.statusCode == 401 && opts.extra[_retried] != true) {
+          final fresh = await _currentToken(forceRefresh: true);
+          if (fresh != null) {
+            opts.extra[_retried] = true;
+            opts.headers[ApiConfig.authHeader] = 'Bearer $fresh';
+            try {
+              return handler.resolve(await _dio.fetch(opts));
+            } on DioException catch (e) {
+              return handler.next(e);
+            }
           }
         }
         // 402 → paywall: trial vencido/assinatura cancelada (RF-14)
@@ -49,27 +60,29 @@ class ApiClient {
     ));
   }
 
+  static const _retried = 'auth_retried';
+
   Dio get dio => _dio;
 
-  Future<void> _tryRefreshToken() async {
-    final refreshToken = await _storage.read(key: 'refresh_token');
-    if (refreshToken == null) return;
+  /// Token do Firebase (renovado automaticamente quando perto de vencer);
+  /// sem usuário/Firebase, cai no último token salvo.
+  Future<String?> _currentToken({bool forceRefresh = false}) async {
+    final fresh = await _idToken(forceRefresh: forceRefresh);
+    if (fresh != null && fresh.isNotEmpty) {
+      await _storage.write(key: 'access_token', value: fresh);
+      return fresh;
+    }
+    return _storage.read(key: 'access_token');
+  }
 
+  static Future<String?> _firebaseIdToken({bool forceRefresh = false}) async {
     try {
-      final resp = await Dio().post(
-        '${ApiConfig.baseUrl}/auth/refresh',
-        data: {'refresh_token': refreshToken},
-      );
-      if (resp.data['access_token'] != null) {
-        await _storage.write(
-            key: 'access_token', value: resp.data['access_token']);
-        if (resp.data['refresh_token'] != null) {
-          await _storage.write(
-              key: 'refresh_token', value: resp.data['refresh_token']);
-        }
-      }
+      return await FirebaseAuth.instance.currentUser
+          ?.getIdToken(forceRefresh)
+          .timeout(const Duration(seconds: 20));
     } catch (_) {
-      // Refresh falhou → logout será tratado pelo auth controller
+      // sem Firebase (testes) ou rede oscilando: usa o token salvo
+      return null;
     }
   }
 
