@@ -69,8 +69,16 @@ jobs:
         run: flutter pub get
       - name: Generate Code
         run: dart run build_runner build --delete-conflicting-outputs
+      # APP_VERSION é a versão que o updater compara com /v1/version.
+      # Sem ele o app se acha 1.0.0 e mostra o banner de atualização para sempre.
       - name: Build APK (release)
-        run: flutter build apk --release --dart-define=API_BASE_URL=${{ vars.API_BASE_URL_PROD }}
+        run: |
+          APP_VERSION=$(sed -n -E 's/^version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' pubspec.yaml)
+          test -n "$APP_VERSION" || { echo "::error::version do pubspec.yaml não encontrada"; exit 1; }
+          echo "APP_VERSION=$APP_VERSION"
+          flutter build apk --release \
+            --dart-define=API_BASE_URL=${{ vars.API_BASE_URL_PROD }} \
+            --dart-define=APP_VERSION=$APP_VERSION
 
       - name: Verify APK
         run: test -f build/app/outputs/flutter-apk/app-release.apk
