@@ -456,6 +456,57 @@ void main() {
     expect(tester.widget<Icon>(check).color, const Color(0xFF1E96E8));
   });
 
+  testWidgets('SEMANA: controles acessíveis em celular de 360 pixels',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await pumpPage(tester);
+    await tester.tap(find.text('Semana'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    for (final tooltip in [
+      'Bloquear horário',
+      'Recolher todos',
+      'Lista',
+      'Grade'
+    ]) {
+      final control = find.byTooltip(tooltip);
+      expect(control.hitTestable(), findsOneWidget);
+      expect(tester.getRect(control).right, lessThanOrEqualTo(360));
+    }
+    await tester.tap(find.byTooltip('Grade'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('SEMANA: novo agendamento reabre o dia recolhido',
+      (tester) async {
+    final start = DateTime.now().add(const Duration(hours: 2));
+    final novo = booking.Appointment(
+        id: 'criado',
+        startsAt: start,
+        endsAt: start.add(const Duration(minutes: 30)),
+        status: 'confirmed');
+    await tester.pumpWidget(_wrap(api, rescheduleResult: novo));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Semana'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Recolher todos'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ana'), findsNothing);
+
+    await tester.tap(find.text('Marcar horário'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SALVAR REMARCAÇÃO'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ana'), findsOneWidget);
+    expect(find.byTooltip('Recolher'), findsOneWidget);
+  });
+
   testWidgets('Marcar horário: ao voltar recarrega a lista', (tester) async {
     await tester.pumpWidget(_wrap(api)); // stub do wizard volta sem resultado
     await tester.pumpAndSettle();
@@ -714,6 +765,18 @@ void main() {
     await tester.tap(find.byTooltip('Detalhes e observações'));
     await tester.pumpAndSettle();
     expect(find.text('Sem observações'), findsOneWidget);
+  });
+
+  testWidgets('GRADE em celular de 360dp: cartões sem estourar a largura',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await pumpPage(tester);
+    await tester.tap(find.byTooltip('Grade'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byTooltip('Detalhes e observações'), findsOneWidget);
   });
 
   testWidgets('DIA: tocar na data do rodapé abre popup com os dias do mês',

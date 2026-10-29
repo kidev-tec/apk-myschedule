@@ -375,7 +375,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                             Padding(
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 16),
-                              child: Row(
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 4,
+                                crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
                                   FilledButton.icon(
                                     onPressed: _openBooking,
@@ -387,7 +390,6 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                                       foregroundColor: Colors.white,
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
                                   IconButton.filledTonal(
                                     onPressed: _showBlockSheet,
                                     tooltip: 'Bloquear horário',
@@ -395,7 +397,6 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                                   ),
                                   // Lista/grade não se aplicam ao mês.
                                   if (_view != _AgendaView.mes) ...[
-                                    const Spacer(),
                                     if (_view == _AgendaView.semana &&
                                         _appointments.isNotEmpty)
                                       _buildCollapseAllButton(),
@@ -586,11 +587,16 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   }
 
   /// Abre o painel de detalhes; ícone preenchido quando há observação.
-  Widget _buildDetailsButton(Appointment a) {
+  /// [compact]: versão menor pro cartão da grade (pouca largura).
+  Widget _buildDetailsButton(Appointment a, {bool compact = false}) {
     final hasNotes = a.notes != null && a.notes!.isNotEmpty;
     return IconButton(
       tooltip: 'Detalhes e observações',
       visualDensity: VisualDensity.compact,
+      iconSize: compact ? 20 : null,
+      padding: compact ? EdgeInsets.zero : null,
+      constraints:
+          compact ? const BoxConstraints.tightFor(width: 32, height: 32) : null,
       color: hasNotes ? AppColors.primaryOf(context) : AppColors.midOf(context),
       icon: Icon(hasNotes ? Icons.sticky_note_2 : Icons.sticky_note_2_outlined),
       onPressed: () => _showDetails(a),
@@ -676,22 +682,29 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           children: [
             Row(
               children: [
-                Container(
-                  key: Key('hora-${a.id}'),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _timeBackground(a),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    timeFmt.format(a.startsAt),
-                    style: theme.textTheme.labelLarge
-                        ?.copyWith(color: _timeForeground(a)),
+                // horário encolhe se faltar espaço (cartão estreito da grade)
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      key: Key('hora-${a.id}'),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _timeBackground(a),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        timeFmt.format(a.startsAt),
+                        style: theme.textTheme.labelLarge
+                            ?.copyWith(color: _timeForeground(a)),
+                      ),
+                    ),
                   ),
                 ),
                 const Spacer(),
-                if (!a.isBlock) _buildDetailsButton(a),
+                if (!a.isBlock) _buildDetailsButton(a, compact: true),
                 // sem menu (remarcado): mantém a altura da linha
                 _buildActionsMenu(a) ?? const SizedBox(height: 48),
               ],
@@ -789,7 +802,11 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     final created = await context.push<booking.Appointment?>('/agenda/booking');
     if (!mounted) return;
     if (created != null) {
-      setState(() => _focusedDay = created.startsAt);
+      final day = created.startsAt.toLocal();
+      setState(() {
+        _focusedDay = day;
+        _collapsedDays.remove(DateTime(day.year, day.month, day.day));
+      });
     }
     _loadAppointments();
   }
