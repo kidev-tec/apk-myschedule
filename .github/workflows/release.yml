@@ -187,7 +187,7 @@ jobs:
           fi
           BRANCH="feat/release-v$VERSION"
           git switch -c "$BRANCH"
-          git -c user.email=mmmarckos@gmail.com -c user.name="Ezequias Fonseca" \
+          git -c user.email=ezequiasfonseca@gmail.com -c user.name="Ezequias Fonseca" \
             commit -m "chore(updater): version.json para $VERSION" -- public/version.json
           git push -u origin "$BRANCH"
           gh pr create --base staging --head "$BRANCH" \
