@@ -563,6 +563,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                     ),
                     ExpansionTile(
                       key: const Key('add-client-more'),
+                      maintainState: true,
                       tilePadding: EdgeInsets.zero,
                       childrenPadding: const EdgeInsets.only(bottom: 8),
                       title: const Text('Mais dados'),

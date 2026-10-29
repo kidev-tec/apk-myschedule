@@ -103,6 +103,38 @@ void main() {
     }));
   });
 
+  testWidgets('CPF inválido continua bloqueando após recolher Mais dados',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 6000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(_wrapWithApi(api));
+    await tester.pumpAndSettle();
+    adapter.onPost(
+        '/clients',
+        (s) => s.reply(
+            201, {'id': 'cpf', 'name': 'Lia', 'phone_e164': '5514999990008'}),
+        data: Matchers.any);
+    await tester.tap(find.text('Adicionar cliente'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextFormField, 'Nome *'), 'Lia');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'WhatsApp *'), '14999990008');
+    await tester.tap(find.text('Mais dados'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('client-cpf')), '11111111111');
+    await tester.tap(find.text('Mais dados'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Criar e usar'));
+    await tester.tap(find.text('Criar e usar'));
+    await tester.pumpAndSettle();
+    expect(posted, isEmpty);
+    expect(find.byType(BottomSheet), findsOneWidget);
+    await tester.tap(find.text('Mais dados'));
+    await tester.pumpAndSettle();
+    expect(find.text('CPF inválido'), findsOneWidget);
+  });
+
   testWidgets('fluxo completo: cliente → serviço → slot → POST /appointments',
       (tester) async {
     await tester.pumpWidget(_wrapWithApi(api));
@@ -310,7 +342,7 @@ void main() {
 
   testWidgets('Adicionar cliente: "Mais dados" abre apelido, aniversário etc.',
       (tester) async {
-    tester.view.physicalSize = const Size(1080, 6000);
+    tester.view.physicalSize = const Size(360, 640);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(_wrapWithApi(api));
@@ -326,17 +358,26 @@ void main() {
     await tester.tap(find.text('Adicionar cliente'));
     await tester.pumpAndSettle();
 
+    tester.view.viewInsets = const FakeViewPadding(bottom: 320);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
     // curto por padrão: e-mail e demais campos ficam no "Mais dados"
     expect(find.byKey(const Key('client-nickname')), findsNothing);
     expect(
         find.widgetWithText(TextFormField, 'E-mail (opcional)'), findsNothing);
 
     await tester.enterText(find.widgetWithText(TextFormField, 'Nome *'), 'Lia');
+    await tester
+        .ensureVisible(find.widgetWithText(TextFormField, 'WhatsApp *'));
     await tester.enterText(
         find.widgetWithText(TextFormField, 'WhatsApp *'), '14999990008');
+    await tester.ensureVisible(find.text('Mais dados'));
     await tester.tap(find.text('Mais dados'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('client-birthday')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.ensureVisible(find.byKey(const Key('client-nickname')));
     await tester.enterText(find.byKey(const Key('client-nickname')), 'Li');
     await tester.ensureVisible(find.text('Criar e usar'));
     await tester.tap(find.text('Criar e usar'));
