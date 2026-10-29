@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -49,6 +50,50 @@ void main() {
     await tester.pumpAndSettle();
     return container;
   }
+
+  testWidgets('salvar aplica a cor enviada mesmo se a seleção mudar',
+      (tester) async {
+    final pending = Completer<void>();
+    api.dio.interceptors.insert(0, InterceptorsWrapper(onRequest: (o, h) async {
+      if (o.method == 'PATCH') await pending.future;
+      h.next(o);
+    }));
+    final c = await pump(tester);
+    await tester.tap(find.byTooltip('Roxo'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Salvar tema'));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Azul AGENVA'));
+    await tester.pump();
+    pending.complete();
+    await tester.pumpAndSettle();
+    expect(patches.single, {'theme_color': '#5E35B1'});
+    expect(c.read(themeColorProvider), const Color(0xFF5E35B1));
+  });
+
+  testWidgets('sair da página durante o salvamento não acessa ref descartado',
+      (tester) async {
+    final pending = Completer<void>();
+    api.dio.interceptors.insert(0, InterceptorsWrapper(onRequest: (o, h) async {
+      if (o.method == 'PATCH') await pending.future;
+      h.next(o);
+    }));
+    await pump(tester);
+    await tester.tap(find.text('Salvar tema'));
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox());
+    final messages = <String>[];
+    final original = debugPrint;
+    debugPrint = (String? message, {int? wrapWidth}) {
+      if (message != null) messages.add(message);
+    };
+    addTearDown(() => debugPrint = original);
+    pending.complete();
+    await tester.pumpAndSettle();
+    debugPrint = original;
+    expect(messages.where((m) => m.contains('[tema] falha')), isEmpty);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('mostra a cor do segmento e a paleta', (tester) async {
     await pump(tester);

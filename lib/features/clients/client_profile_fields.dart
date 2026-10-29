@@ -149,12 +149,22 @@ class _ClientProfileFieldsState extends State<ClientProfileFields> {
   bool _searching = false;
   String? _cepMessage;
   String _lastZip = '';
+  int _lookupGeneration = 0;
 
   ClientProfileData get d => widget.data;
 
   Future<void> _lookupCep() async {
     final zip = onlyDigits(d.zip.text);
-    if (zip.length != 8 || zip == _lastZip) return;
+    if (zip == _lastZip) return;
+    final generation = ++_lookupGeneration;
+    if (zip.length != 8) {
+      _lastZip = '';
+      setState(() {
+        _searching = false;
+        _cepMessage = null;
+      });
+      return;
+    }
     _lastZip = zip;
     setState(() {
       _searching = true;
@@ -162,7 +172,7 @@ class _ClientProfileFieldsState extends State<ClientProfileFields> {
     });
     try {
       final r = await _cep.lookup(zip);
-      if (!mounted) return;
+      if (!mounted || generation != _lookupGeneration) return;
       setState(() {
         if (r == null) {
           _cepMessage = 'CEP não encontrado. Preenche o endereço à mão.';
@@ -174,9 +184,13 @@ class _ClientProfileFieldsState extends State<ClientProfileFields> {
         }
       });
     } on CepException catch (e) {
-      if (mounted) setState(() => _cepMessage = e.message);
+      if (mounted && generation == _lookupGeneration) {
+        setState(() => _cepMessage = e.message);
+      }
     } finally {
-      if (mounted) setState(() => _searching = false);
+      if (mounted && generation == _lookupGeneration) {
+        setState(() => _searching = false);
+      }
     }
   }
 
@@ -240,6 +254,7 @@ class _ClientProfileFieldsState extends State<ClientProfileFields> {
         gap,
         DropdownButtonFormField<String>(
           key: const Key('client-referral'),
+          isExpanded: true,
           initialValue: d.referralSource,
           decoration: const InputDecoration(
             labelText: 'Como conheceu (opcional)',
@@ -260,9 +275,7 @@ class _ClientProfileFieldsState extends State<ClientProfileFields> {
           controller: d.zip,
           keyboardType: TextInputType.number,
           inputFormatters: [_DigitsMask(8, _maskCep)],
-          onChanged: (v) {
-            if (onlyDigits(v).length == 8) _lookupCep();
-          },
+          onChanged: (_) => _lookupCep(),
           decoration: InputDecoration(
             labelText: 'CEP',
             hintText: '00000-000',
