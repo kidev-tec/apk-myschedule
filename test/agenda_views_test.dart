@@ -13,6 +13,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 
 import 'package:minha_agenda/core/api/api_client.dart';
+import 'package:minha_agenda/core/push/push_events.dart';
 import 'package:minha_agenda/features/agenda/agenda_page.dart';
 import 'package:minha_agenda/features/agenda/booking_wizard.dart' as booking;
 
@@ -148,6 +149,15 @@ void main() {
     final hoje = DateTime.now();
     expect(DateTime.parse(q['from'] as String).toLocal(),
         DateTime(hoje.year, hoje.month, hoje.day));
+  });
+
+  testWidgets('push de novo agendamento recarrega a agenda aberta',
+      (tester) async {
+    await pumpPage(tester);
+    final antes = capturedQueries.length;
+    PushEvents.instance.handle({'type': 'new_booking', 'appointment_id': 'x'});
+    await tester.pumpAndSettle();
+    expect(capturedQueries.length, greaterThan(antes));
   });
 
   testWidgets('troca pra SEMANA: janela de 7 dias, agendamento agrupado',
