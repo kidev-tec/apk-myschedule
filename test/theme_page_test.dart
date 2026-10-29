@@ -95,6 +95,24 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('falha ao salvar preserva a mensagem da API e a cor atual',
+      (tester) async {
+    adapter.onPatch('/me', (s) => s.reply(422, {'error': 'Cor indisponível'}),
+        data: Matchers.any);
+    final c = await pump(tester, current: const Color(0xFF5E35B1));
+    await tester.tap(find.byTooltip('Azul AGENVA'));
+    await tester.tap(find.text('Salvar tema'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cor indisponível'), findsOneWidget);
+    expect(c.read(themeColorProvider), const Color(0xFF5E35B1));
+    expect(
+        tester
+            .widget<FilledButton>(
+                find.widgetWithText(FilledButton, 'Salvar tema'))
+            .onPressed,
+        isNotNull);
+  });
+
   testWidgets('mostra a cor do segmento e a paleta', (tester) async {
     await pump(tester);
     expect(find.text('Cor do segmento (Barbearia)'), findsOneWidget);

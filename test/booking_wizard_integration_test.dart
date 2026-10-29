@@ -171,6 +171,48 @@ void main() {
     expect(find.text('CPF inválido'), findsOneWidget);
   });
 
+  testWidgets(
+      'notas em três linhas permitem confirmar com teclado em tela pequena',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(_wrapWithApi(api));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ana'));
+    await tester.pump();
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Corte'));
+    await tester.pump();
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
+    final days = (DateTime.monday - DateTime.now().weekday) % 7;
+    for (var i = 0; i < (days == 0 ? 7 : days); i++) {
+      await tester.tap(find.byIcon(Icons.chevron_right));
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(find.text('10:00'));
+    await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.viewInsets = const FakeViewPadding(bottom: 320);
+    await tester.pumpAndSettle();
+    final notes = find.byKey(const Key('wizard-notes'));
+    await tester.ensureVisible(notes);
+    await tester.enterText(notes,
+        'Primeira linha de detalhes\nSegunda linha de detalhes\nTerceira linha de detalhes');
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.ensureVisible(notes);
+    expect(notes.hitTestable(), findsOneWidget);
+    await tester.ensureVisible(find.text('Confirmar agendamento'));
+    await tester.tap(find.text('Confirmar agendamento'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('PAGINA AGENDA'), findsOneWidget);
+    expect(posted.single['notes'], contains('Terceira linha de detalhes'));
+  });
+
   testWidgets('fluxo completo: cliente → serviço → slot → POST /appointments',
       (tester) async {
     await tester.pumpWidget(_wrapWithApi(api));
