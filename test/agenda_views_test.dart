@@ -725,6 +725,18 @@ void main() {
     expect(find.text('Sem observações'), findsOneWidget);
   });
 
+  testWidgets('GRADE em celular de 360dp: cartões sem estourar a largura',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await pumpPage(tester);
+    await tester.tap(find.byTooltip('Grade'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byTooltip('Detalhes e observações'), findsOneWidget);
+  });
+
   testWidgets('DIA: tocar na data do rodapé abre popup com os dias do mês',
       (tester) async {
     await pumpPage(tester);
