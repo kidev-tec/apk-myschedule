@@ -16,6 +16,7 @@ List<DateTime> generateSlots({
   required List<Appointment> appointments,
   required int durationMin,
   String? excludeId,
+  DateTime? notBefore,
 }) {
   final weekday = date.weekday % 7; // 0=dom..6=sáb
   final dayHours = workingHours.where((h) => h.weekday == weekday).toList();
@@ -44,7 +45,9 @@ List<DateTime> generateSlots({
       final slotEnd = cursor.add(Duration(minutes: durationMin));
       final overlaps = dayAppointments
           .any((a) => a.startsAt.isBefore(slotEnd) && a.endsAt.isAfter(cursor));
-      if (!overlaps) slots.add(cursor);
+      // notBefore: horário que já passou não é oferecido.
+      final past = notBefore != null && cursor.isBefore(notBefore);
+      if (!overlaps && !past) slots.add(cursor);
       cursor = cursor.add(const Duration(minutes: 15)); // step 15 min
     }
   }
@@ -65,11 +68,19 @@ List<Client> filterClients(List<Client> clients, String query) {
 /// B-remarque (t_b018bc6b): monta a mensagem de remarcação pro WhatsApp.
 /// Usa o startsAt do appointment NOVO (resposta do PATCH — a API cancela a
 /// linha antiga e cria outra com id novo); sem dados novos, texto genérico.
+/// "27/10 às 09:00" — data/hora das mensagens de WhatsApp pro cliente.
+/// (No DateFormat, literal vai entre aspas SIMPLES: com aspas duplas o "s"
+/// de "às" virava o campo segundos e saía "à0".)
+String formatWhen(DateTime d) =>
+    DateFormat("dd/MM 'às' HH:mm", 'pt_BR').format(d);
+
+/// Nome usado nas mensagens pro cliente: como ele prefere ser chamado,
+/// ou o nome do cadastro.
+String greetingName(String name, String? nickname) =>
+    (nickname != null && nickname.trim().isNotEmpty) ? nickname.trim() : name;
+
 String buildRescheduleMessage(String clientName, Appointment? novo) {
-  final when = novo == null
-      ? 'o novo horário'
-      : '${DateFormat('dd/MM', 'pt_BR').format(novo.startsAt)} '
-          'às ${DateFormat('HH:mm', 'pt_BR').format(novo.startsAt)}';
+  final when = novo == null ? 'o novo horário' : formatWhen(novo.startsAt);
   return 'Oi $clientName! Remarquei teu horário pra $when. '
       'Confirma se esse novo horário funciona pra você? 🙂';
 }

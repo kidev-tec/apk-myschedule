@@ -20,6 +20,7 @@ class AppColors {
   static const Color surface = Color(0xFFFFFFFF);
   static const Color error = Color(0xFFC62828);
   static const Color success = Color(0xFF2E7D32);
+  static const Color rescheduled = Color(0xFF7B1FA2); // roxo (remarcado)
 
   /// Cores do TEMA ATIVO (respeitam o segmento escolhido).
   ///

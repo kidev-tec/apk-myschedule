@@ -578,6 +578,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           const SizedBox(height: 8),
 
+          // Cadastro de clientes: lista, criar e editar (dados completos,
+          // endereço com busca de CEP e informações privadas).
+          if (_me != null)
+            Card(
+              child: ListTile(
+                leading: Icon(Icons.people_outline,
+                    color: AppColors.primaryOf(context)),
+                title: const Text('Meus clientes'),
+                subtitle: const Text('Cadastrar, editar dados e informações'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/clients'),
+              ),
+            ),
+          const SizedBox(height: 8),
+
           if (_me != null)
             Card(
               child: ListTile(
