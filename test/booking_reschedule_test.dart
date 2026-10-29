@@ -59,6 +59,17 @@ void main() {
     });
   });
 
+  test('Appointment.fromJson lê notes', () {
+    final a = Appointment.fromJson({
+      'id': 'a1',
+      'starts_at': '2026-10-28T10:00:00.000',
+      'ends_at': '2026-10-28T11:00:00.000',
+      'status': 'confirmed',
+      'notes': 'obs',
+    });
+    expect(a.notes, 'obs');
+  });
+
   test('CA4 Appointment.fromJson parseia clientId/serviceId (snake/camel)', () {
     final a = Appointment.fromJson({
       'id': 'a1',
@@ -245,6 +256,29 @@ void main() {
       final voltar = tester.widget<IconButton>(
           find.widgetWithIcon(IconButton, Icons.chevron_left));
       expect(voltar.onPressed, isNull);
+    });
+
+    testWidgets('remarcar traz as observações já preenchidas', (tester) async {
+      FlutterSecureStorage.setMockInitialValues({});
+      final (api, _) = fakeApi();
+      final comObs = Appointment(
+          id: 'appt-9',
+          startsAt: DateTime(2026, 10, 28, 10),
+          endsAt: DateTime(2026, 10, 28, 11),
+          status: 'confirmed',
+          clientId: 'c1',
+          serviceId: 's1',
+          notes: 'prefere máquina 2');
+      await tester.pumpWidget(wrapWithApi(api, comObs));
+      await tester.tap(find.byKey(const Key('open-wizard')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pumpAndSettle();
+
+      // horário atual pré-selecionado → campo visível e preenchido
+      final campo =
+          tester.widget<TextField>(find.byKey(const Key('wizard-notes')));
+      expect(campo.controller?.text, 'prefere máquina 2');
     });
 
     testWidgets('CA3 salvar faz PATCH (nunca POST) e volta pra tela anterior',

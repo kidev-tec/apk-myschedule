@@ -631,6 +631,112 @@ void main() {
     expect(find.textContaining('DioException'), findsNothing);
   });
 
+  testWidgets(
+      'card mostra as observações (lista) e o botão de detalhes (grade)',
+      (tester) async {
+    final inicio = DateTime.now().add(const Duration(hours: 1));
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [
+                {
+                  'id': 'n1',
+                  'client_name': 'Ana',
+                  'client_phone': '+5514999990001',
+                  'service_name': 'Corte',
+                  'starts_at': inicio.toIso8601String(),
+                  'ends_at':
+                      inicio.add(const Duration(minutes: 30)).toIso8601String(),
+                  'status': 'confirmed',
+                  'source': 'app',
+                  'notes': 'alergia a pomada',
+                },
+              ]
+            }),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+    await pumpPage(tester);
+    expect(find.text('alergia a pomada'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Grade'));
+    await tester.pumpAndSettle();
+    // na grade o acesso é pelo botão de detalhes
+    expect(find.byTooltip('Detalhes e observações'), findsOneWidget);
+  });
+
+  testWidgets('botão Detalhes abre o painel com a observação e permite editar',
+      (tester) async {
+    final inicio = DateTime.now().add(const Duration(hours: 1));
+    Map<String, dynamic> appt(String? notes) => {
+          'id': 'd1',
+          'client_name': 'Ana',
+          'client_phone': '+5514999990001',
+          'service_name': 'Corte',
+          'starts_at': inicio.toIso8601String(),
+          'ends_at': inicio.add(const Duration(minutes: 30)).toIso8601String(),
+          'status': 'confirmed',
+          'source': 'app',
+          'notes': notes,
+        };
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [appt('alergia a pomada')]
+            }),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+    // PATCH só responde se o body tiver a observação nova (aparada)
+    adapter.onPatch('/appointments/d1',
+        (s) => s.reply(200, {'appointment': appt('usar máquina 2')}),
+        data: {'notes': 'usar máquina 2'});
+    await pumpPage(tester);
+
+    await tester.tap(find.byTooltip('Detalhes e observações'));
+    await tester.pumpAndSettle();
+    final painel = find.byKey(const Key('details-sheet'));
+    expect(painel, findsOneWidget);
+    expect(find.descendant(of: painel, matching: find.text('Ana')),
+        findsOneWidget);
+    expect(find.descendant(of: painel, matching: find.text('alergia a pomada')),
+        findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('details-edit')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const Key('details-notes-field')), ' usar máquina 2 ');
+    // depois de salvar, a agenda recarrega com a observação nova
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [appt('usar máquina 2')]
+            }),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+    await tester.tap(find.byKey(const Key('details-save')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Observação salva'), findsOneWidget);
+    expect(painel, findsNothing);
+    expect(find.text('usar máquina 2'), findsOneWidget);
+  });
+
+  testWidgets('Detalhes sem observação mostra "Sem observações"',
+      (tester) async {
+    await pumpPage(tester);
+    await tester.tap(find.byTooltip('Detalhes e observações'));
+    await tester.pumpAndSettle();
+    expect(find.text('Sem observações'), findsOneWidget);
+  });
+
+  testWidgets('GRADE em celular de 360dp: cartões sem estourar a largura',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await pumpPage(tester);
+    await tester.tap(find.byTooltip('Grade'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byTooltip('Detalhes e observações'), findsOneWidget);
+  });
+
   testWidgets('DIA: tocar na data do rodapé abre popup com os dias do mês',
       (tester) async {
     await pumpPage(tester);

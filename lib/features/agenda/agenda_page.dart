@@ -511,14 +511,47 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         title: Text(
             a.isBlock ? (a.canceledReason ?? 'Bloqueado') : a.clientName,
             style: Theme.of(context).textTheme.titleMedium),
-        subtitle: Text.rich(
-            a.isBlock
-                ? TextSpan(text: '🔒 Bloqueado • ${_statusLabel(a.status)}')
-                : _statusSubtitle(a),
-            style: a.isBlock
-                ? const TextStyle(fontStyle: FontStyle.italic)
-                : null),
-        trailing: _buildActionsMenu(a),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text.rich(
+                a.isBlock
+                    ? TextSpan(text: '🔒 Bloqueado • ${_statusLabel(a.status)}')
+                    : _statusSubtitle(a),
+                style: a.isBlock
+                    ? const TextStyle(fontStyle: FontStyle.italic)
+                    : null),
+            // observações do prestador (privadas)
+            if (a.notes != null && a.notes!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.sticky_note_2_outlined,
+                        size: 14, color: AppColors.midOf(context)),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(a.notes!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(fontStyle: FontStyle.italic)),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!a.isBlock) _buildDetailsButton(a),
+            _buildActionsMenu(a) ?? const SizedBox(width: 48),
+          ],
+        ),
       ),
     );
   }
@@ -560,6 +593,46 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                 const PopupMenuItem(value: 'cancel', child: Text('Cancelar')),
             ],
           );
+  }
+
+  /// Abre o painel de detalhes; ícone preenchido quando há observação.
+  /// [compact]: versão menor pro cartão da grade (pouca largura).
+  Widget _buildDetailsButton(Appointment a, {bool compact = false}) {
+    final hasNotes = a.notes != null && a.notes!.isNotEmpty;
+    return IconButton(
+      tooltip: 'Detalhes e observações',
+      visualDensity: VisualDensity.compact,
+      iconSize: compact ? 20 : null,
+      padding: compact ? EdgeInsets.zero : null,
+      constraints:
+          compact ? const BoxConstraints.tightFor(width: 32, height: 32) : null,
+      color: hasNotes ? AppColors.primaryOf(context) : AppColors.midOf(context),
+      icon: Icon(hasNotes ? Icons.sticky_note_2 : Icons.sticky_note_2_outlined),
+      onPressed: () => _showDetails(a),
+    );
+  }
+
+  /// Painel com os dados do agendamento e as observações (privadas do
+  /// prestador), com edição da observação no próprio painel.
+  Future<void> _showDetails(Appointment a) async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _AppointmentDetailsSheet(
+        appointment: a,
+        statusLabel: _displayStatus(a),
+        onSave: (notes) => ref
+            .read(agendaApiProvider)
+            .dio
+            .patch('/appointments/${a.id}', data: {'notes': notes}),
+      ),
+    );
+    if (saved == true && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Observação salva')));
+      await _loadAppointments();
+    }
   }
 
   /// Botão do alternador lista/grade; destacado quando é o layout atual.
@@ -610,21 +683,29 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           children: [
             Row(
               children: [
-                Container(
-                  key: Key('hora-${a.id}'),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _timeBackground(a),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    timeFmt.format(a.startsAt),
-                    style: theme.textTheme.labelLarge
-                        ?.copyWith(color: _timeForeground(a)),
+                // horário encolhe se faltar espaço (cartão estreito da grade)
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      key: Key('hora-${a.id}'),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _timeBackground(a),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        timeFmt.format(a.startsAt),
+                        style: theme.textTheme.labelLarge
+                            ?.copyWith(color: _timeForeground(a)),
+                      ),
+                    ),
                   ),
                 ),
                 const Spacer(),
+                if (!a.isBlock) _buildDetailsButton(a, compact: true),
                 // sem menu (remarcado): mantém a altura da linha
                 _buildActionsMenu(a) ?? const SizedBox(height: 48),
               ],
@@ -1335,6 +1416,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             status: a.status,
             clientId: a.clientId,
             serviceId: a.serviceId,
+            notes: a.notes,
           );
           final changed = await context.push<booking.Appointment?>(
               '/agenda/booking',
@@ -1381,6 +1463,9 @@ class Appointment {
   final String source;
   // RF-A02: motivo do bloqueio (mesma coluna de canceled_reason)
   final String? canceledReason;
+
+  /// Observações do prestador (privadas).
+  final String? notes;
   // B3: FKs pro modo remarcar (wizard pré-preenche cliente/serviço)
   final String? clientId;
   final String? serviceId;
@@ -1397,6 +1482,7 @@ class Appointment {
     required this.status,
     this.source = 'app',
     this.canceledReason,
+    this.notes,
     this.clientId,
     this.serviceId,
   });
@@ -1411,6 +1497,7 @@ class Appointment {
         status: j['status'] ?? 'pending',
         source: j['source'] ?? 'app',
         canceledReason: j['canceled_reason'] ?? j['canceledReason'],
+        notes: j['notes'] as String?,
         clientId: j['client_id'] ?? j['clientId'],
         serviceId: j['service_id'] ?? j['serviceId'],
       );
@@ -1673,6 +1760,158 @@ class _DayOfMonthPicker extends StatelessWidget {
             );
           }),
         ],
+      ),
+    );
+  }
+}
+
+/// Painel de detalhes do agendamento: dados + observações, com edição.
+/// Widget próprio pra que o controller do texto viva enquanto o painel
+/// existir (inclusive durante a animação de fechar).
+class _AppointmentDetailsSheet extends StatefulWidget {
+  final Appointment appointment;
+  final String statusLabel;
+  final Future<void> Function(String notes) onSave;
+
+  const _AppointmentDetailsSheet({
+    required this.appointment,
+    required this.statusLabel,
+    required this.onSave,
+  });
+
+  @override
+  State<_AppointmentDetailsSheet> createState() =>
+      _AppointmentDetailsSheetState();
+}
+
+class _AppointmentDetailsSheetState extends State<_AppointmentDetailsSheet> {
+  late final _ctrl =
+      TextEditingController(text: widget.appointment.notes ?? '');
+  bool _editing = false;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await widget.onSave(_ctrl.text.trim());
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = 'Não consegui salvar: ${humanError(e)}';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final a = widget.appointment;
+    final theme = Theme.of(context);
+    final notes = a.notes ?? '';
+    Widget row(IconData icon, String text) => Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(children: [
+            Icon(icon, size: 18, color: AppColors.midOf(context)),
+            const SizedBox(width: 8),
+            Expanded(child: Text(text, style: theme.textTheme.bodyLarge)),
+          ]),
+        );
+
+    return Padding(
+      key: const Key('details-sheet'),
+      padding: EdgeInsets.fromLTRB(
+          20, 0, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(a.clientName, style: theme.textTheme.titleLarge),
+            const SizedBox(height: 12),
+            row(Icons.event, booking_logic.formatWhen(a.startsAt)),
+            row(Icons.content_cut, a.serviceName),
+            row(Icons.info_outline, widget.statusLabel),
+            if (a.clientPhone.isNotEmpty) row(Icons.phone, a.clientPhone),
+            const Divider(height: 24),
+            Row(children: [
+              Text('Detalhes / Observações', style: theme.textTheme.titleSmall),
+              const Spacer(),
+              if (!_editing)
+                TextButton.icon(
+                  key: const Key('details-edit'),
+                  onPressed: () => setState(() => _editing = true),
+                  icon: const Icon(Icons.edit, size: 18),
+                  label: const Text('Editar'),
+                ),
+            ]),
+            const SizedBox(height: 4),
+            if (!_editing)
+              Text(
+                notes.isEmpty ? 'Sem observações' : notes,
+                style: notes.isEmpty
+                    ? theme.textTheme.bodyMedium
+                        ?.copyWith(color: AppColors.neutral)
+                    : theme.textTheme.bodyLarge,
+              )
+            else ...[
+              TextField(
+                key: const Key('details-notes-field'),
+                controller: _ctrl,
+                autofocus: true,
+                minLines: 2,
+                maxLines: 5,
+                maxLength: 1000,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                    helperText: 'Só você vê — o cliente não recebe.'),
+              ),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(_error!,
+                      style: const TextStyle(color: AppColors.error)),
+                ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: _saving
+                        ? null
+                        : () => setState(() {
+                              _editing = false;
+                              _ctrl.text = notes;
+                            }),
+                    child: const Text('Cancelar'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    key: const Key('details-save'),
+                    onPressed: _saving ? null : _save,
+                    child: _saving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Text('Salvar'),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
