@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
 
 import 'package:minha_agenda/core/api/api_client.dart';
+import 'package:minha_agenda/core/cep/cep_service.dart';
 import 'package:minha_agenda/features/clients/client_form_page.dart';
 
 // O form cria o próprio ApiClient (não tem provider de DI como o wizard) —
@@ -42,6 +43,13 @@ Widget _wrap({required String? clientId, required ApiClient api}) {
   );
 }
 
+/// Formulário de cliente é longo: tela alta pra todos os campos montarem.
+void _tall(WidgetTester tester) {
+  tester.view.physicalSize = const Size(1080, 6000);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -68,6 +76,7 @@ void main() {
 
   testWidgets('modo edição carrega cliente e salva com PATCH (não POST)',
       (tester) async {
+    _tall(tester);
     adapter.onGet(
         '/clients/abc-123',
         (s) => s.reply(200, {
@@ -75,6 +84,7 @@ void main() {
               'name': 'Ana',
               'phone_e164': '+5514999990001',
               'email': 'ana@x.com',
+              'notes': 'alérgica a tinta',
             }));
     adapter.onPatch('/clients/abc-123', (s) => s.reply(200, {'id': 'abc-123'}),
         data: Matchers.any);
@@ -87,6 +97,10 @@ void main() {
     final nameField = tester
         .widget<TextFormField>(find.widgetWithText(TextFormField, 'Nome *'));
     expect(nameField.controller!.text, 'Ana');
+    // informações do cliente carregadas no campo próprio
+    final notesField =
+        tester.widget<TextFormField>(find.byKey(const Key('client-notes')));
+    expect(notesField.controller!.text, 'alérgica a tinta');
 
     // edita o nome e salva
     await tester.enterText(
@@ -99,6 +113,8 @@ void main() {
     expect(patch, hasLength(1));
     expect(patch.single.path, '/clients/abc-123');
     expect(patch.single.body['name'], 'Ana Silva');
+    // PATCH substitui tudo: as informações precisam ir junto (senão apagam)
+    expect(patch.single.body['notes'], 'alérgica a tinta');
     expect(requests.where((r) => r.method == 'POST'), isEmpty);
 
     // volta pra lista
@@ -106,6 +122,7 @@ void main() {
   });
 
   testWidgets('modo criação continua com POST', (tester) async {
+    _tall(tester);
     adapter.onPost('/clients', (s) => s.reply(201, {'id': 'novo'}),
         data: Matchers.any);
 
@@ -127,12 +144,201 @@ void main() {
         find.widgetWithText(TextFormField, 'Nome *'), 'Beto');
     await tester.enterText(
         find.widgetWithText(TextFormField, 'WhatsApp *'), '+5514999990002');
+    await tester.enterText(
+        find.byKey(const Key('client-notes')), '  gosta de café  ');
+    await tester.ensureVisible(find.text('Criar cliente'));
     await tester.tap(find.text('Criar cliente'));
     await tester.pumpAndSettle();
 
     final post = requests.where((r) => r.method == 'POST').toList();
     expect(post, hasLength(1));
     expect(post.single.path, '/clients');
+    expect(post.single.body['notes'], 'gosta de café');
     expect(find.text('LISTA CLIENTES'), findsOneWidget);
+  });
+
+  testWidgets('cadastro completo: CEP preenche endereço e tudo vai no POST',
+      (tester) async {
+    _tall(tester);
+    adapter.onPost('/clients', (s) => s.reply(201, {'id': 'novo'}),
+        data: Matchers.any);
+    final cep = CepService(
+        lookupOverride: (c) async => c == '17012000'
+            ? const CepAddress(
+                street: 'Rua Batista de Carvalho',
+                district: 'Centro',
+                city: 'Bauru',
+                state: 'SP')
+            : null);
+
+    final router = GoRouter(initialLocation: '/clients/new', routes: [
+      GoRoute(
+          path: '/clients/new',
+          builder: (_, __) => ClientFormPage(api: api, cepService: cep)),
+      GoRoute(
+          path: '/clients',
+          builder: (_, __) => const Scaffold(body: Text('LISTA CLIENTES'))),
+    ]);
+    await tester.pumpWidget(
+        ProviderScope(child: MaterialApp.router(routerConfig: router)));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Nome *'), 'Eduardo Mello');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'WhatsApp *'), '14999990005');
+    await tester.enterText(find.byKey(const Key('client-nickname')), 'Dudu');
+    await tester.enterText(
+        find.byKey(const Key('client-cpf')), '529.982.247-25');
+
+    // CEP com 8 dígitos busca e preenche rua/bairro/cidade/UF
+    await tester.ensureVisible(find.byKey(const Key('client-zip')));
+    await tester.enterText(find.byKey(const Key('client-zip')), '17012-000');
+    await tester.pumpAndSettle();
+    expect(find.text('Rua Batista de Carvalho'), findsOneWidget);
+    expect(find.text('Bauru'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('client-number')), '100');
+
+    // como conheceu + consentimento
+    await tester.ensureVisible(find.byKey(const Key('client-referral')));
+    await tester.tap(find.byKey(const Key('client-referral')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Indicação').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('client-consent')));
+    await tester.tap(find.byKey(const Key('client-consent')));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Criar cliente'));
+    await tester.tap(find.text('Criar cliente'));
+    await tester.pumpAndSettle();
+
+    final body = requests.singleWhere((r) => r.method == 'POST').body as Map;
+    expect(body['nickname'], 'Dudu');
+    expect(body['cpf'], '52998224725');
+    expect(body['referral_source'], 'indicacao');
+    expect(body['marketing_consent'], isTrue);
+    expect(body['address'], {
+      'zip': '17012000',
+      'street': 'Rua Batista de Carvalho',
+      'number': '100',
+      'complement': '',
+      'district': 'Centro',
+      'city': 'Bauru',
+      'state': 'SP',
+    });
+    expect(find.text('LISTA CLIENTES'), findsOneWidget);
+  });
+
+  testWidgets('CPF inválido bloqueia o salvar com mensagem', (tester) async {
+    _tall(tester);
+    final router = GoRouter(initialLocation: '/clients/new', routes: [
+      GoRoute(
+          path: '/clients/new', builder: (_, __) => ClientFormPage(api: api)),
+    ]);
+    await tester.pumpWidget(
+        ProviderScope(child: MaterialApp.router(routerConfig: router)));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextFormField, 'Nome *'), 'Zé');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'WhatsApp *'), '14999990006');
+    await tester.enterText(
+        find.byKey(const Key('client-cpf')), '111.111.111-11');
+    await tester.ensureVisible(find.text('Criar cliente'));
+    await tester.tap(find.text('Criar cliente'));
+    await tester.pumpAndSettle();
+    expect(find.text('CPF inválido'), findsOneWidget);
+    expect(requests.where((r) => r.method == 'POST'), isEmpty);
+  });
+
+  testWidgets('edição carrega o cadastro completo', (tester) async {
+    _tall(tester);
+    adapter.onGet(
+        '/clients/abc-9',
+        (s) => s.reply(200, {
+              'id': 'abc-9',
+              'name': 'Eduardo',
+              'phone_e164': '5514999990005',
+              'cpf': '52998224725',
+              'nickname': 'Dudu',
+              'referral_source': 'instagram',
+              'marketing_consent': true,
+              'address': {
+                'zip': '17012000',
+                'street': 'Rua X',
+                'number': '10',
+                'complement': null,
+                'district': 'Centro',
+                'city': 'Bauru',
+                'state': 'SP',
+              },
+            }));
+    await tester.pumpWidget(_wrap(clientId: 'abc-9', api: api));
+    await tester.pumpAndSettle();
+    String txt(String k) =>
+        tester.widget<TextFormField>(find.byKey(Key(k))).controller!.text;
+    expect(txt('client-nickname'), 'Dudu');
+    expect(txt('client-cpf'), '529.982.247-25');
+    expect(txt('client-zip'), '17012-000');
+    expect(txt('client-city'), 'Bauru');
+    expect(find.text('Instagram'), findsOneWidget);
+  });
+
+  testWidgets(
+      'aberto a partir da lista: salvar VOLTA (pop), sem perder o voltar',
+      (tester) async {
+    _tall(tester);
+    adapter.onPost('/clients', (s) => s.reply(201, {'id': 'novo'}),
+        data: Matchers.any);
+    final router = GoRouter(initialLocation: '/settings', routes: [
+      GoRoute(
+          path: '/settings',
+          builder: (ctx, __) => Scaffold(
+              body: TextButton(
+                  onPressed: () => ctx.push('/clients/new'),
+                  child: const Text('ABRIR FORM')))),
+      GoRoute(
+          path: '/clients/new', builder: (_, __) => ClientFormPage(api: api)),
+      GoRoute(
+          path: '/clients',
+          builder: (_, __) => const Scaffold(body: Text('LISTA CLIENTES'))),
+    ]);
+    await tester.pumpWidget(
+        ProviderScope(child: MaterialApp.router(routerConfig: router)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ABRIR FORM'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextFormField, 'Nome *'), 'Lia');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'WhatsApp *'), '14999990007');
+    await tester.tap(find.text('Criar cliente'));
+    await tester.pumpAndSettle();
+    // voltou pra tela de origem (pilha preservada)
+    expect(find.text('ABRIR FORM'), findsOneWidget);
+    expect(find.text('LISTA CLIENTES'), findsNothing);
+  });
+
+  testWidgets('CEP e CPF só aceitam dígitos/máscara e no tamanho certo',
+      (tester) async {
+    _tall(tester);
+    final router = GoRouter(initialLocation: '/clients/new', routes: [
+      GoRoute(
+          path: '/clients/new',
+          builder: (_, __) => ClientFormPage(
+              api: api,
+              cepService: CepService(lookupOverride: (_) async => null))),
+    ]);
+    await tester.pumpWidget(
+        ProviderScope(child: MaterialApp.router(routerConfig: router)));
+    await tester.pumpAndSettle();
+    String txt(String k) =>
+        tester.widget<TextFormField>(find.byKey(Key(k))).controller!.text;
+
+    await tester.enterText(
+        find.byKey(const Key('client-zip')), '1198888777701310100');
+    expect(txt('client-zip'), '11988-887');
+    await tester.enterText(
+        find.byKey(const Key('client-cpf')), '529982247251234abc');
+    expect(txt('client-cpf'), '529.982.247-25');
   });
 }

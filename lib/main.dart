@@ -22,11 +22,13 @@ import 'features/settings/waitlist_page.dart';
 import 'features/settings/edit_business_page.dart';
 import 'features/services/service_form_page.dart';
 import 'features/settings/settings_page.dart';
+import 'features/settings/theme_page.dart';
 import 'features/settings/working_hours_page.dart';
 import 'features/settings/push_init_service.dart';
 import 'features/terms/terms_page.dart';
 import 'core/push/push_events.dart';
 import 'theme/app_theme.dart';
+import 'theme/theme_palette.dart';
 
 /// Segmento ativo do negócio (persistido; null = beauty default).
 /// Messenger global: avisos de push com o app aberto (fora de qualquer tela).
@@ -70,6 +72,9 @@ final routerProvider = Provider<GoRouter>((ref) {
             ref.read(segmentPresetProvider.notifier).state =
                 SegmentPreset.byId(id);
           }
+          // cor escolhida em Configurações → Tema (null = cor do segmento)
+          ref.read(themeColorProvider.notifier).state =
+              parseHexColor(r.data['theme_color'] as String?);
         }).catchError((_) {});
       }
 
@@ -162,6 +167,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/settings',
         builder: (_, __) => const SettingsPage(),
       ),
+      GoRoute(
+        path: '/theme',
+        builder: (_, __) => const ThemePage(),
+      ),
     ],
   );
 });
@@ -252,8 +261,10 @@ class MinhaAgendaApp extends ConsumerWidget {
           child: child ?? const SizedBox.shrink(),
         );
       },
-      theme: buildAppTheme(ref.watch(segmentPresetProvider)),
-      darkTheme: buildAppTheme(ref.watch(segmentPresetProvider))
+      theme: buildAppTheme(applyThemeColor(
+          ref.watch(segmentPresetProvider), ref.watch(themeColorProvider))),
+      darkTheme: buildAppTheme(applyThemeColor(
+              ref.watch(segmentPresetProvider), ref.watch(themeColorProvider)))
           .copyWith(brightness: Brightness.dark),
       themeMode: ThemeMode.system,
       routerConfig: router,

@@ -189,4 +189,19 @@ void main() {
       expect(filterClients(clientes, 'zzz'), isEmpty);
     });
   });
+
+  group('generateSlots notBefore', () {
+    test('descarta horários que começam antes de notBefore', () {
+      final slots = generateSlots(
+        date: segunda,
+        workingHours: [wh(1, '09:00', '12:00')],
+        appointments: [],
+        durationMin: 60,
+        notBefore: DateTime(2026, 9, 14, 10, 10),
+      );
+      expect(slots.first, DateTime(2026, 9, 14, 10, 15));
+      expect(
+          slots.any((s) => s.isBefore(DateTime(2026, 9, 14, 10, 10))), isFalse);
+    });
+  });
 }

@@ -516,6 +516,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           const SizedBox(height: 8),
 
+          // Tema e identidade visual: cor do app (paleta) — por cima do segmento
+          if (_me != null)
+            Card(
+              child: ListTile(
+                leading: Icon(Icons.palette_outlined,
+                    color: AppColors.primaryOf(context)),
+                title: const Text('Tema e identidade visual'),
+                subtitle: const Text('Escolher a cor do app'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/theme'),
+              ),
+            ),
+          const SizedBox(height: 8),
+
           // Logo do estabelecimento (upload próprio, servido pela API)
           if (_me != null)
             Card(
@@ -560,6 +574,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     const Text('Adicionar, editar preço e duração, arquivar'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => context.push('/services'),
+              ),
+            ),
+          const SizedBox(height: 8),
+
+          // Cadastro de clientes: lista, criar e editar (dados completos,
+          // endereço com busca de CEP e informações privadas).
+          if (_me != null)
+            Card(
+              child: ListTile(
+                leading: Icon(Icons.people_outline,
+                    color: AppColors.primaryOf(context)),
+                title: const Text('Meus clientes'),
+                subtitle: const Text('Cadastrar, editar dados e informações'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/clients'),
               ),
             ),
           const SizedBox(height: 8),
