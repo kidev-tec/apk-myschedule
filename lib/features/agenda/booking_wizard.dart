@@ -513,105 +513,107 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                   MediaQuery.of(sheetContext).viewInsets.bottom +
                       MediaQuery.of(sheetContext).padding.bottom +
                       24),
-              child: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('Adicionar cliente',
-                        style: Theme.of(sheetContext).textTheme.titleMedium),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: nameCtrl,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(
-                        labelText: 'Nome *',
-                        prefixIcon: Icon(Icons.person_outline),
-                      ),
-                      validator: (v) => v == null || v.trim().isEmpty
-                          ? 'Nome é obrigatório'
-                          : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: phoneCtrl,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        labelText: 'WhatsApp *',
-                        hintText: '(14) 99999-9999',
-                        helperText: 'Com DDD — o 55 do Brasil entra sozinho',
-                        prefixIcon: Icon(Icons.phone_outlined),
-                      ),
-                      validator: (v) => normalizePhoneBr(v ?? '').isEmpty
-                          ? 'Telefone inválido (informe DDD)'
-                          : null,
-                    ),
-                    const SizedBox(height: 12),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      key: const Key('add-client-notes'),
-                      controller: notesCtrl,
-                      minLines: 1,
-                      maxLines: 3,
-                      maxLength: 1000,
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: const InputDecoration(
-                        labelText: 'Informações / Observações (opcional)',
-                        helperText: 'Sobre o cliente. Só você vê.',
-                        prefixIcon: Icon(Icons.person_search_outlined),
-                      ),
-                    ),
-                    ExpansionTile(
-                      key: const Key('add-client-more'),
-                      maintainState: true,
-                      tilePadding: EdgeInsets.zero,
-                      childrenPadding: const EdgeInsets.only(bottom: 8),
-                      title: const Text('Mais dados'),
-                      subtitle:
-                          const Text('E-mail, aniversário, CPF, endereço…'),
-                      onExpansionChanged: (open) {
-                        if (open) moreOpened = true;
-                      },
-                      children: [
-                        TextFormField(
-                          controller: emailCtrl,
-                          keyboardType: TextInputType.emailAddress,
-                          decoration: const InputDecoration(
-                            labelText: 'E-mail (opcional)',
-                            prefixIcon: Icon(Icons.email_outlined),
-                          ),
+              child: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Adicionar cliente',
+                          style: Theme.of(sheetContext).textTheme.titleMedium),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: nameCtrl,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(
+                          labelText: 'Nome *',
+                          prefixIcon: Icon(Icons.person_outline),
                         ),
-                        const SizedBox(height: 12),
-                        ClientProfileFields(data: profile),
-                      ],
-                    ),
-                    if (duplicateError != null) ...[
+                        validator: (v) => v == null || v.trim().isEmpty
+                            ? 'Nome é obrigatório'
+                            : null,
+                      ),
                       const SizedBox(height: 12),
-                      Text(duplicateError!,
-                          style: const TextStyle(color: AppColors.error)),
-                      if (duplicate != null)
-                        TextButton.icon(
-                          icon: const Icon(Icons.person_search),
-                          label: Text('Usar ${duplicate!.name}'),
-                          onPressed: () =>
-                              Navigator.pop(sheetContext, duplicate),
+                      TextFormField(
+                        controller: phoneCtrl,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                          labelText: 'WhatsApp *',
+                          hintText: '(14) 99999-9999',
+                          helperText: 'Com DDD — o 55 do Brasil entra sozinho',
+                          prefixIcon: Icon(Icons.phone_outlined),
                         ),
-                    ],
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: saving ? null : save,
-                        child: saving
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2))
-                            : const Text('Criar e usar'),
+                        validator: (v) => normalizePhoneBr(v ?? '').isEmpty
+                            ? 'Telefone inválido (informe DDD)'
+                            : null,
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        key: const Key('add-client-notes'),
+                        controller: notesCtrl,
+                        minLines: 1,
+                        maxLines: 3,
+                        maxLength: 1000,
+                        textCapitalization: TextCapitalization.sentences,
+                        decoration: const InputDecoration(
+                          labelText: 'Informações / Observações (opcional)',
+                          helperText: 'Sobre o cliente. Só você vê.',
+                          prefixIcon: Icon(Icons.person_search_outlined),
+                        ),
+                      ),
+                      ExpansionTile(
+                        key: const Key('add-client-more'),
+                        maintainState: true,
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding: const EdgeInsets.only(bottom: 8),
+                        title: const Text('Mais dados'),
+                        subtitle:
+                            const Text('E-mail, aniversário, CPF, endereço…'),
+                        onExpansionChanged: (open) {
+                          if (open) moreOpened = true;
+                        },
+                        children: [
+                          TextFormField(
+                            controller: emailCtrl,
+                            keyboardType: TextInputType.emailAddress,
+                            decoration: const InputDecoration(
+                              labelText: 'E-mail (opcional)',
+                              prefixIcon: Icon(Icons.email_outlined),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          ClientProfileFields(data: profile),
+                        ],
+                      ),
+                      if (duplicateError != null) ...[
+                        const SizedBox(height: 12),
+                        Text(duplicateError!,
+                            style: const TextStyle(color: AppColors.error)),
+                        if (duplicate != null)
+                          TextButton.icon(
+                            icon: const Icon(Icons.person_search),
+                            label: Text('Usar ${duplicate!.name}'),
+                            onPressed: () =>
+                                Navigator.pop(sheetContext, duplicate),
+                          ),
+                      ],
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: saving ? null : save,
+                          child: saving
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2))
+                              : const Text('Criar e usar'),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
