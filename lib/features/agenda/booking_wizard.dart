@@ -765,10 +765,11 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     final dateFmt = DateFormat('EEEE, d \'de\' MMMM', 'pt_BR');
     final timeFmt = DateFormat('HH:mm', 'pt_BR');
 
-    return Column(
-      children: [
+    return CustomScrollView(
+      slivers: [
         // Date picker
-        Container(
+        SliverToBoxAdapter(
+            child: Container(
           padding: const EdgeInsets.all(16),
           color: AppColors.softOf(context).withValues(alpha: 0.3),
           child: Row(
@@ -781,17 +782,22 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                       ? () => setState(() => _selectedDate =
                           _selectedDate.subtract(const Duration(days: 1)))
                       : null),
-              Text(dateFmt.format(_selectedDate).capitalize(),
-                  style: Theme.of(context).textTheme.titleMedium),
+              Expanded(
+                child: Text(dateFmt.format(_selectedDate).capitalize(),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium),
+              ),
               IconButton(
                   icon: const Icon(Icons.chevron_right),
                   onPressed: () => setState(() => _selectedDate =
                       _selectedDate.add(const Duration(days: 1)))),
             ],
           ),
-        ),
+        )),
         if (slots.isEmpty)
-          Expanded(
+          SliverToBoxAdapter(
+              child: Padding(
+            padding: const EdgeInsets.all(16),
             child: Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -809,19 +815,18 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                 ],
               ),
             ),
-          )
+          ))
         else
-          Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.all(16),
+          SliverPadding(
+            padding: const EdgeInsets.all(16),
+            sliver: SliverGrid(
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 3,
                 childAspectRatio: 2.5,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
               ),
-              itemCount: slots.length,
-              itemBuilder: (_, i) {
+              delegate: SliverChildBuilderDelegate((_, i) {
                 final slot = slots[i];
                 final selected = _selectedSlot == slot;
                 return InkWell(
@@ -852,12 +857,13 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                     ),
                   ),
                 );
-              },
+              }, childCount: slots.length),
             ),
           ),
         // Observações: só depois de escolher o horário; privadas do prestador.
         if (_selectedSlot != null)
-          Padding(
+          SliverToBoxAdapter(
+              child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: TextField(
               key: const Key('wizard-notes'),
@@ -872,7 +878,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                 prefixIcon: Icon(Icons.sticky_note_2_outlined),
               ),
             ),
-          ),
+          )),
       ],
     );
   }
