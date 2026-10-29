@@ -415,7 +415,9 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.ensureVisible(find.byKey(const Key('client-nickname')));
     await tester.enterText(find.byKey(const Key('client-nickname')), 'Li');
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Criar e usar'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Criar e usar'));
     await tester.pumpAndSettle();
 

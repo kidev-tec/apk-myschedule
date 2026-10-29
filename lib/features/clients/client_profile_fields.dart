@@ -254,6 +254,7 @@ class _ClientProfileFieldsState extends State<ClientProfileFields> {
         gap,
         DropdownButtonFormField<String>(
           key: const Key('client-referral'),
+          isExpanded: true,
           initialValue: d.referralSource,
           decoration: const InputDecoration(
             labelText: 'Como conheceu (opcional)',
