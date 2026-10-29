@@ -75,6 +75,7 @@ void main() {
               'name': 'Ana',
               'phone_e164': '+5514999990001',
               'email': 'ana@x.com',
+              'notes': 'alérgica a tinta',
             }));
     adapter.onPatch('/clients/abc-123', (s) => s.reply(200, {'id': 'abc-123'}),
         data: Matchers.any);
@@ -87,6 +88,10 @@ void main() {
     final nameField = tester
         .widget<TextFormField>(find.widgetWithText(TextFormField, 'Nome *'));
     expect(nameField.controller!.text, 'Ana');
+    // informações do cliente carregadas no campo próprio
+    final notesField =
+        tester.widget<TextFormField>(find.byKey(const Key('client-notes')));
+    expect(notesField.controller!.text, 'alérgica a tinta');
 
     // edita o nome e salva
     await tester.enterText(
@@ -99,6 +104,8 @@ void main() {
     expect(patch, hasLength(1));
     expect(patch.single.path, '/clients/abc-123');
     expect(patch.single.body['name'], 'Ana Silva');
+    // PATCH substitui tudo: as informações precisam ir junto (senão apagam)
+    expect(patch.single.body['notes'], 'alérgica a tinta');
     expect(requests.where((r) => r.method == 'POST'), isEmpty);
 
     // volta pra lista
@@ -127,12 +134,16 @@ void main() {
         find.widgetWithText(TextFormField, 'Nome *'), 'Beto');
     await tester.enterText(
         find.widgetWithText(TextFormField, 'WhatsApp *'), '+5514999990002');
+    await tester.enterText(
+        find.byKey(const Key('client-notes')), '  gosta de café  ');
+    await tester.ensureVisible(find.text('Criar cliente'));
     await tester.tap(find.text('Criar cliente'));
     await tester.pumpAndSettle();
 
     final post = requests.where((r) => r.method == 'POST').toList();
     expect(post, hasLength(1));
     expect(post.single.path, '/clients');
+    expect(post.single.body['notes'], 'gosta de café');
     expect(find.text('LISTA CLIENTES'), findsOneWidget);
   });
 }

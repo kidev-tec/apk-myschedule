@@ -103,6 +103,42 @@ void main() {
     }));
   });
 
+  testWidgets('Adicionar cliente permite salvar com teclado em tela pequena',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(_wrapWithApi(api));
+    await tester.pumpAndSettle();
+    adapter.onPost(
+        '/clients',
+        (s) => s.reply(
+            201, {'id': 'small', 'name': 'Lia', 'phone_e164': '5514999990008'}),
+        data: Matchers.any);
+    await tester.tap(find.text('Adicionar cliente'));
+    await tester.pumpAndSettle();
+    tester.view.viewInsets = const FakeViewPadding(bottom: 320);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    final name = find.widgetWithText(TextFormField, 'Nome *');
+    await tester.ensureVisible(name);
+    await tester.enterText(name, 'Lia');
+    final phone = find.widgetWithText(TextFormField, 'WhatsApp *');
+    await tester.ensureVisible(phone);
+    await tester.enterText(phone, '14999990008');
+    final notes = find.byKey(const Key('add-client-notes'));
+    await tester.ensureVisible(notes);
+    await tester.enterText(notes, 'Prefere café');
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Criar e usar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Criar e usar'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(posted.last['notes'], 'Prefere café');
+  });
+
   testWidgets('fluxo completo: cliente → serviço → slot → POST /appointments',
       (tester) async {
     await tester.pumpWidget(_wrapWithApi(api));
@@ -274,20 +310,28 @@ void main() {
     expect(find.text('Nenhum cliente encontrado'), findsOneWidget);
     expect(find.text('Adicionar cliente'), findsOneWidget);
 
+    // POST só responde se as informações do cliente forem junto (aparadas)
     adapter.onPost(
         '/clients',
         (s) => s.reply(201,
             {'id': 'c-novo', 'name': 'Zé Novato', 'phone_e164': '+5514999977'}),
-        data: Matchers.any);
+        data: {
+          'name': 'Zé Novato',
+          'phone_e164': Matchers.any,
+          'notes': 'cliente novo, indicado pela Ana',
+        });
 
     await tester.tap(find.text('Adicionar cliente'));
     await tester.pumpAndSettle();
 
-    // bottom sheet: preenche nome + telefone e salva
+    // bottom sheet: preenche nome + telefone + informações e salva
     await tester.enterText(
         find.widgetWithText(TextFormField, 'Nome *'), 'Zé Novato');
     await tester.enterText(
         find.widgetWithText(TextFormField, 'WhatsApp *'), '+5514999977');
+    await tester.enterText(find.byKey(const Key('add-client-notes')),
+        ' cliente novo, indicado pela Ana ');
+    await tester.ensureVisible(find.text('Criar e usar'));
     await tester.tap(find.text('Criar e usar'));
     await tester.pumpAndSettle();
 

@@ -717,6 +717,48 @@ void main() {
     expect(find.text('usar máquina 2'), findsOneWidget);
   });
 
+  testWidgets('Detalhes: informações do CLIENTE só aparecem ao tocar no botão',
+      (tester) async {
+    final inicio = DateTime.now().add(const Duration(hours: 1));
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [
+                {
+                  'id': 'd1',
+                  'client_id': 'cli-1',
+                  'client_name': 'Ana',
+                  'client_phone': '+5514999990001',
+                  'service_name': 'Corte',
+                  'starts_at': inicio.toIso8601String(),
+                  'ends_at':
+                      inicio.add(const Duration(minutes: 30)).toIso8601String(),
+                  'status': 'confirmed',
+                  'source': 'app',
+                },
+              ]
+            }),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+    adapter.onGet(
+        '/clients/cli-1',
+        (s) => s.reply(200, {
+              'id': 'cli-1',
+              'name': 'Ana',
+              'phone_e164': '+5514999990001',
+              'notes': 'alérgica a tinta',
+            }));
+    await pumpPage(tester);
+
+    await tester.tap(find.byTooltip('Detalhes e observações'));
+    await tester.pumpAndSettle();
+    // escondido por padrão
+    expect(find.text('alérgica a tinta'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('details-client-info')));
+    await tester.pumpAndSettle();
+    expect(find.text('alérgica a tinta'), findsOneWidget);
+  });
+
   testWidgets('Detalhes sem observação mostra "Sem observações"',
       (tester) async {
     await pumpPage(tester);

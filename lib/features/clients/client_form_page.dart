@@ -22,6 +22,9 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
   final _emailController = TextEditingController();
   final _birthdayController = TextEditingController();
 
+  /// Informações sobre o cliente (privadas do prestador).
+  final _notesController = TextEditingController();
+
   bool _loading = false;
   bool get _isEditing => widget.clientId != null;
 
@@ -29,6 +32,16 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
   void initState() {
     super.initState();
     if (_isEditing) _loadClient();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _emailController.dispose();
+    _birthdayController.dispose();
+    _notesController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadClient() async {
@@ -40,6 +53,7 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
       _nameController.text = data['name'];
       _phoneController.text = data['phone_e164'] ?? data['phoneE164'] ?? '';
       _emailController.text = data['email'] ?? '';
+      _notesController.text = data['notes'] ?? '';
       if (data['birthday'] != null) {
         final dt = DateTime.parse(data['birthday']);
         _birthdayController.text =
@@ -71,6 +85,8 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
         'email': _emailController.text.trim(),
       if (birthday != null)
         'birthday': birthday.toIso8601String().split('T')[0],
+      // sempre enviado: o PATCH substitui tudo (sem o campo, apagaria)
+      'notes': _notesController.text.trim(),
     };
 
     try {
@@ -168,6 +184,23 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
                       hintText: 'DD/MM/AAAA',
                       prefixIcon: Icon(Icons.cake_outlined),
                       suffixIcon: Icon(Icons.calendar_today),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    key: const Key('client-notes'),
+                    controller: _notesController,
+                    minLines: 2,
+                    maxLines: 5,
+                    maxLength: 1000,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      labelText: 'Informações / Observações (opcional)',
+                      hintText:
+                          'Ex.: alergias, preferências, como gosta do corte',
+                      helperText: 'Só você vê — o cliente não recebe.',
+                      prefixIcon: Icon(Icons.person_search_outlined),
+                      alignLabelWithHint: true,
                     ),
                   ),
                   const SizedBox(height: 32),
