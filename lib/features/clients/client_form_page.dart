@@ -2,14 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
+import '../../core/api/api_error.dart';
+import '../../core/cep/cep_service.dart';
 import '../../core/utils/phone_br.dart';
 import '../../theme/app_theme.dart';
+import 'client_profile_fields.dart';
 
 class ClientFormPage extends ConsumerStatefulWidget {
   final String? clientId; // null = novo
   final ApiClient? api; // DI pra testes (mock da rede)
+  final CepService? cepService; // DI pra testes (busca de CEP)
 
-  const ClientFormPage({super.key, this.clientId, this.api});
+  const ClientFormPage({super.key, this.clientId, this.api, this.cepService});
 
   @override
   ConsumerState<ClientFormPage> createState() => _ClientFormPageState();
@@ -20,7 +24,9 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
-  final _birthdayController = TextEditingController();
+
+  /// Aniversário, apelido, CPF, como conheceu, consentimento e endereço.
+  final _profile = ClientProfileData();
 
   /// Informações sobre o cliente (privadas do prestador).
   final _notesController = TextEditingController();
@@ -39,7 +45,7 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
     _nameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
-    _birthdayController.dispose();
+    _profile.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -54,11 +60,7 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
       _phoneController.text = data['phone_e164'] ?? data['phoneE164'] ?? '';
       _emailController.text = data['email'] ?? '';
       _notesController.text = data['notes'] ?? '';
-      if (data['birthday'] != null) {
-        final dt = DateTime.parse(data['birthday']);
-        _birthdayController.text =
-            '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
-      }
+      _profile.loadFrom(Map<String, dynamic>.from(data as Map));
     } catch (e) {
       debugPrint('[client_form] erro: $e');
     }
@@ -69,22 +71,12 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
 
-    DateTime? birthday;
-    if (_birthdayController.text.isNotEmpty) {
-      final parts = _birthdayController.text.split('/');
-      if (parts.length == 3) {
-        birthday = DateTime(
-            int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
-      }
-    }
-
     final data = {
       'name': _nameController.text.trim(),
       'phone_e164': normalizePhoneBr(_phoneController.text),
       if (_emailController.text.trim().isNotEmpty)
         'email': _emailController.text.trim(),
-      if (birthday != null)
-        'birthday': birthday.toIso8601String().split('T')[0],
+      ..._profile.toJson(),
       // sempre enviado: o PATCH substitui tudo (sem o campo, apagaria)
       'notes': _notesController.text.trim(),
     };
@@ -96,31 +88,24 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
       } else {
         await api.dio.post('/clients', data: data);
       }
-      if (mounted) context.go('/clients');
+      if (!mounted) return;
+      // Volta pra tela de origem (lista/configurações) preservando a pilha;
+      // sem origem (deep link), cai na lista.
+      if (context.canPop()) {
+        context.pop(true);
+      } else {
+        context.go('/clients');
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Falha: $e'), backgroundColor: AppColors.error),
+              content: Text('Não consegui salvar: ${humanError(e)}'),
+              backgroundColor: AppColors.error),
         );
       }
     }
     if (mounted) setState(() => _loading = false);
-  }
-
-  Future<void> _pickBirthday() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: now.subtract(const Duration(days: 365 * 25)),
-      firstDate: DateTime(1920),
-      lastDate: now,
-    );
-    if (picked != null) {
-      _birthdayController.text =
-          '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
-      setState(() {});
-    }
   }
 
   @override
@@ -175,17 +160,8 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _birthdayController,
-                    readOnly: true,
-                    onTap: _pickBirthday,
-                    decoration: const InputDecoration(
-                      labelText: 'Aniversário (opcional)',
-                      hintText: 'DD/MM/AAAA',
-                      prefixIcon: Icon(Icons.cake_outlined),
-                      suffixIcon: Icon(Icons.calendar_today),
-                    ),
-                  ),
+                  ClientProfileFields(
+                      data: _profile, cepService: widget.cepService),
                   const SizedBox(height: 16),
                   TextFormField(
                     key: const Key('client-notes'),

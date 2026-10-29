@@ -74,6 +74,11 @@ List<Client> filterClients(List<Client> clients, String query) {
 String formatWhen(DateTime d) =>
     DateFormat("dd/MM 'às' HH:mm", 'pt_BR').format(d);
 
+/// Nome usado nas mensagens pro cliente: como ele prefere ser chamado,
+/// ou o nome do cadastro.
+String greetingName(String name, String? nickname) =>
+    (nickname != null && nickname.trim().isNotEmpty) ? nickname.trim() : name;
+
 String buildRescheduleMessage(String clientName, Appointment? novo) {
   final when = novo == null ? 'o novo horário' : formatWhen(novo.startsAt);
   return 'Oi $clientName! Remarquei teu horário pra $when. '

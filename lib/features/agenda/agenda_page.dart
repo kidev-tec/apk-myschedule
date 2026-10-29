@@ -14,7 +14,7 @@ import '../../core/update/update_service.dart';
 import '../../theme/app_theme.dart';
 import 'booking_wizard.dart' as booking show Appointment;
 import 'booking_logic.dart' as booking_logic
-    show buildRescheduleMessage, formatWhen;
+    show buildRescheduleMessage, formatWhen, greetingName;
 
 /// B6/DI: provider do ApiClient pra agenda — testes sobrescrevem com mock.
 final agendaApiProvider = Provider<ApiClient>((ref) => ApiClient());
@@ -1121,6 +1121,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
 
   bool _isPast(Appointment a) => a.startsAt.isBefore(DateTime.now());
 
+  /// Como chamar o cliente nas mensagens de WhatsApp (apelido ou nome).
+  String _greeting(Appointment a) =>
+      booking_logic.greetingName(a.clientName, a.clientNickname);
+
   /// Agendamento de hoje ou de um dia anterior (fuso do aparelho).
   bool _isOnOrBeforeToday(Appointment a) {
     final now = DateTime.now();
@@ -1134,7 +1138,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   Future<void> _notifyCancelOnWhatsapp(Appointment a) async {
     final when = booking_logic.formatWhen(a.startsAt);
     final msg = Uri.encodeComponent(
-        'Oi ${a.clientName}! Tive que remanejar teu horário de $when. '
+        'Oi ${_greeting(a)}! Tive que remanejar teu horário de $when. '
         'Me chama pra combinarmos outro horário! 🙂');
     final phone = ensureDdi55(a.clientPhone);
     final ok = await showDialog<bool>(
@@ -1165,7 +1169,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     final when = booking_logic.formatWhen(a.startsAt);
     final link = await _confirmationLink(a);
     final msg = Uri.encodeComponent(
-        'Oi ${a.clientName}! Confirmando teu horário de $when. '
+        'Oi ${_greeting(a)}! Confirmando teu horário de $when. '
         'Pode confirmar tua presença aqui? $link 🙂');
     final phone = ensureDdi55(a.clientPhone);
     if (!mounted) return;
@@ -1209,11 +1213,11 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   Future<void> _notifyRescheduledOnWhatsapp(
       Appointment a, booking.Appointment? novo) async {
     final whenText = booking_logic
-        .buildRescheduleMessage(a.clientName, novo)
-        .replaceFirst('Oi ${a.clientName}! ', '');
+        .buildRescheduleMessage(_greeting(a), novo)
+        .replaceFirst('Oi ${_greeting(a)}! ', '');
     if (!mounted) return;
     final msg = Uri.encodeComponent(
-        booking_logic.buildRescheduleMessage(a.clientName, novo));
+        booking_logic.buildRescheduleMessage(_greeting(a), novo));
     final phone = ensureDdi55(a.clientPhone);
     final ok = await showDialog<bool>(
       context: context,
@@ -1475,6 +1479,9 @@ class Appointment {
 
   /// Observações do prestador (privadas).
   final String? notes;
+
+  /// Como o cliente prefere ser chamado (mensagens de WhatsApp).
+  final String? clientNickname;
   // B3: FKs pro modo remarcar (wizard pré-preenche cliente/serviço)
   final String? clientId;
   final String? serviceId;
@@ -1492,6 +1499,7 @@ class Appointment {
     this.source = 'app',
     this.canceledReason,
     this.notes,
+    this.clientNickname,
     this.clientId,
     this.serviceId,
   });
@@ -1507,6 +1515,7 @@ class Appointment {
         source: j['source'] ?? 'app',
         canceledReason: j['canceled_reason'] ?? j['canceledReason'],
         notes: j['notes'] as String?,
+        clientNickname: j['client_nickname'] as String?,
         clientId: j['client_id'] ?? j['clientId'],
         serviceId: j['service_id'] ?? j['serviceId'],
       );

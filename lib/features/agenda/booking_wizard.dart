@@ -7,6 +7,7 @@ import '../../core/api/api_client.dart';
 import '../../core/storage/sync_queue.dart';
 import '../../core/utils/phone_br.dart';
 import '../../theme/app_theme.dart';
+import '../clients/client_profile_fields.dart';
 import 'booking_logic.dart' as logic;
 
 /// Provider do ApiClient — DI pra testes de integração sobrescreverem
@@ -431,6 +432,9 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     final phoneCtrl = TextEditingController(text: _query.trim());
     final emailCtrl = TextEditingController();
     final notesCtrl = TextEditingController();
+    // "Mais dados": e-mail, apelido, aniversário, CPF, origem, LGPD, endereço
+    final profile = ClientProfileData();
+    var moreOpened = false;
     final formKey = GlobalKey<FormState>();
     bool saving = false;
     String? duplicateError;
@@ -457,6 +461,8 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                     'email': emailCtrl.text.trim(),
                   if (notesCtrl.text.trim().isNotEmpty)
                     'notes': notesCtrl.text.trim(),
+                  // só manda o cadastro complementar se foi aberto
+                  if (moreOpened) ...profile.toJson(),
                 });
                 if (sheetContext.mounted) {
                   Navigator.pop(sheetContext, Client.fromJson(resp.data));
@@ -542,14 +548,6 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                             : null,
                       ),
                       const SizedBox(height: 12),
-                      TextFormField(
-                        controller: emailCtrl,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(
-                          labelText: 'E-mail (opcional)',
-                          prefixIcon: Icon(Icons.email_outlined),
-                        ),
-                      ),
                       const SizedBox(height: 12),
                       TextFormField(
                         key: const Key('add-client-notes'),
@@ -563,6 +561,30 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                           helperText: 'Sobre o cliente. Só você vê.',
                           prefixIcon: Icon(Icons.person_search_outlined),
                         ),
+                      ),
+                      ExpansionTile(
+                        key: const Key('add-client-more'),
+                        maintainState: true,
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding: const EdgeInsets.only(bottom: 8),
+                        title: const Text('Mais dados'),
+                        subtitle:
+                            const Text('E-mail, aniversário, CPF, endereço…'),
+                        onExpansionChanged: (open) {
+                          if (open) moreOpened = true;
+                        },
+                        children: [
+                          TextFormField(
+                            controller: emailCtrl,
+                            keyboardType: TextInputType.emailAddress,
+                            decoration: const InputDecoration(
+                              labelText: 'E-mail (opcional)',
+                              prefixIcon: Icon(Icons.email_outlined),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          ClientProfileFields(data: profile),
+                        ],
                       ),
                       if (duplicateError != null) ...[
                         const SizedBox(height: 12),
