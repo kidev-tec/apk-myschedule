@@ -516,6 +516,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           const SizedBox(height: 8),
 
+          // Tema e identidade visual: cor do app (paleta) — por cima do segmento
+          if (_me != null)
+            Card(
+              child: ListTile(
+                leading: Icon(Icons.palette_outlined,
+                    color: AppColors.primaryOf(context)),
+                title: const Text('Tema e identidade visual'),
+                subtitle: const Text('Escolher a cor do app'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/theme'),
+              ),
+            ),
+          const SizedBox(height: 8),
+
           // Logo do estabelecimento (upload próprio, servido pela API)
           if (_me != null)
             Card(

@@ -172,6 +172,7 @@ void main() {
     expect(find.textContaining('Não consegui carregar'), findsNothing);
     expect(find.text('Meus serviços'), findsOneWidget);
     expect(find.text('Segmento'), findsOneWidget);
+    expect(find.text('Tema e identidade visual'), findsOneWidget);
     // cadastro de clientes acessível pelas Configurações
     expect(find.text('Meus clientes'), findsOneWidget);
   });
