@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_error.dart';
+import '../../core/push/push_events.dart';
 import '../../core/storage/local_cache.dart';
 import '../../core/storage/connectivity_provider.dart';
 import '../../core/storage/sync_queue.dart';
@@ -63,6 +64,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   @override
   void initState() {
     super.initState();
+    // Cliente agendou pelo link (push) → recarrega a agenda aberta.
+    PushEvents.instance.agendaChanged.addListener(_onPushAgendaChanged);
     (widget.onCheckUpdate ??
         () => UpdateService.check().then((info) {
               if (info != null && mounted) _updateBanner.value = true;
@@ -79,6 +82,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   @override
   void dispose() {
     _connRemove?.call();
+    PushEvents.instance.agendaChanged.removeListener(_onPushAgendaChanged);
     super.dispose();
   }
 
@@ -107,6 +111,10 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         _loadAppointments();
       }
     }).whenComplete(() => _syncing = false);
+  }
+
+  void _onPushAgendaChanged() {
+    if (mounted) _loadAppointments();
   }
 
   Future<void> _loadAppointments() async {
