@@ -15,6 +15,7 @@ import '../../core/api/paywall_flag.dart';
 import '../../core/update/update_service.dart';
 import '../../theme/app_theme.dart';
 import '../clients/public_link_badge.dart';
+import '../notifications/notification_bell.dart';
 import 'block_time_page.dart';
 import 'booking_wizard.dart' as booking show Appointment;
 import 'booking_logic.dart' as booking_logic
@@ -217,6 +218,12 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   }
 
   /// Mês: tocar num dia abre a visão dia daquela data.
+  /// Abre as notificações; tocar numa de agendamento volta com o dia dele.
+  Future<void> _openNotifications() async {
+    final day = await context.push<DateTime>('/notifications');
+    if (day != null && mounted) _openDay(day);
+  }
+
   void _openDay(DateTime day) {
     setState(() {
       _view = _AgendaView.dia;
@@ -257,6 +264,11 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           // B6: botão de mês no AppBar removido — redundante com o seletor
           // Dia/Semana/Mês (feedback Rafael 18/09). O "Mês" do seletor abre
           // o mesmo bottom sheet.
+          // central de notificações (bolinha = não lidas)
+          NotificationBell(
+            api: ref.read(agendaApiProvider),
+            onOpen: _openNotifications,
+          ),
           IconButton(
             icon: const Icon(Icons.settings),
             tooltip: 'Configurações',
@@ -844,12 +856,24 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             const Spacer(),
             Padding(
               padding: const EdgeInsets.only(right: 12),
-              child: Text(
-                a.isBlock ? (a.canceledReason ?? 'Bloqueado') : a.clientName,
-                style: theme.textTheme.titleSmall,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              // nome + ícone 🌐 (cadastro pelo link), como na lista; o
+              // nome corta com "…" e o ícone fica sempre visível
+              child: Row(children: [
+                Flexible(
+                  child: Text(
+                    a.isBlock
+                        ? (a.canceledReason ?? 'Bloqueado')
+                        : a.clientName,
+                    style: theme.textTheme.titleSmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (a.clientFromPublicLink) ...[
+                  const SizedBox(width: 4),
+                  const PublicLinkBadge(),
+                ],
+              ]),
             ),
             const SizedBox(height: 2),
             Padding(

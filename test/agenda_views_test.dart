@@ -112,6 +112,8 @@ void main() {
     expect(find.text('Mês'), findsOneWidget);
     // agendamento do dia aparece (card com o nome do cliente)
     expect(find.text('Ana'), findsOneWidget);
+    // sino da central de notificações no topo
+    expect(find.byKey(const Key('notification-bell')), findsOneWidget);
   });
 
   testWidgets('remarcação recarrega agenda e oferece WhatsApp com horário novo',
@@ -221,6 +223,18 @@ void main() {
     expect(find.textContaining('Cadastro feito pelo cliente'), findsOneWidget);
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
+
+    // visão em grade também mostra o ícone, no cartão certo
+    await tester.tap(find.byTooltip('Grade'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('client-public-link-badge')), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.ancestor(
+                of: find.text('Teste de cadastro'),
+                matching: find.byType(Card)),
+            matching: find.byKey(const Key('client-public-link-badge'))),
+        findsOneWidget);
   });
 
   testWidgets('Ver bloqueio mostra dia, horário, duração e motivo; libera',
