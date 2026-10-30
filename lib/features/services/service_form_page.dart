@@ -293,7 +293,7 @@ class _ServiceFormPageState extends ConsumerState<ServiceFormPage> {
   Future<void> _save() async {
     final formOk = _formKey.currentState!.validate();
     if (_isKit && _items.length < 2) {
-      setState(() => _itemsError = 'Escolhe pelo menos 2 serviços pro kit');
+      setState(() => _itemsError = 'Escolha pelo menos 2 serviços para o kit');
       return;
     }
     if (!formOk) return;
@@ -351,7 +351,7 @@ class _ServiceFormPageState extends ConsumerState<ServiceFormPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Serviços do kit', style: theme.textTheme.titleSmall),
-        Text('Marca 2 ou mais. O kit é agendado como um serviço só.',
+        Text('Marque 2 ou mais. O kit é agendado como um único serviço.',
             style:
                 theme.textTheme.bodySmall?.copyWith(color: AppColors.neutral)),
         const SizedBox(height: 4),
@@ -383,8 +383,8 @@ class _ServiceFormPageState extends ConsumerState<ServiceFormPage> {
         else if (_options.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
-            child: Text('Cadastra os serviços avulsos primeiro '
-                '(ex.: Corte, Barba) pra montar um kit.'),
+            child: Text('Cadastre os serviços avulsos primeiro '
+                '(ex.: Corte, Barba) para montar um kit.'),
           ),
         for (final o in _options)
           CheckboxListTile(

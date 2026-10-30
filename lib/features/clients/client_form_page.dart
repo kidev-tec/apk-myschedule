@@ -148,7 +148,8 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
                     decoration: const InputDecoration(
                       labelText: 'WhatsApp *',
                       hintText: '(11) 99999-9999',
-                      helperText: 'Com DDD — o 55 do Brasil entra sozinho',
+                      helperText:
+                          'Com DDD — o código 55 do Brasil é adicionado automaticamente',
                       prefixIcon: Icon(Icons.phone_outlined),
                     ),
                     validator: (v) => normalizePhoneBr(v ?? '').isEmpty

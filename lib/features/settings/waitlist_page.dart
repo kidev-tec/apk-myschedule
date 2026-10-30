@@ -56,7 +56,7 @@ class _WaitlistPageState extends ConsumerState<WaitlistPage> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Não deu pra atualizar'),
+            content: Text('Não foi possível atualizar'),
             backgroundColor: AppColors.error));
       }
     }
@@ -97,7 +97,7 @@ class _WaitlistPageState extends ConsumerState<WaitlistPage> {
           else if (_entries == null || _entries!.isEmpty)
             Expanded(
               child: Center(
-                child: Text('Ninguém na espera pra esse dia. 🗓️',
+                child: Text('Ninguém na espera para esse dia. 🗓️',
                     style: Theme.of(context).textTheme.bodyMedium),
               ),
             )

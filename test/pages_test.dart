@@ -33,7 +33,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Nenhum cliente ainda'), findsOneWidget);
-    expect(find.text('Toque em + pra adicionar o primeiro'), findsOneWidget);
+    expect(find.text('Toque em + para adicionar o primeiro'), findsOneWidget);
     expect(find.byType(FloatingActionButton), findsOneWidget);
     expect(find.byIcon(Icons.people_outline), findsOneWidget);
   });
@@ -58,7 +58,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Nenhum serviço ainda'), findsOneWidget);
-    expect(find.text('Toque em + pra criar o primeiro'), findsOneWidget);
+    expect(find.text('Toque em + para criar o primeiro'), findsOneWidget);
     expect(find.byType(FloatingActionButton), findsOneWidget);
     expect(find.byIcon(Icons.miscellaneous_services_outlined), findsOneWidget);
   });

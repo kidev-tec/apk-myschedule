@@ -65,7 +65,7 @@ void main() {
     await tester.tap(find.text('Pular'));
     await tester.pumpAndSettle();
     // avançou pro passo 3 (horários)
-    expect(find.text('Teus horários'), findsOneWidget);
+    expect(find.text('Seus horários'), findsOneWidget);
     // campos preenchidos com o genérico
     expect(find.widgetWithText(TextField, 'Atendimento'), findsNothing);
   });
@@ -90,6 +90,6 @@ void main() {
     await tester.enterText(fields.at(2), '50,00');
     await tester.tap(find.text('Começar'));
     await tester.pumpAndSettle();
-    expect(find.text('Teus horários'), findsOneWidget);
+    expect(find.text('Seus horários'), findsOneWidget);
   });
 }

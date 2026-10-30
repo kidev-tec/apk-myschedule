@@ -451,9 +451,9 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
         title: Text(widget.reschedule != null
             ? 'Remarcar'
             : [
-                'Escolhe o cliente',
-                'Escolhe o serviço',
-                'Escolhe o horário',
+                'Escolha o cliente',
+                'Escolha o serviço',
+                'Escolha o horário',
                 'Confirma o agendamento'
               ][_step]),
         leading: _step > 0
@@ -626,7 +626,8 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                         decoration: const InputDecoration(
                           labelText: 'WhatsApp *',
                           hintText: '(14) 99999-9999',
-                          helperText: 'Com DDD — o 55 do Brasil entra sozinho',
+                          helperText:
+                              'Com DDD — o código 55 do Brasil é adicionado automaticamente',
                           prefixIcon: Icon(Icons.phone_outlined),
                         ),
                         validator: (v) => normalizePhoneBr(v ?? '').isEmpty
@@ -1112,7 +1113,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                   Text('Sem horários livres neste dia',
                       style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 8),
-                  Text('Tenta outro dia ou ajusta teus horários de trabalho',
+                  Text('Tente outro dia ou ajuste seus horários de trabalho',
                       style: Theme.of(context)
                           .textTheme
                           .bodyMedium

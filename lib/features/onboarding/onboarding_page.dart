@@ -132,7 +132,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         final serverMsg = e.response?.data is Map
             ? (e.response?.data['error'] as String?)
             : null;
-        final msg = serverMsg ?? 'Não consegui salvar tudo. Tenta de novo.';
+        final msg =
+            serverMsg ?? 'Não foi possível salvar tudo. Tente novamente.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(msg), backgroundColor: AppColors.error),
         );
@@ -171,14 +172,14 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         return true;
       case 1:
         if (_businessNameController.text.trim().isEmpty) {
-          _showError('Como teu espaço se chama?');
+          _showError('Qual é o nome do seu espaço?');
           return false;
         }
         _nextStep();
         return true;
       case 2:
         if (_serviceNameController.text.trim().isEmpty) {
-          _showError('Qual serviço tu oferece?');
+          _showError('Qual serviço você oferece?');
           return false;
         }
         // B3: mesma regra da API — 15..480, múltiplo de 15
@@ -190,7 +191,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         final price =
             double.tryParse(_servicePriceController.text.replaceAll(',', '.'));
         if (price == null || price < 0) {
-          _showError('Preço inválido — usa números, ex: 80,00');
+          _showError('Preço inválido — use números, ex.: 80,00');
           return false;
         }
         _nextStep();
@@ -198,7 +199,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       case 3:
         final hasAny = _workingHours.values.any((r) => r.isNotEmpty);
         if (!hasAny) {
-          _showError('Marca pelo menos um dia com horário');
+          _showError('Marque pelo menos um dia com horário');
           return false;
         }
         _finishOnboarding();
@@ -319,11 +320,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 8),
-          Text('Qual é o teu negócio?',
+          Text('Qual é o seu negócio?',
               style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 8),
           Text(
-            'Isso personaliza as cores e te dá serviços de exemplo. Tu pode mudar tudo depois.',
+            'Isso personaliza as cores e sugere serviços de exemplo. Você pode mudar tudo depois.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 20),
@@ -359,10 +360,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Teu espaço', style: Theme.of(context).textTheme.headlineMedium),
+          Text('Seu espaço', style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 8),
           Text(
-            'Como teu espaço ou teu atendimento se chama? A gente usa isso na agenda.',
+            'Qual é o nome do seu espaço ou atendimento? Ele aparece na agenda.',
             style: Theme.of(context)
                 .textTheme
                 .bodyMedium
@@ -383,7 +384,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           // Endereço (F1): onde os clientes vão te encontrar. Opcional —
           // quem atende fora de um espaço fixo pode pular.
           Text(
-            'Onde os clientes te encontram? (opcional)',
+            'Onde os clientes encontram você? (opcional)',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 8),
@@ -455,7 +456,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Teu primeiro serviço',
+          Text('Seu primeiro serviço',
               style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 8),
           // B7/B14: copy exata — deixa claro que pode adicionar mais depois
@@ -521,11 +522,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Teus horários',
+          Text('Seus horários',
               style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 8),
           Text(
-            'Quando atendes? Toque no dia pra ligar/desligar.',
+            'Em quais dias você atende? Toque no dia para ligar/desligar.',
             style: Theme.of(context)
                 .textTheme
                 .bodyMedium

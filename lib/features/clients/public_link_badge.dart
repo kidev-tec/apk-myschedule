@@ -7,7 +7,7 @@ class PublicLinkBadge extends StatelessWidget {
   const PublicLinkBadge({super.key});
 
   static const message = 'Cadastro feito pelo cliente no agendamento online '
-      '(só nome e celular). Pede pra ele completar o cadastro.';
+      '(só nome e celular). Peça para ele completar o cadastro.';
 
   @override
   Widget build(BuildContext context) {

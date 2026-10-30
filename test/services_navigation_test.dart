@@ -404,7 +404,8 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Criar kit'));
     await tester.pump();
-    expect(find.text('Escolhe pelo menos 2 serviços pro kit'), findsOneWidget);
+    expect(
+        find.text('Escolha pelo menos 2 serviços para o kit'), findsOneWidget);
     expect(backend.posts, isEmpty);
   });
 

@@ -163,7 +163,7 @@ void main() {
     expect(find.text('Meus clientes'), findsNothing);
     expect(find.text('Google Calendar'), findsNothing);
     expect(find.text('Segmento'), findsNothing);
-    expect(find.text('Teu link de agendamento'), findsNothing);
+    expect(find.text('Seu link de agendamento'), findsNothing);
     // skeleton presente (Key de teste no placeholder)
     expect(find.byKey(const Key('settings-skeleton')), findsWidgets);
 
@@ -194,14 +194,14 @@ void main() {
     await tester.pumpWidget(_wrap(scripted));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Não consegui carregar'), findsOneWidget);
+    expect(find.textContaining('Não foi possível carregar'), findsOneWidget);
     expect(find.text('Tentar de novo'), findsOneWidget);
 
     await tester.tap(find.text('Tentar de novo'));
     await tester.pumpAndSettle();
 
     // recuperou: cards de negócio presentes
-    expect(find.textContaining('Não consegui carregar'), findsNothing);
+    expect(find.textContaining('Não foi possível carregar'), findsNothing);
     expect(find.text('Meus serviços'), findsOneWidget);
     expect(find.text('Segmento'), findsOneWidget);
     expect(find.text('Tema e identidade visual'), findsOneWidget);

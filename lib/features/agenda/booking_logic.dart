@@ -94,8 +94,8 @@ String greetingName(String name, String? nickname) =>
 
 String buildRescheduleMessage(String clientName, Appointment? novo) {
   final when = novo == null ? 'o novo horário' : formatWhen(novo.startsAt);
-  return 'Oi $clientName! Remarquei teu horário pra $when. '
-      'Confirma se esse novo horário funciona pra você? 🙂';
+  return 'Olá, $clientName! Remarquei seu horário para $when. '
+      'Pode confirmar se esse novo horário funciona para você? 🙂';
 }
 
 class BookingWizardLogic {

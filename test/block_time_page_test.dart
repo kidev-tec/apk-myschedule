@@ -231,7 +231,7 @@ void main() {
     await tester.tap(find.byKey(const Key('block-next-day')));
     await tester.pumpAndSettle();
     // terça: sem expediente no fake
-    expect(find.text('Sem expediente neste dia — nada pra bloquear.'),
+    expect(find.text('Sem expediente neste dia — nada para bloquear.'),
         findsOneWidget);
   });
 }

@@ -244,7 +244,7 @@ class _BlockTimePageState extends State<BlockTimePage> {
                     ? _message(Icons.cloud_off, _loadError!, retry: true)
                     : _grid.isEmpty
                         ? _message(Icons.event_busy,
-                            'Sem expediente neste dia — nada pra bloquear.')
+                            'Sem expediente neste dia — nada para bloquear.')
                         : ListView(
                             padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
                             children: [

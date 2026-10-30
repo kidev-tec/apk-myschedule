@@ -72,7 +72,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             .showSnackBar(const SnackBar(content: Text('Logo atualizada!')));
       } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(result.errorMessage ?? 'Não deu. Tenta de novo')));
+            content: Text(
+                result.errorMessage ?? 'Não foi possível. Tente novamente')));
       }
     } finally {
       if (mounted) setState(() => _logoBusy = false);
@@ -109,7 +110,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         builder: (_) => AlertDialog(
           title: const Text('Desconectar o Google Calendar?'),
           content: const Text(
-              'Os agendamentos novos não vão mais aparecer na tua agenda Google. '
+              'Os agendamentos novos não vão mais aparecer na sua agenda Google. '
               'Os que já entraram, continuam lá.'),
           actions: [
             TextButton(
@@ -134,7 +135,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         if (!mounted) return;
         if (!ok) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Não consegui abrir o navegador. Tenta de novo')));
+              content:
+                  Text('Não foi possível abrir o navegador. Tente novamente')));
         }
         // Ao voltar do browser, o usuário reabre Configurações e o status
         // recarrega (initState). Refresh leve ao retomar:
@@ -143,8 +145,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     } catch (e) {
       debugPrint('[settings] gcal toggle: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Deu erro na conexão. Tenta de novo')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Erro na conexão. Tente novamente')));
       }
     } finally {
       if (mounted) setState(() => _gcalBusy = false);
@@ -193,7 +195,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
             child: Text(
                 'Tempo livre depois de cada atendimento, antes do próximo '
-                'cliente (limpeza, preparo). Vale também pro link público.'),
+                'cliente (limpeza, preparo). Vale também para o link público.'),
           ),
           for (final m in bufferOptionsMin)
             SimpleDialogOption(
@@ -229,8 +231,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       final msg =
           data is Map<String, dynamic> ? data['error'] as String? : null;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content:
-              Text(msg ?? 'Não deu pra salvar o intervalo. Tenta de novo.'),
+          content: Text(
+              msg ?? 'Não foi possível salvar o intervalo. Tente novamente.'),
           backgroundColor: AppColors.error));
     }
   }
@@ -293,7 +295,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       if (invoiceUrl == null || invoiceUrl.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text(
-                'Não consegui gerar o link de pagamento. Tenta de novo.')));
+                'Não foi possível gerar o link de pagamento. Tente novamente.')));
         return;
       }
       await launchUrl(Uri.parse(invoiceUrl),
@@ -306,7 +308,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           onPressed: _loadMe,
         ),
         content: const Text(
-            'Finaliza o pagamento na página que abriu. Depois toca em atualizar.'),
+            'Finalize o pagamento na página que abriu. Depois toque em atualizar.'),
       ));
     } on DioException catch (e) {
       if (mounted) {
@@ -387,14 +389,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Excluir tua conta?'),
+        title: const Text('Excluir sua conta?'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Isso apaga PERMANENTEMENTE teu perfil, teus serviços, '
-              'teus clientes e todo o teu histórico de agendamentos. '
+              'Isso apaga PERMANENTEMENTE seu perfil, seus serviços, '
+              'seus clientes e todo o seu histórico de agendamentos. '
               'Não tem como desfazer.',
             ),
             const SizedBox(height: 16),
@@ -402,7 +404,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               controller: controller,
               autofocus: true,
               decoration: const InputDecoration(
-                labelText: 'Digita EXCLUIR pra confirmar',
+                labelText: 'Digite EXCLUIR para confirmar',
               ),
             ),
           ],
@@ -510,8 +512,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         Icon(Icons.cloud_off),
                         SizedBox(width: 12),
                         Expanded(
-                          child:
-                              Text('Não consegui carregar tuas configurações'),
+                          child: Text(
+                              'Não foi possível carregar suas configurações'),
                         ),
                       ],
                     ),
@@ -542,7 +544,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     Icon(Icons.workspace_premium, color: _subscriptionColor),
                 title: Text(_subscriptionLabel),
                 subtitle: _subscriptionStatus == 'past_due'
-                    ? const Text('Confere no teu e-mail')
+                    ? const Text('Confira no seu e-mail')
                     : Text(_me?['name'] as String? ?? ''),
                 trailing: _subscriptionStatus != 'active'
                     ? TextButton(
@@ -593,7 +595,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               child: ListTile(
                 leading: _logoLeading(),
                 title: const Text('Logo do estabelecimento'),
-                subtitle: const Text('Aparece no teu link de agendamento'),
+                subtitle: const Text('Aparece no seu link de agendamento'),
                 trailing: _logoBusy
                     ? const SizedBox(
                         width: 20,
@@ -679,7 +681,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 leading:
                     Icon(Icons.schedule, color: AppColors.primaryOf(context)),
                 title: const Text('Horário de funcionamento'),
-                subtitle: const Text('Quando tu atende, dia a dia'),
+                subtitle: const Text('Dias e horários de atendimento'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => context.push('/working-hours'),
               ),
@@ -714,8 +716,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 subtitle: Text(_gcalConnected == null
                     ? 'Verificando…'
                     : _gcalConnected == true
-                        ? 'Conectado — agendamentos confirmados vão pra tua agenda'
-                        : 'Conectar pra ver agendamentos na tua agenda Google'),
+                        ? 'Conectado — agendamentos confirmados vão para a sua agenda'
+                        : 'Conecte para ver os agendamentos na sua agenda Google'),
                 trailing: _gcalBusy
                     ? const SizedBox(
                         width: 20,
@@ -735,7 +737,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               child: ListTile(
                 leading:
                     Icon(Icons.public, color: AppColors.primaryOf(context)),
-                title: const Text('Teu link de agendamento'),
+                title: const Text('Seu link de agendamento'),
                 subtitle: Text(
                   _publicUrl!,
                   maxLines: 1,

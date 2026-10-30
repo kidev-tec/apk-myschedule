@@ -95,7 +95,7 @@ class _WorkingHoursPageState extends ConsumerState<WorkingHoursPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Não consegui salvar. Tenta de novo.'),
+            content: Text('Não foi possível salvar. Tente novamente.'),
             backgroundColor: AppColors.error,
           ),
         );

@@ -235,7 +235,7 @@ void main() {
       await pumpOpen(tester);
       // título trocou; não mostra a lista de clientes (passo 1)
       expect(find.text('Remarcar'), findsOneWidget);
-      expect(find.text('Escolhe o cliente'), findsNothing);
+      expect(find.text('Escolha o cliente'), findsNothing);
       // grade de slots visível com o horário atual pré-selecionável
       expect(find.text('10:00'), findsWidgets);
     });

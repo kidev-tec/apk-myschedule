@@ -239,7 +239,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Step 1: escolhe cliente Ana
-    expect(find.text('Escolhe o cliente'), findsOneWidget);
+    expect(find.text('Escolha o cliente'), findsOneWidget);
     expect(find.text('Ana'), findsOneWidget);
     expect(find.text('Beto'), findsOneWidget);
     // botão desabilitado antes da seleção
@@ -253,7 +253,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Step 2: escolhe serviço Corte
-    expect(find.text('Escolhe o serviço'), findsOneWidget);
+    expect(find.text('Escolha o serviço'), findsOneWidget);
     expect(find.textContaining('Corte'), findsOneWidget);
     await tester.tap(find.text('Corte'));
     await tester.pump();
@@ -263,7 +263,7 @@ void main() {
     // Step 3: slots — o dia corrente pode não ter working hour (fixture =
     // segunda). Navega com o chevron até a PRÓXIMA segunda (dinâmico:
     // teste data-dependent com "3 cliques" quebrava quando o calendário andou).
-    expect(find.text('Escolhe o horário'), findsOneWidget);
+    expect(find.text('Escolha o horário'), findsOneWidget);
     final today = DateTime.now();
     final daysToMonday = (DateTime.monday - today.weekday) % 7;
     final taps = daysToMonday == 0 ? 7 : daysToMonday;
@@ -485,10 +485,10 @@ void main() {
     expect(find.text('Confirmar agendamento'), findsOneWidget);
     await tester.tap(find.byKey(const Key('review-change-time')));
     await tester.pumpAndSettle();
-    expect(find.text('Escolhe o horário'), findsOneWidget);
+    expect(find.text('Escolha o horário'), findsOneWidget);
     await tester.tap(find.byIcon(Icons.arrow_back));
     await tester.pumpAndSettle();
-    expect(find.text('Escolhe o serviço'), findsOneWidget);
+    expect(find.text('Escolha o serviço'), findsOneWidget);
     expect(find.text('Corte'), findsOneWidget);
   });
 

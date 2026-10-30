@@ -118,7 +118,7 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
                     Text('Nenhum cliente ainda',
                         style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),
-                    Text('Toque em + pra adicionar o primeiro',
+                    Text('Toque em + para adicionar o primeiro',
                         style: Theme.of(context)
                             .textTheme
                             .bodyMedium

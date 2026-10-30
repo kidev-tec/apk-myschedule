@@ -491,8 +491,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   Widget _buildEmptyState(BuildContext context) {
     // B6: mensagem de vazio contextual por visão
     final title = _view == _AgendaView.semana
-        ? 'Nada agendado pra semana'
-        : 'Nada agendado pra hoje';
+        ? 'Nada agendado para a semana'
+        : 'Nada agendado para hoje';
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -509,7 +509,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Toque em "Marcar horário" pra começar',
+              'Toque em "Marcar horário" para começar',
               style: Theme.of(context)
                   .textTheme
                   .bodyMedium
@@ -1293,15 +1293,15 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   Future<void> _notifyCancelOnWhatsapp(Appointment a) async {
     final when = booking_logic.formatWhen(a.startsAt);
     final msg = Uri.encodeComponent(
-        'Oi ${_greeting(a)}! Tive que remanejar teu horário de $when. '
-        'Me chama pra combinarmos outro horário! 🙂');
+        'Olá, ${_greeting(a)}! Precisei remanejar seu horário de $when. '
+        'Fale comigo para combinarmos outro horário! 🙂');
     final phone = ensureDdi55(a.clientPhone);
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Avisar o cliente?'),
         content: Text(
-            'Vou abrir teu WhatsApp com uma mensagem pronta pra ${a.clientName} avisando do cancelamento de $when.'),
+            'Vamos abrir seu WhatsApp com uma mensagem pronta para ${a.clientName} avisando do cancelamento de $when.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -1324,8 +1324,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     final when = booking_logic.formatWhen(a.startsAt);
     final link = await _confirmationLink(a);
     final msg = Uri.encodeComponent(
-        'Oi ${_greeting(a)}! Confirmando teu horário de $when. '
-        'Pode confirmar tua presença aqui? $link 🙂');
+        'Olá, ${_greeting(a)}! Confirmando seu horário de $when. '
+        'Pode confirmar sua presença aqui? $link 🙂');
     final phone = ensureDdi55(a.clientPhone);
     if (!mounted) return;
     final ok = await showDialog<bool>(
@@ -1333,7 +1333,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       builder: (_) => AlertDialog(
         title: const Text('Pedir confirmação?'),
         content: Text(
-            'Vou abrir teu WhatsApp com uma mensagem pra ${a.clientName} confirmar se vem em $when.'),
+            'Vamos abrir seu WhatsApp com uma mensagem para ${a.clientName} confirmar se vem em $when.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -1369,7 +1369,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       Appointment a, booking.Appointment? novo) async {
     final whenText = booking_logic
         .buildRescheduleMessage(_greeting(a), novo)
-        .replaceFirst('Oi ${_greeting(a)}! ', '');
+        .replaceFirst('Olá, ${_greeting(a)}! ', '');
     if (!mounted) return;
     final msg = Uri.encodeComponent(
         booking_logic.buildRescheduleMessage(_greeting(a), novo));
@@ -1379,7 +1379,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       builder: (_) => AlertDialog(
         title: const Text('Avisar o cliente?'),
         content: Text(
-            'Vou abrir teu WhatsApp com uma mensagem pro ${a.clientName} com o novo horário ($whenText).'),
+            'Vamos abrir seu WhatsApp com uma mensagem para ${a.clientName} com o novo horário ($whenText).'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),

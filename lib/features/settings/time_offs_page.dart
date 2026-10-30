@@ -88,7 +88,7 @@ class _TimeOffsPageState extends ConsumerState<TimeOffsPage> {
   Future<void> _save() async {
     if (_start == null || _end == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Escolhe início e fim do bloqueio'),
+          content: Text('Escolha o início e o fim do bloqueio'),
           backgroundColor: AppColors.error));
       return;
     }
@@ -119,8 +119,8 @@ class _TimeOffsPageState extends ConsumerState<TimeOffsPage> {
       if (!mounted) return;
       final msg = e.response?.data is Map
           ? (e.response?.data['error'] as String? ??
-              'Não deu pra criar o bloqueio')
-          : 'Não deu pra criar o bloqueio. Verifica a internet.';
+              'Não foi possível criar o bloqueio')
+          : 'Não foi possível criar o bloqueio. Verifique a internet.';
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(msg), backgroundColor: AppColors.error));
     } finally {
@@ -135,7 +135,7 @@ class _TimeOffsPageState extends ConsumerState<TimeOffsPage> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Não deu pra remover'),
+            content: Text('Não foi possível remover'),
             backgroundColor: AppColors.error));
       }
     }
@@ -153,7 +153,7 @@ class _TimeOffsPageState extends ConsumerState<TimeOffsPage> {
               padding: const EdgeInsets.all(16),
               children: [
                 Text(
-                  'Horários em que tu NÃO atende — almoço, feriado, consulta. '
+                  'Horários em que você NÃO atende — almoço, feriado, consulta. '
                   'Clientes veem esses horários como indisponíveis.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
@@ -162,7 +162,7 @@ class _TimeOffsPageState extends ConsumerState<TimeOffsPage> {
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
-                      child: Text('Nenhum bloqueio. Tua agenda tá aberta. 📅',
+                      child: Text('Nenhum bloqueio. Sua agenda está aberta. 📅',
                           style: Theme.of(context).textTheme.bodyMedium),
                     ),
                   )

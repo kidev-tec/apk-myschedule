@@ -81,8 +81,8 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Excluir serviço?'),
-        content: Text('"${s.name}" não vai mais aparecer pra novos '
-            'agendamentos (nem no teu link). Os agendamentos que já usaram '
+        content: Text('"${s.name}" não vai mais aparecer para novos '
+            'agendamentos (nem no seu link). Os agendamentos que já usaram '
             'esse serviço continuam mostrando ele na agenda e no histórico.'),
         actions: [
           TextButton(
@@ -112,7 +112,7 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
           builder: (ctx) => AlertDialog(
             title: const Text('Serviço está em kit'),
             content: Text('"${s.name}" faz parte de: ${kits.join(', ')}.\n\n'
-                'Pra excluir, tira ele do kit (editando o kit) ou exclui '
+                'Para excluir, retire-o do kit (editando o kit) ou exclua '
                 '${kits.length > 1 ? 'os kits' : 'o kit'} junto. '
                 'Agendamentos já feitos continuam no histórico.'),
             actions: [
@@ -166,7 +166,7 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
                       Text('Nenhum serviço ainda',
                           style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 8),
-                      Text('Toque em + pra criar o primeiro',
+                      Text('Toque em + para criar o primeiro',
                           style: Theme.of(context)
                               .textTheme
                               .bodyMedium

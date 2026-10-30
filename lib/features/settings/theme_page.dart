@@ -61,7 +61,7 @@ class _ThemePageState extends ConsumerState<ThemePage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('Escolhe a cor principal do app.', style: textTheme.bodyLarge),
+          Text('Escolha a cor principal do app.', style: textTheme.bodyLarge),
           const SizedBox(height: 16),
           // Padrão: cor do segmento
           Card(
