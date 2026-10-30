@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
 import '../../theme/app_theme.dart';
+import '../../core/widgets/home_action.dart';
 
 /// F5 — Lista de espera: quem quer vaga em um dia específico.
 /// Ao cancelar um horário, o prestador vê quem avisar e marca como
@@ -55,7 +56,7 @@ class _WaitlistPageState extends ConsumerState<WaitlistPage> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Não deu pra atualizar'),
+            content: Text('Não foi possível atualizar'),
             backgroundColor: AppColors.error));
       }
     }
@@ -71,7 +72,8 @@ class _WaitlistPageState extends ConsumerState<WaitlistPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Lista de espera')),
+      appBar: AppBar(
+          title: const Text('Lista de espera'), actions: const [HomeAction()]),
       body: Column(
         children: [
           Padding(
@@ -95,7 +97,7 @@ class _WaitlistPageState extends ConsumerState<WaitlistPage> {
           else if (_entries == null || _entries!.isEmpty)
             Expanded(
               child: Center(
-                child: Text('Ninguém na espera pra esse dia. 🗓️',
+                child: Text('Ninguém na espera para esse dia. 🗓️',
                     style: Theme.of(context).textTheme.bodyMedium),
               ),
             )

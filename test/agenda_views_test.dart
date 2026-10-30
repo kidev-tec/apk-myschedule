@@ -15,6 +15,7 @@ import 'package:intl/intl.dart';
 import 'package:minha_agenda/core/api/api_client.dart';
 import 'package:minha_agenda/core/push/push_events.dart';
 import 'package:minha_agenda/features/agenda/agenda_page.dart';
+import 'package:minha_agenda/features/agenda/block_time_page.dart';
 import 'package:minha_agenda/features/agenda/booking_wizard.dart' as booking;
 
 Widget _wrap(ApiClient api, {booking.Appointment? rescheduleResult}) {
@@ -111,6 +112,8 @@ void main() {
     expect(find.text('Mês'), findsOneWidget);
     // agendamento do dia aparece (card com o nome do cliente)
     expect(find.text('Ana'), findsOneWidget);
+    // sino da central de notificações no topo
+    expect(find.byKey(const Key('notification-bell')), findsOneWidget);
   });
 
   testWidgets('remarcação recarrega agenda e oferece WhatsApp com horário novo',
@@ -176,6 +179,126 @@ void main() {
     // começa no domingo da semana do dia focado
     expect(from.weekday, DateTime.sunday);
     expect(find.text('Ana'), findsOneWidget);
+  });
+
+  testWidgets('card mostra o ícone de cadastro pelo link (toque explica)',
+      (tester) async {
+    Map<String, dynamic> appt(
+        String id, String nome, int hora, String? origin) {
+      final hoje = DateTime.now();
+      final base = DateTime(hoje.year, hoje.month, hoje.day, hora);
+      return {
+        'id': id,
+        'client_name': nome,
+        'client_phone': '+5514999990001',
+        'service_name': 'Barba',
+        'starts_at': base.toIso8601String(),
+        'ends_at': base.add(const Duration(minutes: 30)).toIso8601String(),
+        'status': 'pending',
+        'source': 'public_link',
+        if (origin != null) 'client_origin': origin,
+      };
+    }
+
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [
+                appt('p1', 'Teste de cadastro', 15, 'public_link'),
+                appt('p2', 'Cliente Antigo', 16, 'app'),
+                appt('p3', 'Sem Origem', 17, null),
+              ]
+            }),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+    await pumpPage(tester);
+
+    expect(find.byKey(const Key('client-public-link-badge')), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.widgetWithText(Card, 'Teste de cadastro'),
+            matching: find.byKey(const Key('client-public-link-badge'))),
+        findsOneWidget);
+    await tester.tap(find.byKey(const Key('client-public-link-badge')));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.textContaining('Cadastro feito pelo cliente'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+
+    // visão em grade também mostra o ícone, no cartão certo
+    await tester.tap(find.byTooltip('Grade'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('client-public-link-badge')), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.ancestor(
+                of: find.text('Teste de cadastro'),
+                matching: find.byType(Card)),
+            matching: find.byKey(const Key('client-public-link-badge'))),
+        findsOneWidget);
+  });
+
+  testWidgets('Ver bloqueio mostra dia, horário, duração e motivo; libera',
+      (tester) async {
+    final amanha = DateTime.now().add(const Duration(days: 1));
+    final ini = DateTime(amanha.year, amanha.month, amanha.day, 16, 40);
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [
+                {
+                  'id': 'b1',
+                  'client_name': '— bloqueio —',
+                  'client_phone': '',
+                  'service_name': 'Bloqueio',
+                  'starts_at': ini.toIso8601String(),
+                  'ends_at':
+                      ini.add(const Duration(minutes: 50)).toIso8601String(),
+                  'status': 'confirmed',
+                  'source': 'block',
+                  'canceled_reason': 'Almoço',
+                },
+              ]
+            }),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+    final patches = <String>[];
+    adapter.onPatch('/appointments/b1', (s) {
+      patches.add('b1');
+      return s.reply(200, {'appointment': {}});
+    }, data: Matchers.any);
+    await pumpPage(tester);
+    // vai pro dia do bloqueio
+    await tester.tap(find.byIcon(Icons.chevron_right).last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(PopupMenuButton<String>).first);
+    await tester.pumpAndSettle();
+    expect(find.text('Ver bloqueio'), findsOneWidget);
+    await tester.tap(find.text('Ver bloqueio'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('block-details')), findsOneWidget);
+    expect(
+        tester.widget<Text>(find.byKey(const Key('block-details-time'))).data,
+        '16:40 às 17:30 (50 minutos)');
+    expect(
+        tester.widget<Text>(find.byKey(const Key('block-details-reason'))).data,
+        'Almoço');
+
+    await tester.tap(find.byKey(const Key('block-details-release')));
+    await tester.pumpAndSettle();
+    expect(patches, ['b1']);
+  });
+
+  testWidgets('cadeado abre a tela de bloqueio no dia aberto na agenda',
+      (tester) async {
+    await pumpPage(tester);
+    await tester.tap(find.byTooltip('Bloquear horário'));
+    await tester.pumpAndSettle();
+    final page = tester.widget<BlockTimePage>(find.byType(BlockTimePage));
+    final hoje = DateTime.now();
+    expect(page.initialDate.year, hoje.year);
+    expect(page.initialDate.month, hoje.month);
+    expect(page.initialDate.day, hoje.day);
   });
 
   testWidgets(
@@ -422,8 +545,31 @@ void main() {
             }),
         queryParameters: {'from': Matchers.any, 'to': Matchers.any});
     await pumpPage(tester);
+
+    // DIA também mostra o semáforo, ao lado dos botões de layout
+    String contagemDia(String tipo) => (tester
+        .widget<Text>(find.descendant(
+            of: find.descendant(
+                of: find.byKey(const Key('day-semaphore')),
+                matching: find.byKey(Key('semaforo-$tipo'))),
+            matching: find.byType(Text)))
+        .data)!;
+    expect(contagemDia('confirmado'), '3');
+    expect(contagemDia('cancelado'), '1');
+    expect(contagemDia('remarcado'), '2');
+    expect(contagemDia('concluido'), '1');
+    // linha própria abaixo dos botões, alinhada à direita
+    final semaforo = find.byKey(const Key('day-semaphore'));
+    expect(
+        tester.getTopLeft(semaforo).dy,
+        greaterThan(
+            tester.getBottomLeft(find.byTooltip('Bloquear horário')).dy));
+    expect(tester.getCenter(find.byKey(const Key('semaforo-remarcado'))).dx,
+        greaterThan(tester.getCenter(find.byTooltip('Grade')).dx));
+
     await tester.tap(find.text('Semana'));
     await tester.pumpAndSettle();
+    expect(find.byKey(const Key('day-semaphore')), findsNothing);
 
     String contagem(String tipo) => (tester
         .widget<Text>(find.descendant(
@@ -793,9 +939,12 @@ void main() {
       (tester) async {
     await pumpPage(tester);
     final now = DateTime.now();
-    final hoje = DateFormat('dd/MM').format(now);
+    // rodapé do Dia: "Sexta-feira, 30/10" (nome do dia + data)
+    final hoje = DateFormat("EEEE, dd/MM", 'pt_BR').format(now);
+    expect(find.text('${hoje[0].toUpperCase()}${hoje.substring(1)}'),
+        findsOneWidget);
 
-    await tester.tap(find.text(hoje));
+    await tester.tap(find.byKey(const Key('day-footer-label')));
     await tester.pumpAndSettle();
     final popup = find.byKey(const Key('day-picker'));
     expect(popup, findsOneWidget);

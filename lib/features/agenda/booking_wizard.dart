@@ -9,6 +9,7 @@ import '../../core/utils/phone_br.dart';
 import '../../theme/app_theme.dart';
 import '../clients/client_profile_fields.dart';
 import 'booking_logic.dart' as logic;
+import '../services/service_subtitle.dart';
 
 /// Provider do ApiClient — DI pra testes de integração sobrescreverem
 /// a rede com http_mock_adapter. Em prod, resolve pro default (network real).
@@ -41,8 +42,50 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
   final _notesCtrl = TextEditingController();
 
   Client? _selectedClient;
-  Service? _selectedService;
+
+  /// Serviços escolhidos (vários = um horário só "A + B"; kit vai sozinho).
+  final List<Service> _picked = [];
+
+  /// O que vai pro horário: 1 serviço ou a soma dos escolhidos.
+  Service? get _selectedService {
+    if (_picked.isEmpty) return null;
+    if (_picked.length == 1) return _picked.first;
+    return Service(
+      id: '',
+      name: _picked.map((s) => s.name).join(' + '),
+      durationMin: _picked.fold(0, (a, s) => a + s.durationMin),
+      priceCents: _picked.fold(0, (a, s) => a + s.priceCents),
+    );
+  }
+
+  /// Avulso: marca/desmarca (vários). Kit: vai sozinho, não soma com outros.
+  void _togglePick(Service s) {
+    setState(() {
+      final on = _picked.any((p) => p.id == s.id);
+      if (s.isKit) {
+        _picked
+          ..clear()
+          ..addAll(on ? [] : [s]);
+      } else {
+        _picked.removeWhere((p) => p.isKit);
+        on ? _picked.removeWhere((p) => p.id == s.id) : _picked.add(s);
+      }
+      _durationOverrideMin = null; // volta pra duração somada
+    });
+  }
+
   DateTime? _selectedSlot;
+
+  /// Duração deste agendamento — null = a padrão do serviço.
+  int? _durationOverrideMin;
+
+  /// Folga padrão do negócio (GET /me) e override deste agendamento.
+  int _defaultBufferMin = 0;
+  int? _bufferOverrideMin;
+
+  int get _effectiveDurationMin =>
+      _durationOverrideMin ?? _selectedService?.durationMin ?? 60;
+  int get _effectiveBufferMin => _bufferOverrideMin ?? _defaultBufferMin;
 
   bool _loading = true;
 
@@ -185,13 +228,35 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     } catch (e) {
       debugPrint('[wizard] falha ao carregar dados: $e');
     }
+    // Folga padrão do negócio: falha aqui não impede agendar (fica 0).
+    try {
+      final me = await api.dio.get('/me');
+      final b = me.data is Map<String, dynamic> ? me.data['buffer_min'] : null;
+      if (b is int) _defaultBufferMin = b;
+    } catch (e) {
+      debugPrint('[wizard] falha ao carregar intervalo padrão: $e');
+    }
     // B3: modo remarcar — casa as FKs do agendamento com os registros
     // carregados (clients/services) pra pré-selecionar.
     final r = widget.reschedule;
     if (r != null) {
       _selectedClient = _clients.where((c) => c.id == r.clientId).firstOrNull;
-      _selectedService =
-          _services.where((s) => s.id == r.serviceId).firstOrNull;
+      // remarcar mantém a duração e a folga que o agendamento já tinha
+      final dur = r.endsAt.difference(r.startsAt).inMinutes;
+      // Serviço excluído não vem na lista de ativos: remarca com os dados
+      // do próprio agendamento (o histórico mantém o serviço).
+      final original =
+          _services.where((s) => s.id == r.serviceId).firstOrNull ??
+              (r.serviceId == null
+                  ? null
+                  : Service(
+                      id: r.serviceId!,
+                      name: r.serviceName ?? 'Serviço',
+                      durationMin: dur,
+                      priceCents: r.servicePriceCents ?? 0));
+      if (original != null) _picked.add(original);
+      if (dur != _selectedService?.durationMin) _durationOverrideMin = dur;
+      if (r.bufferMin != _defaultBufferMin) _bufferOverrideMin = r.bufferMin;
       // pré-seleciona o horário atual, que continua válido (excludeId)
       _selectedSlot = _generateSlots(_selectedDate)
           .where((s) => _sameHM(s, r.startsAt))
@@ -217,14 +282,15 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
       date: date,
       workingHours: _workingHours,
       appointments: _existingAppointments,
-      durationMin: _selectedService?.durationMin ?? 60,
+      durationMin: _effectiveDurationMin,
+      bufferMin: _effectiveBufferMin,
       excludeId: widget.reschedule?.id, // B3: não colidir consigo mesmo
       notBefore: widget.clock(), // horário que já passou não é oferecido
     );
   }
 
   void _nextStep() {
-    if (_step < 2) {
+    if (_step < _reviewStep) {
       _pageController.nextPage(
           duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
     } else {
@@ -261,21 +327,33 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
               // remarcar: envia sempre (vazio apaga)
               'notes': _notesCtrl.text.trim(),
               'startsAt': _selectedSlot!.toUtc().toIso8601String(),
+              'duration_min': _effectiveDurationMin,
+              // endsAt coerente com duration_min: API antiga (sem duração
+              // flexível) ainda exige; a nova valida que bate.
               'endsAt': _selectedSlot!
-                  .add(Duration(minutes: _selectedService!.durationMin))
+                  .add(Duration(minutes: _effectiveDurationMin))
                   .toUtc()
                   .toIso8601String(),
+              'buffer_min': _effectiveBufferMin,
             }
           : {
               'clientId': _selectedClient!.id,
-              'serviceId': _selectedService!.id,
+              // vários → a API monta o horário "A + B"
+              if (_picked.length > 1)
+                'serviceIds': [for (final p in _picked) p.id]
+              else
+                'serviceId': _picked.first.id,
               if (_notesCtrl.text.trim().isNotEmpty)
                 'notes': _notesCtrl.text.trim(),
               'startsAt': _selectedSlot!.toUtc().toIso8601String(),
+              'duration_min': _effectiveDurationMin,
+              // endsAt coerente com duration_min: API antiga (sem duração
+              // flexível) ainda exige; a nova valida que bate.
               'endsAt': _selectedSlot!
-                  .add(Duration(minutes: _selectedService!.durationMin))
+                  .add(Duration(minutes: _effectiveDurationMin))
                   .toUtc()
                   .toIso8601String(),
+              'buffer_min': _effectiveBufferMin,
             },
       queuedAt: DateTime.now(),
       description: isReschedule
@@ -373,9 +451,10 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
         title: Text(widget.reschedule != null
             ? 'Remarcar'
             : [
-                'Escolhe o cliente',
-                'Escolhe o serviço',
-                'Escolhe o horário'
+                'Escolha o cliente',
+                'Escolha o serviço',
+                'Escolha o horário',
+                'Confirma o agendamento'
               ][_step]),
         leading: _step > 0
             ? IconButton(
@@ -390,6 +469,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
           _buildClientStep(),
           _buildServiceStep(),
           _buildSlotStep(),
+          _buildReviewStep(),
         ],
       ),
       bottomNavigationBar: _loading
@@ -401,7 +481,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                 child: FilledButton(
                   key: const Key('wizard-save'),
                   onPressed: _canProceed() ? _nextStep : null,
-                  child: Text(_step == 2
+                  child: Text(_step == _reviewStep
                       ? (widget.reschedule != null
                           ? 'Salvar novo horário'
                           : 'Confirmar agendamento')
@@ -420,6 +500,8 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
         return _selectedService != null;
       case 2:
         return _selectedSlot != null;
+      case _reviewStep:
+        return _selectedSlot != null;
       default:
         return false;
     }
@@ -429,7 +511,10 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
 
   Future<void> _openAddClientSheet() async {
     final nameCtrl = TextEditingController();
-    final phoneCtrl = TextEditingController(text: _query.trim());
+    // busca só com números vira o telefone (já com máscara)
+    final q = _query.trim();
+    final phoneCtrl = TextEditingController(
+        text: RegExp(r'^[0-9()\s+-]+$').hasMatch(q) ? maskPhoneBr(q) : '');
     final emailCtrl = TextEditingController();
     final notesCtrl = TextEditingController();
     // "Mais dados": e-mail, apelido, aniversário, CPF, origem, LGPD, endereço
@@ -537,10 +622,12 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                       TextFormField(
                         controller: phoneCtrl,
                         keyboardType: TextInputType.phone,
+                        inputFormatters: [PhoneBrInputFormatter()],
                         decoration: const InputDecoration(
                           labelText: 'WhatsApp *',
                           hintText: '(14) 99999-9999',
-                          helperText: 'Com DDD — o 55 do Brasil entra sozinho',
+                          helperText:
+                              'Com DDD — o código 55 do Brasil é adicionado automaticamente',
                           prefixIcon: Icon(Icons.phone_outlined),
                         ),
                         validator: (v) => normalizePhoneBr(v ?? '').isEmpty
@@ -732,31 +819,249 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
   }
 
   Widget _buildServiceStep() {
+    final combo = _picked.length > 1 ? _selectedService : null;
+    final money = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+        child: Text(
+          combo == null
+              ? 'Pode marcar mais de um — fica tudo num horário só.'
+              : '${_picked.length} serviços · ${combo.durationMin} min · '
+                  '${money.format(combo.priceCents / 100)}',
+          key: const Key('services-picked-summary'),
+          style: combo == null
+              ? Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: AppColors.neutral)
+              : Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(color: AppColors.primaryOf(context)),
+        ),
+      ),
+      Expanded(child: _buildServiceList()),
+    ]);
+  }
+
+  Widget _buildServiceList() {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: _services.length,
       itemBuilder: (_, i) {
         final s = _services[i];
-        final selected = _selectedService?.id == s.id;
-        final priceFmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+        final selected = _picked.any((p) => p.id == s.id);
         return Card(
           color: selected ? AppColors.softOf(context) : null,
           margin: const EdgeInsets.only(bottom: 12),
           child: ListTile(
             leading: CircleAvatar(
               backgroundColor: AppColors.primaryOf(context),
-              child: const Icon(Icons.content_cut, color: Colors.white),
+              child: Icon(
+                  s.isKit ? Icons.style_outlined : Icons.miscellaneous_services,
+                  color: Colors.white),
             ),
             title: Text(s.name),
-            subtitle: Text(
-                '${s.durationMin} min • ${priceFmt.format(s.priceCents / 100)}'),
+            subtitle: ServiceSubtitle(
+                durationMin: s.durationMin,
+                priceCents: s.priceCents,
+                kitItems: s.kitItems,
+                kitFullCents: s.kitFullCents),
+            isThreeLine: s.isKit,
             trailing: selected
                 ? Icon(Icons.check_circle, color: AppColors.primaryOf(context))
                 : null,
-            onTap: () => setState(() => _selectedService = s),
+            onTap: () => _togglePick(s),
           ),
         );
       },
+    );
+  }
+
+  /// Último passo: resumo do que vai ser salvo + observações em destaque.
+  /// (Antes as observações ficavam no fim da grade de horários, escondidas
+  /// atrás do botão — ninguém via.)
+  static const _reviewStep = 3;
+
+  Widget _buildReviewStep() {
+    final slot = _selectedSlot;
+    if (slot == null) return const SizedBox.shrink();
+    final end = slot.add(Duration(minutes: _effectiveDurationMin));
+    final timeFmt = DateFormat('HH:mm', 'pt_BR');
+    final dateFmt = DateFormat("EEEE, d 'de' MMMM", 'pt_BR');
+    final price = _selectedService == null
+        ? null
+        : NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$')
+            .format(_selectedService!.priceCents / 100);
+    final muted = Theme.of(context)
+        .textTheme
+        .bodySmall
+        ?.copyWith(color: AppColors.neutral);
+
+    Widget row(IconData icon, String label, String value, {Key? key}) =>
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 20, color: AppColors.primaryOf(context)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: muted),
+                    Text(value,
+                        key: key, style: Theme.of(context).textTheme.bodyLarge),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+
+    // SingleChildScrollView (não ListView): poucos itens, e o campo precisa
+    // existir mesmo com o teclado ocupando metade da tela pequena.
+    return SingleChildScrollView(
+      key: const Key('wizard-review'),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Card(
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+              child: Column(
+                children: [
+                  row(Icons.person_outline, 'Cliente',
+                      _selectedClient?.name ?? '—'),
+                  row(Icons.miscellaneous_services, 'Serviço',
+                      '${_selectedService?.name ?? '—'}${price != null ? ' · $price' : ''}'),
+                  row(Icons.event, 'Dia', dateFmt.format(slot).capitalize()),
+                  row(
+                      Icons.schedule,
+                      'Horário',
+                      '${timeFmt.format(slot)} às ${timeFmt.format(end)} '
+                          '($_effectiveDurationMin min)',
+                      key: const Key('review-time')),
+                  row(Icons.more_time, 'Intervalo depois',
+                      logic.bufferLabel(_effectiveBufferMin)),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      key: const Key('review-change-time'),
+                      icon: const Icon(Icons.edit_calendar_outlined, size: 18),
+                      label: const Text('Alterar horário'),
+                      onPressed: _prevStep,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text('Detalhes / Observações do atendimento',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text('Opcional. Só você vê — o cliente não recebe.', style: muted),
+          const SizedBox(height: 8),
+          TextField(
+            key: const Key('wizard-notes'),
+            controller: _notesCtrl,
+            minLines: 3,
+            maxLines: 6,
+            maxLength: 1000,
+            textCapitalization: TextCapitalization.sentences,
+            scrollPadding: const EdgeInsets.only(bottom: 120),
+            decoration: const InputDecoration(
+              hintText: 'Ex.: prefere máquina 2, alergia a tal produto…',
+              border: OutlineInputBorder(),
+              alignLabelWithHint: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Muda duração/folga e solta o horário escolhido se ele deixou de caber.
+  void _adjust({int? durationMin, int? bufferMin}) {
+    setState(() {
+      if (durationMin != null) _durationOverrideMin = durationMin;
+      if (bufferMin != null) _bufferOverrideMin = bufferMin;
+      if (_selectedSlot != null &&
+          !_generateSlots(_selectedDate).contains(_selectedSlot)) {
+        _selectedSlot = null;
+      }
+    });
+  }
+
+  /// Duração deste atendimento (−/+ de 5 em 5) e intervalo depois dele.
+  Widget _buildTimeAdjustments() {
+    const step = 5;
+    final dur = _effectiveDurationMin;
+    final buf = _effectiveBufferMin;
+    final serviceDur = _selectedService?.durationMin;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(child: Text('Duração')),
+              IconButton.outlined(
+                key: const Key('duration-minus'),
+                tooltip: 'Diminuir 5 minutos',
+                onPressed:
+                    dur <= step ? null : () => _adjust(durationMin: dur - step),
+                icon: const Icon(Icons.remove),
+              ),
+              SizedBox(
+                width: 72,
+                child: Text('$dur min',
+                    key: const Key('duration-value'),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium),
+              ),
+              IconButton.outlined(
+                key: const Key('duration-plus'),
+                tooltip: 'Aumentar 5 minutos',
+                onPressed:
+                    dur >= 480 ? null : () => _adjust(durationMin: dur + step),
+                icon: const Icon(Icons.add),
+              ),
+            ],
+          ),
+          if (serviceDur != null && dur != serviceDur)
+            Text('Padrão do serviço: $serviceDur min',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: AppColors.neutral)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Expanded(child: Text('Intervalo depois')),
+              DropdownButton<int>(
+                key: const Key('buffer-select'),
+                value: buf,
+                items: {...logic.bufferOptionsMin, buf}
+                    .toList()
+                    .map((m) => DropdownMenuItem(
+                        value: m, child: Text(logic.bufferLabel(m))))
+                    .toList()
+                  ..sort((a, b) => a.value!.compareTo(b.value!)),
+                onChanged: (m) {
+                  if (m != null) _adjust(bufferMin: m);
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -794,6 +1099,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
             ],
           ),
         )),
+        SliverToBoxAdapter(child: _buildTimeAdjustments()),
         if (slots.isEmpty)
           SliverToBoxAdapter(
               child: Padding(
@@ -807,7 +1113,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                   Text('Sem horários livres neste dia',
                       style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 8),
-                  Text('Tenta outro dia ou ajusta teus horários de trabalho',
+                  Text('Tente outro dia ou ajuste seus horários de trabalho',
                       style: Theme.of(context)
                           .textTheme
                           .bodyMedium
@@ -860,25 +1166,6 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
               }, childCount: slots.length),
             ),
           ),
-        // Observações: só depois de escolher o horário; privadas do prestador.
-        if (_selectedSlot != null)
-          SliverToBoxAdapter(
-              child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: TextField(
-              key: const Key('wizard-notes'),
-              controller: _notesCtrl,
-              minLines: 1,
-              maxLines: 3,
-              maxLength: 1000,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Detalhes / Observações',
-                helperText: 'Só você vê — o cliente não recebe.',
-                prefixIcon: Icon(Icons.sticky_note_2_outlined),
-              ),
-            ),
-          )),
       ],
     );
   }
@@ -910,17 +1197,33 @@ class Service {
   final int durationMin;
   final int priceCents;
 
+  /// Kit (combo): nomes dos serviços incluídos.
+  final List<String> kitItems;
+  bool get isKit => kitItems.isNotEmpty;
+
+  /// Soma dos preços dos itens do kit (pra mostrar o desconto).
+  final int kitFullCents;
+
   Service(
       {required this.id,
       required this.name,
       required this.durationMin,
-      required this.priceCents});
+      required this.priceCents,
+      this.kitItems = const [],
+      this.kitFullCents = 0});
 
   factory Service.fromJson(Map<String, dynamic> j) => Service(
         id: j['id'],
         name: j['name'],
         durationMin: j['duration_min'] ?? j['durationMin'],
         priceCents: j['price_cents'] ?? j['priceCents'],
+        kitItems: [
+          for (final i in (j['items'] as List? ?? [])) i['name'] as String,
+        ],
+        kitFullCents: [
+          for (final i in (j['items'] as List? ?? []))
+            (i['price_cents'] ?? 0) as int,
+        ].fold(0, (a, b) => a + b),
       );
 }
 
@@ -955,6 +1258,14 @@ class Appointment {
   /// Observações do prestador (privadas).
   final String? notes;
 
+  /// Folga depois do atendimento (min) — o próximo só começa após ela.
+  final int bufferMin;
+
+  /// Nome/preço do serviço como o agendamento conhece — remarcar funciona
+  /// mesmo se o serviço foi excluído (não vem mais em GET /services).
+  final String? serviceName;
+  final int? servicePriceCents;
+
   Appointment(
       {required this.id,
       required this.startsAt,
@@ -962,7 +1273,10 @@ class Appointment {
       required this.status,
       this.clientId,
       this.serviceId,
-      this.notes});
+      this.notes,
+      this.bufferMin = 0,
+      this.serviceName,
+      this.servicePriceCents});
 
   factory Appointment.fromJson(Map<String, dynamic> j) => Appointment(
         id: j['id'],
@@ -972,6 +1286,7 @@ class Appointment {
         clientId: j['client_id'] ?? j['clientId'],
         serviceId: j['service_id'] ?? j['serviceId'],
         notes: j['notes'] as String?,
+        bufferMin: (j['buffer_min'] ?? j['bufferMin'] ?? 0) as int,
       );
 }
 

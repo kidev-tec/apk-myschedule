@@ -86,7 +86,7 @@ void main() {
     await tester.tap(find.text('Criar conta').last);
     await tester.pump();
 
-    expect(find.text('Cria tua conta'), findsOneWidget);
+    expect(find.text('Crie sua conta'), findsOneWidget);
     expect(find.text('Bem-vindo de volta'), findsNothing);
     // botão principal vira "Criar conta" e o toggle vira "Entrar"
     expect(find.text('Criar conta'), findsOneWidget);
@@ -129,7 +129,7 @@ void main() {
     expect(depois.obscureText, isFalse);
   });
 
-  testWidgets('F0: modo cadastro mostra campo "Teu nome" (login não mostra)',
+  testWidgets('F0: modo cadastro mostra campo "Seu nome" (login não mostra)',
       (tester) async {
     await tester.pumpWidget(_wrap());
     // toggle pra criar conta
@@ -138,7 +138,7 @@ void main() {
         warnIfMissed: false);
     await tester.pumpAndSettle();
 
-    expect(find.text('Teu nome'), findsOneWidget);
+    expect(find.text('Seu nome'), findsOneWidget);
   });
 
   testWidgets('F0: modo login mostra link "Esqueci minha senha"',

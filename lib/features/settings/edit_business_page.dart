@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../theme/app_theme.dart';
+import '../../core/widgets/home_action.dart';
 
 /// Edição do negócio pós-onboarding: nome, segmento e endereço.
 /// Serve pros prestadores antigos (adesão antes do F1) adicionarem
@@ -96,8 +97,8 @@ class _EditBusinessPageState extends ConsumerState<EditBusinessPage> {
     } on DioException catch (e) {
       if (!mounted) return;
       final msg = e.response?.data is Map
-          ? (e.response?.data['error'] as String? ?? 'Não deu pra salvar')
-          : 'Não deu pra salvar. Verifica a internet.';
+          ? (e.response?.data['error'] as String? ?? 'Não foi possível salvar')
+          : 'Não foi possível salvar. Verifique a internet.';
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(msg), backgroundColor: AppColors.error));
     } finally {
@@ -136,7 +137,7 @@ class _EditBusinessPageState extends ConsumerState<EditBusinessPage> {
       final r = await Dio().get('https://viacep.com.br/ws/$digits/json/');
       if (!mounted) return;
       if (r.data is Map && r.data['erro'] == true) {
-        _snack('CEP não encontrado — preenche manualmente');
+        _snack('CEP não encontrado — preencha manualmente');
         return;
       }
       setState(() {
@@ -146,7 +147,9 @@ class _EditBusinessPageState extends ConsumerState<EditBusinessPage> {
         _stateController.text = r.data['uf'] ?? '';
       });
     } catch (_) {
-      if (mounted) _snack('Não deu pra buscar o CEP — preenche manualmente');
+      if (mounted) {
+        _snack('Não foi possível buscar o CEP — preencha manualmente');
+      }
     } finally {
       if (mounted) setState(() => _zipLookingUp = false);
     }
@@ -171,7 +174,8 @@ class _EditBusinessPageState extends ConsumerState<EditBusinessPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Meu negócio')),
+      appBar: AppBar(
+          title: const Text('Meu negócio'), actions: const [HomeAction()]),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : Form(
@@ -206,12 +210,12 @@ class _EditBusinessPageState extends ConsumerState<EditBusinessPage> {
                     onChanged: (v) => setState(() => _currentSegment = v),
                   ),
                   const SizedBox(height: 24),
-                  Text('Endereço (onde os clientes te encontram)',
+                  Text('Endereço (onde os clientes encontram você)',
                       style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 4),
                   Text(
-                      'Aparece no teu link de agendamento público. '
-                      'Deixa vazio se atende em todo lugar ou online.',
+                      'Aparece no seu link de agendamento público. '
+                      'Deixe vazio se atende em vários lugares ou online.',
                       style: Theme.of(context)
                           .textTheme
                           .bodySmall
@@ -292,7 +296,7 @@ class _EditBusinessPageState extends ConsumerState<EditBusinessPage> {
                                             strokeWidth: 2)),
                                   )
                                 : const Icon(Icons.travel_explore_outlined),
-                            helperText: 'Preenche o resto sozinho',
+                            helperText: 'Preenche o restante automaticamente',
                           ),
                         ),
                       ),

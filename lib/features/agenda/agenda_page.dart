@@ -9,10 +9,14 @@ import '../../core/push/push_events.dart';
 import '../../core/storage/local_cache.dart';
 import '../../core/storage/connectivity_provider.dart';
 import '../../core/storage/sync_queue.dart';
+import '../../core/utils/duration_text.dart';
 import '../../core/utils/phone_br.dart';
 import '../../core/api/paywall_flag.dart';
 import '../../core/update/update_service.dart';
 import '../../theme/app_theme.dart';
+import '../clients/public_link_badge.dart';
+import '../notifications/notification_bell.dart';
+import 'block_time_page.dart';
 import 'booking_wizard.dart' as booking show Appointment;
 import 'booking_logic.dart' as booking_logic
     show buildRescheduleMessage, formatWhen, greetingName;
@@ -214,6 +218,12 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   }
 
   /// Mês: tocar num dia abre a visão dia daquela data.
+  /// Abre as notificações; tocar numa de agendamento volta com o dia dele.
+  Future<void> _openNotifications() async {
+    final day = await context.push<DateTime>('/notifications');
+    if (day != null && mounted) _openDay(day);
+  }
+
   void _openDay(DateTime day) {
     setState(() {
       _view = _AgendaView.dia;
@@ -254,6 +264,11 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
           // B6: botão de mês no AppBar removido — redundante com o seletor
           // Dia/Semana/Mês (feedback Rafael 18/09). O "Mês" do seletor abre
           // o mesmo bottom sheet.
+          // central de notificações (bolinha = não lidas)
+          NotificationBell(
+            api: ref.read(agendaApiProvider),
+            onOpen: _openNotifications,
+          ),
           IconButton(
             icon: const Icon(Icons.settings),
             tooltip: 'Configurações',
@@ -425,6 +440,19 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                                 ],
                               ),
                             ),
+                            // Dia: semáforo de status numa linha própria,
+                            // abaixo dos botões (alinhado à direita)
+                            if (_view == _AgendaView.dia &&
+                                _appointments.isNotEmpty)
+                              Padding(
+                                key: const Key('day-semaphore'),
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: _buildStatusSemaphore(_appointments),
+                                ),
+                              ),
                             const SizedBox(height: 8),
                             Expanded(
                               child: _view == _AgendaView.mes
@@ -463,8 +491,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   Widget _buildEmptyState(BuildContext context) {
     // B6: mensagem de vazio contextual por visão
     final title = _view == _AgendaView.semana
-        ? 'Nada agendado pra semana'
-        : 'Nada agendado pra hoje';
+        ? 'Nada agendado para a semana'
+        : 'Nada agendado para hoje';
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -481,7 +509,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Toque em "Marcar horário" pra começar',
+              'Toque em "Marcar horário" para começar',
               style: Theme.of(context)
                   .textTheme
                   .bodyMedium
@@ -516,9 +544,19 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             ),
           ),
         ),
-        title: Text(
-            a.isBlock ? (a.canceledReason ?? 'Bloqueado') : a.clientName,
-            style: Theme.of(context).textTheme.titleMedium),
+        // ícone 🌐 ao lado do nome: cliente se cadastrou pelo link (toque
+        // mostra a explicação)
+        title: Row(children: [
+          Flexible(
+            child: Text(
+                a.isBlock ? (a.canceledReason ?? 'Bloqueado') : a.clientName,
+                style: Theme.of(context).textTheme.titleMedium),
+          ),
+          if (a.clientFromPublicLink) ...[
+            const SizedBox(width: 6),
+            const PublicLinkBadge(),
+          ],
+        ]),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -529,6 +567,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                 style: a.isBlock
                     ? const TextStyle(fontStyle: FontStyle.italic)
                     : null),
+            // cliente se cadastrou sozinho no agendamento online
             // observações do prestador (privadas)
             if (a.notes != null && a.notes!.isNotEmpty)
               Padding(
@@ -567,13 +606,100 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   /// Menu "⋮" de ações do agendamento (compartilhado entre lista e grade).
   /// Remarcado não tem menu: é histórico — o agendamento novo já existe e
   /// remarcar de novo criaria um duplicado.
+  /// "Ver bloqueio": dia, horário, duração e motivo. Devolve true se o
+  /// prestador tocou em "Liberar horário" (só pra bloqueio futuro).
+  Future<bool?> _showBlockDetails(Appointment a) {
+    final theme = Theme.of(context);
+    final dia = DateFormat("EEEE, d 'de' MMMM", 'pt_BR').format(a.startsAt);
+    final hm = DateFormat('HH:mm', 'pt_BR');
+    final motivo = (a.canceledReason ?? '').trim();
+    Widget row(IconData icon, String label, String value, {Key? key}) =>
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 20, color: AppColors.primaryOf(context)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label,
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: AppColors.neutral)),
+                    Text(value, key: key, style: theme.textTheme.bodyLarge),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+    return showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        // rolável: em tela pequena o painel não estoura
+        child: SingleChildScrollView(
+            child: Padding(
+          key: const Key('block-details'),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(children: [
+                const Text('🔒 ', style: TextStyle(fontSize: 20)),
+                Text('Bloqueio', style: theme.textTheme.titleLarge),
+              ]),
+              const SizedBox(height: 8),
+              row(Icons.event, 'Dia',
+                  '${dia[0].toUpperCase()}${dia.substring(1)}'),
+              row(
+                  Icons.schedule,
+                  'Horário',
+                  '${hm.format(a.startsAt)} às ${hm.format(a.endsAt)} '
+                      '(${humanDuration(a.endsAt.difference(a.startsAt).inMinutes)})',
+                  key: const Key('block-details-time')),
+              row(Icons.notes, 'Motivo',
+                  motivo.isEmpty ? 'Sem motivo informado' : motivo,
+                  key: const Key('block-details-reason')),
+              if (_isPast(a))
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text('Esse horário já passou.',
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: AppColors.neutral)),
+                ),
+              const SizedBox(height: 12),
+              if (!_isPast(a))
+                OutlinedButton.icon(
+                  key: const Key('block-details-release'),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  icon: const Icon(Icons.lock_open),
+                  label: const Text('Liberar horário'),
+                ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Fechar'),
+              ),
+            ],
+          ),
+        )),
+      ),
+    );
+  }
+
   Widget? _buildActionsMenu(Appointment a) {
     if (_statusKind(a) == _StatusKind.remarcado) return null;
     return a.isBlock
         ? PopupMenuButton<String>(
             onSelected: (v) => _handleAppointmentAction(v, a),
             itemBuilder: (_) => [
-              // Horário já passou: sem ações (nada a liberar).
+              const PopupMenuItem(
+                  value: 'view_block', child: Text('Ver bloqueio')),
+              // Horário já passou: nada a liberar.
               if (!_isPast(a))
                 const PopupMenuItem(
                     value: 'cancel', child: Text('Liberar horário')),
@@ -730,12 +856,24 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             const Spacer(),
             Padding(
               padding: const EdgeInsets.only(right: 12),
-              child: Text(
-                a.isBlock ? (a.canceledReason ?? 'Bloqueado') : a.clientName,
-                style: theme.textTheme.titleSmall,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              // nome + ícone 🌐 (cadastro pelo link), como na lista; o
+              // nome corta com "…" e o ícone fica sempre visível
+              child: Row(children: [
+                Flexible(
+                  child: Text(
+                    a.isBlock
+                        ? (a.canceledReason ?? 'Bloqueado')
+                        : a.clientName,
+                    style: theme.textTheme.titleSmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (a.clientFromPublicLink) ...[
+                  const SizedBox(width: 4),
+                  const PublicLinkBadge(),
+                ],
+              ]),
             ),
             const SizedBox(height: 2),
             Padding(
@@ -775,20 +913,29 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
               Expanded(child: _buildWeekStrip())
             else if (_view == _AgendaView.dia)
               // Dia: tocar na data abre o seletor de dias do mês.
-              TextButton.icon(
-                onPressed: _pickDayOfMonth,
-                iconAlignment: IconAlignment.end,
-                icon: const Icon(Icons.arrow_drop_down),
-                label: Text(DateFormat('dd/MM').format(_focusedDay)),
-                style: TextButton.styleFrom(
-                  foregroundColor:
-                      Theme.of(context).textTheme.titleMedium?.color,
-                  textStyle: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w600),
-                ),
-              )
+              // Flexible+FittedBox: "Quarta-feira, 30/10" encolhe em 360dp.
+              Flexible(
+                  child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: TextButton.icon(
+                        onPressed: _pickDayOfMonth,
+                        iconAlignment: IconAlignment.end,
+                        icon: const Icon(Icons.arrow_drop_down),
+                        // "Sexta-feira, 30/10": nome do dia antes da data
+                        label: Text(
+                            DateFormat("EEEE, dd/MM", 'pt_BR')
+                                .format(_focusedDay)
+                                .capitalize(),
+                            key: const Key('day-footer-label')),
+                        style: TextButton.styleFrom(
+                          foregroundColor:
+                              Theme.of(context).textTheme.titleMedium?.color,
+                          textStyle: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                      )))
             else
               Text(
                 _view == _AgendaView.mes
@@ -1146,15 +1293,15 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   Future<void> _notifyCancelOnWhatsapp(Appointment a) async {
     final when = booking_logic.formatWhen(a.startsAt);
     final msg = Uri.encodeComponent(
-        'Oi ${_greeting(a)}! Tive que remanejar teu horário de $when. '
-        'Me chama pra combinarmos outro horário! 🙂');
+        'Olá, ${_greeting(a)}! Precisei remanejar seu horário de $when. '
+        'Fale comigo para combinarmos outro horário! 🙂');
     final phone = ensureDdi55(a.clientPhone);
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Avisar o cliente?'),
         content: Text(
-            'Vou abrir teu WhatsApp com uma mensagem pronta pra ${a.clientName} avisando do cancelamento de $when.'),
+            'Vamos abrir seu WhatsApp com uma mensagem pronta para ${a.clientName} avisando do cancelamento de $when.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -1177,8 +1324,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     final when = booking_logic.formatWhen(a.startsAt);
     final link = await _confirmationLink(a);
     final msg = Uri.encodeComponent(
-        'Oi ${_greeting(a)}! Confirmando teu horário de $when. '
-        'Pode confirmar tua presença aqui? $link 🙂');
+        'Olá, ${_greeting(a)}! Confirmando seu horário de $when. '
+        'Pode confirmar sua presença aqui? $link 🙂');
     final phone = ensureDdi55(a.clientPhone);
     if (!mounted) return;
     final ok = await showDialog<bool>(
@@ -1186,7 +1333,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       builder: (_) => AlertDialog(
         title: const Text('Pedir confirmação?'),
         content: Text(
-            'Vou abrir teu WhatsApp com uma mensagem pra ${a.clientName} confirmar se vem em $when.'),
+            'Vamos abrir seu WhatsApp com uma mensagem para ${a.clientName} confirmar se vem em $when.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -1222,7 +1369,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       Appointment a, booking.Appointment? novo) async {
     final whenText = booking_logic
         .buildRescheduleMessage(_greeting(a), novo)
-        .replaceFirst('Oi ${_greeting(a)}! ', '');
+        .replaceFirst('Olá, ${_greeting(a)}! ', '');
     if (!mounted) return;
     final msg = Uri.encodeComponent(
         booking_logic.buildRescheduleMessage(_greeting(a), novo));
@@ -1232,7 +1379,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       builder: (_) => AlertDialog(
         title: const Text('Avisar o cliente?'),
         content: Text(
-            'Vou abrir teu WhatsApp com uma mensagem pro ${a.clientName} com o novo horário ($whenText).'),
+            'Vamos abrir seu WhatsApp com uma mensagem para ${a.clientName} com o novo horário ($whenText).'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -1251,159 +1398,30 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
 
   /// RF-A01..A03: sheet de bloqueio de horário. Cria appointment
   /// source='block' ocupando o intervalo escolhido do dia focado.
+  /// RF-A: tela própria de bloqueio — mostra o dia (expediente,
+  /// agendamentos, bloqueios) e só deixa escolher o que está livre.
   Future<void> _showBlockSheet() async {
     final api = ref.read(agendaApiProvider);
-    final day = _focusedDay;
-    TimeOfDay start = const TimeOfDay(hour: 12, minute: 0);
-    TimeOfDay end = const TimeOfDay(hour: 13, minute: 0);
-    final reasonCtrl = TextEditingController();
-
-    final ok = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          // barra de gestos + teclado (padrão do commit 888d475)
-          bottom: MediaQuery.of(ctx).viewInsets.bottom +
-              MediaQuery.of(ctx).padding.bottom +
-              24,
-        ),
-        child: StatefulBuilder(
-          builder: (ctx, setSheet) => Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Bloquear horário',
-                  style: Theme.of(ctx).textTheme.titleLarge),
-              const SizedBox(height: 8),
-              Text(
-                  '${DateFormat('EEEE, d \'de\' MMMM', 'pt_BR').format(day)} — clientes não verão este intervalo.',
-                  style: Theme.of(ctx).textTheme.bodySmall),
-              const SizedBox(height: 16),
-              Row(children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () async {
-                      final t = await showTimePicker(
-                          context: ctx, initialTime: start);
-                      if (t != null) setSheet(() => start = t);
-                    },
-                    child: Text('Início ${start.format(ctx)}'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () async {
-                      final t =
-                          await showTimePicker(context: ctx, initialTime: end);
-                      if (t != null) setSheet(() => end = t);
-                    },
-                    child: Text('Fim ${end.format(ctx)}'),
-                  ),
-                ),
-              ]),
-              const SizedBox(height: 12),
-              TextField(
-                controller: reasonCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Motivo (opcional, só você vê)',
-                  hintText: 'ex.: dentista',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                icon: const Icon(Icons.lock_outline),
-                label: const Text('Bloquear'),
-                onPressed: () {
-                  if (start.hour * 60 + start.minute >=
-                      end.hour * 60 + end.minute) {
-                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-                        content: Text('O fim deve ser depois do início')));
-                    return;
-                  }
-                  Navigator.pop(ctx, true);
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (ok != true || !mounted) return;
-
-    try {
-      // find-or-create do par cliente/serviço técnico do bloqueio
-      final blockIds = await _ensureBlockClientAndService(api);
-      final startDt =
-          DateTime(day.year, day.month, day.day, start.hour, start.minute);
-      final endDt =
-          DateTime(day.year, day.month, day.day, end.hour, end.minute);
-      await api.dio.post('/appointments', data: {
-        'clientId': blockIds['clientId'],
-        'serviceId': blockIds['serviceId'],
-        'startsAt': startDt.toUtc().toIso8601String(),
-        'endsAt': endDt.toUtc().toIso8601String(),
-        'source': 'block',
-        if (reasonCtrl.text.trim().isNotEmpty)
-          'canceledReason': reasonCtrl.text.trim(),
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Horário bloqueado 🔒')));
-        await _loadAppointments();
-      }
-    } catch (e) {
-      debugPrint('[agenda] falha ao bloquear: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Não consegui bloquear: ${humanError(e)}'),
-            backgroundColor: AppColors.error));
-      }
-    }
-  }
-
-  /// RF-A: o schema exige clientId+serviceId; bloqueio usa par técnico
-  /// reutilizável (cliente '— bloqueio —', serviço 'Bloqueio', preço 0).
-  Future<Map<String, String>> _ensureBlockClientAndService(
-      ApiClient api) async {
-    final clientsRes = await api.dio.get('/clients');
-    final clients = (clientsRes.data['clients'] as List? ?? []);
-    final existingClient = clients.firstWhere(
-      (c) => (c is Map) && c['name'] == '— bloqueio —',
-      orElse: () => null,
-    );
-    String clientId;
-    if (existingClient != null) {
-      clientId = existingClient['id'] as String;
-    } else {
-      final created =
-          await api.dio.post('/clients', data: {'name': '— bloqueio —'});
-      clientId = (created.data['client'] as Map)['id'] as String;
-    }
-
-    final servicesRes = await api.dio.get('/services');
-    final services = (servicesRes.data['services'] as List? ?? []);
-    final existingService = services.firstWhere(
-      (s) => (s is Map) && s['name'] == 'Bloqueio',
-      orElse: () => null,
-    );
-    String serviceId;
-    if (existingService != null) {
-      serviceId = existingService['id'] as String;
-    } else {
-      final created = await api.dio.post('/services',
-          data: {'name': 'Bloqueio', 'duration_min': 60, 'price_cents': 0});
-      serviceId = (created.data['service'] as Map)['id'] as String;
-    }
-    return {'clientId': clientId, 'serviceId': serviceId};
+    final created = await Navigator.of(context).push<int>(MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => BlockTimePage(api: api, initialDate: _focusedDay),
+    ));
+    if (!mounted || created == null || created == 0) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(created == 1
+            ? 'Horário bloqueado 🔒'
+            : '$created horários bloqueados 🔒')));
+    await _loadAppointments();
   }
 
   Future<void> _handleAppointmentAction(String action, Appointment a) async {
+    if (action == 'view_block') {
+      final liberar = await _showBlockDetails(a);
+      if (liberar == true && mounted) {
+        await _handleAppointmentAction('cancel', a);
+      }
+      return;
+    }
     final api = ref.read(agendaApiProvider);
     try {
       switch (action) {
@@ -1438,6 +1456,11 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             clientId: a.clientId,
             serviceId: a.serviceId,
             notes: a.notes,
+            // folga original (antes ia 0 e a remarcação perdia a folga)
+            bufferMin: a.bufferMin,
+            // serviço pode ter sido excluído: o wizard usa estes dados
+            serviceName: a.serviceName,
+            servicePriceCents: a.servicePriceCents,
           );
           final changed = await context.push<booking.Appointment?>(
               '/agenda/booking',
@@ -1494,6 +1517,16 @@ class Appointment {
   final String? clientId;
   final String? serviceId;
 
+  /// Preço do serviço (pro resumo da remarcação, mesmo se ele foi excluído).
+  final int servicePriceCents;
+
+  /// Folga depois do atendimento (min) — remarcar preserva.
+  final int bufferMin;
+
+  /// 'public_link' = o cliente se cadastrou no agendamento online.
+  final String clientOrigin;
+  bool get clientFromPublicLink => clientOrigin == 'public_link';
+
   bool get isBlock => source == 'block';
 
   Appointment({
@@ -1510,6 +1543,9 @@ class Appointment {
     this.clientNickname,
     this.clientId,
     this.serviceId,
+    this.servicePriceCents = 0,
+    this.bufferMin = 0,
+    this.clientOrigin = 'app',
   });
 
   factory Appointment.fromJson(Map<String, dynamic> j) => Appointment(
@@ -1526,6 +1562,9 @@ class Appointment {
         clientNickname: j['client_nickname'] as String?,
         clientId: j['client_id'] ?? j['clientId'],
         serviceId: j['service_id'] ?? j['serviceId'],
+        servicePriceCents: (j['service_price_cents'] ?? 0) as int,
+        bufferMin: (j['buffer_min'] ?? j['bufferMin'] ?? 0) as int,
+        clientOrigin: j['client_origin'] as String? ?? 'app',
       );
 }
 
@@ -1875,7 +1914,7 @@ class _AppointmentDetailsSheetState extends State<_AppointmentDetailsSheet> {
             Text(a.clientName, style: theme.textTheme.titleLarge),
             const SizedBox(height: 12),
             row(Icons.event, booking_logic.formatWhen(a.startsAt)),
-            row(Icons.content_cut, a.serviceName),
+            row(Icons.miscellaneous_services, a.serviceName),
             row(Icons.info_outline, widget.statusLabel),
             if (a.clientPhone.isNotEmpty) row(Icons.phone, a.clientPhone),
             if (widget.loadClientNotes != null) ...[
@@ -1935,8 +1974,10 @@ class _AppointmentDetailsSheetState extends State<_AppointmentDetailsSheet> {
             ],
             const Divider(height: 24),
             Row(children: [
-              Text('Detalhes / Observações', style: theme.textTheme.titleSmall),
-              const Spacer(),
+              Expanded(
+                child: Text('Detalhes / Observações do atendimento',
+                    style: theme.textTheme.titleSmall),
+              ),
               if (!_editing)
                 TextButton.icon(
                   key: const Key('details-edit'),

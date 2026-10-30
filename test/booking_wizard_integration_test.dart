@@ -37,6 +37,13 @@ Widget _wrapWithApi(ApiClient api) {
   );
 }
 
+/// Observações e resumo ficam no último passo ("Confirma o agendamento"):
+/// avança pra ele a partir da escolha do horário.
+Future<void> goToReview(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('wizard-save')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -71,7 +78,15 @@ void main() {
                 'duration_min': 60,
                 'price_cents': 5000
               },
+              {
+                'id': 's2',
+                'name': 'Barba',
+                'duration_min': 30,
+                'price_cents': 3000
+              },
             ]));
+    // folga padrão do negócio (intervalo entre atendimentos)
+    adapter.onGet('/me', (s) => s.reply(200, {'buffer_min': 0}));
     adapter.onGet(
         '/working-hours',
         (s) => s.reply(200, [
@@ -192,11 +207,14 @@ void main() {
       await tester.tap(find.byIcon(Icons.chevron_right));
       await tester.pumpAndSettle();
     }
+    await tester.ensureVisible(find.text('10:00'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('10:00'));
     await tester.pumpAndSettle();
     tester.view.physicalSize = const Size(360, 640);
     tester.view.viewInsets = const FakeViewPadding(bottom: 320);
     await tester.pumpAndSettle();
+    await goToReview(tester);
     final notes = find.byKey(const Key('wizard-notes'));
     await tester.ensureVisible(notes);
     await tester.enterText(notes,
@@ -221,7 +239,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Step 1: escolhe cliente Ana
-    expect(find.text('Escolhe o cliente'), findsOneWidget);
+    expect(find.text('Escolha o cliente'), findsOneWidget);
     expect(find.text('Ana'), findsOneWidget);
     expect(find.text('Beto'), findsOneWidget);
     // botão desabilitado antes da seleção
@@ -235,7 +253,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Step 2: escolhe serviço Corte
-    expect(find.text('Escolhe o serviço'), findsOneWidget);
+    expect(find.text('Escolha o serviço'), findsOneWidget);
     expect(find.textContaining('Corte'), findsOneWidget);
     await tester.tap(find.text('Corte'));
     await tester.pump();
@@ -245,7 +263,7 @@ void main() {
     // Step 3: slots — o dia corrente pode não ter working hour (fixture =
     // segunda). Navega com o chevron até a PRÓXIMA segunda (dinâmico:
     // teste data-dependent com "3 cliques" quebrava quando o calendário andou).
-    expect(find.text('Escolhe o horário'), findsOneWidget);
+    expect(find.text('Escolha o horário'), findsOneWidget);
     final today = DateTime.now();
     final daysToMonday = (DateTime.monday - today.weekday) % 7;
     final taps = daysToMonday == 0 ? 7 : daysToMonday;
@@ -261,8 +279,15 @@ void main() {
     expect(find.text('10:00'), findsOneWidget); // pós-conflito
     // observações só aparecem depois de escolher o horário
     expect(find.byKey(const Key('wizard-notes')), findsNothing);
+    await tester.ensureVisible(find.text('10:00'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('10:00'));
     await tester.pump();
+    await goToReview(tester);
+    // resumo antes de salvar + observações em destaque no último passo
+    expect(find.text('Confirma o agendamento'), findsOneWidget);
+    expect(find.text('Ana'), findsOneWidget);
+    expect(find.text('10:00 às 11:00 (60 min)'), findsOneWidget);
     expect(find.byKey(const Key('wizard-notes')), findsOneWidget);
     await tester.enterText(
         find.byKey(const Key('wizard-notes')), '  pediu degradê baixo ');
@@ -294,6 +319,110 @@ void main() {
     final start = DateTime.parse(posted.first['startsAt'] as String);
     final end = DateTime.parse(posted.first['endsAt'] as String);
     expect(end.difference(start), const Duration(minutes: 60));
+  });
+
+  testWidgets('vários serviços num horário só: soma e manda serviceIds',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(_wrapWithApi(api));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ana'));
+    await tester.pump();
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pode marcar mais de um — fica tudo num horário só.'),
+        findsOneWidget);
+    await tester.tap(find.text('Corte'));
+    await tester.pump();
+    await tester.tap(find.text('Barba'));
+    await tester.pump();
+    expect(find.textContaining('2 serviços · 90 min'), findsOneWidget);
+    // desmarca e marca de novo (ordem: Corte, Barba)
+    await tester.tap(find.text('Barba'));
+    await tester.pump();
+    expect(find.textContaining('2 serviços'), findsNothing);
+    await tester.tap(find.text('Barba'));
+    await tester.pump();
+
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
+    final days = (DateTime.monday - DateTime.now().weekday) % 7;
+    for (var i = 0; i < (days == 0 ? 7 : days); i++) {
+      await tester.tap(find.byIcon(Icons.chevron_right));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('90 min'), findsOneWidget); // duração somada
+    await tester.tap(find.text('10:00'));
+    await tester.pump();
+    await goToReview(tester);
+    expect(find.textContaining('Corte + Barba'), findsOneWidget);
+    expect(find.text('10:00 às 11:30 (90 min)'), findsOneWidget);
+    await tester.tap(find.text('Confirmar agendamento'));
+    await tester.pumpAndSettle();
+
+    final post = posted.single;
+    expect(post['serviceIds'], ['s1', 's2']);
+    expect(post.containsKey('serviceId'), isFalse);
+    expect(post['duration_min'], 90);
+  });
+
+  testWidgets('ajusta duração e intervalo do agendamento → vai no POST',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(_wrapWithApi(api));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ana'));
+    await tester.pump();
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Corte'));
+    await tester.pump();
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
+    final days = (DateTime.monday - DateTime.now().weekday) % 7;
+    for (var i = 0; i < (days == 0 ? 7 : days); i++) {
+      await tester.tap(find.byIcon(Icons.chevron_right));
+      await tester.pumpAndSettle();
+    }
+
+    // padrão: duração do serviço (60) e sem intervalo (/me buffer_min 0)
+    expect(find.text('60 min'), findsOneWidget);
+    expect(find.text('Sem intervalo'), findsOneWidget);
+    // serviço de 60 → janela 09-12 com appt 09-10: 11:30 não cabe
+    expect(find.text('11:30'), findsNothing);
+
+    // −30 min: 60 → 30 (cliente "cabelo zero")
+    for (var i = 0; i < 6; i++) {
+      await tester.tap(find.byKey(const Key('duration-minus')));
+      await tester.pump();
+    }
+    expect(find.text('30 min'), findsOneWidget);
+    expect(find.text('Padrão do serviço: 60 min'), findsOneWidget);
+    expect(find.text('11:30'), findsOneWidget);
+
+    // intervalo de 10 min depois deste atendimento
+    await tester.tap(find.byKey(const Key('buffer-select')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('10 min').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('10:00'));
+    await tester.pump();
+    await goToReview(tester);
+    await tester.tap(find.text('Confirmar agendamento'));
+    await tester.pumpAndSettle();
+
+    expect(posted, hasLength(1));
+    expect(posted.first['duration_min'], 30);
+    expect(posted.first['buffer_min'], 10);
+    final start = DateTime.parse(posted.first['startsAt'] as String);
+    final end = DateTime.parse(posted.first['endsAt'] as String);
+    expect(end.difference(start), const Duration(minutes: 30));
   });
 
   testWidgets('fluxo: POST falha → SnackBar de erro, sem sucesso',
@@ -332,8 +461,13 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    await tester.ensureVisible(find.text('10:00'));
+
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('10:00'));
     await tester.pump();
+    await goToReview(tester);
     await tester.ensureVisible(find.text('Confirmar agendamento'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Confirmar agendamento'));
@@ -345,13 +479,16 @@ void main() {
     // (fase 2 do offline: só falha de CONEXÃO é que enfileira).
     expect(find.textContaining('slot já reservado'), findsOneWidget);
 
-    // Após o erro o wizard continua no passo do horário (não volta pro
-    // passo 1 com o título/estado do passo 3) e o voltar funciona.
-    expect(find.text('Escolhe o horário'), findsOneWidget);
+    // Após o erro o wizard continua no passo de confirmação (dá pra
+    // tentar de novo ou voltar pra trocar o horário).
+    expect(find.text('Confirma o agendamento'), findsOneWidget);
     expect(find.text('Confirmar agendamento'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('review-change-time')));
+    await tester.pumpAndSettle();
+    expect(find.text('Escolha o horário'), findsOneWidget);
     await tester.tap(find.byIcon(Icons.arrow_back));
     await tester.pumpAndSettle();
-    expect(find.text('Escolhe o serviço'), findsOneWidget);
+    expect(find.text('Escolha o serviço'), findsOneWidget);
     expect(find.text('Corte'), findsOneWidget);
   });
 

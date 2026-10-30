@@ -3,9 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../theme/app_theme.dart';
+import 'public_link_badge.dart';
+import '../../core/widgets/home_action.dart';
 
 class ClientsPage extends ConsumerStatefulWidget {
-  const ClientsPage({super.key});
+  /// DI pra teste (mock de rede). Padrão: ApiClient real.
+  final ApiClient? api;
+
+  const ClientsPage({super.key, this.api});
 
   @override
   ConsumerState<ClientsPage> createState() => _ClientsPageState();
@@ -31,7 +36,7 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
   Future<void> _loadClients() async {
     setState(() => _loading = true);
     try {
-      final api = ApiClient();
+      final api = widget.api ?? ApiClient();
       final resp = await api.dio.get('/clients');
       _clients = (resp.data as List).map((j) => Client.fromJson(j)).toList();
     } catch (e) {
@@ -68,7 +73,7 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
     if (confirm != true) return;
 
     try {
-      final api = ApiClient();
+      final api = widget.api ?? ApiClient();
       await api.dio.delete('/clients/${c.id}');
       _loadClients();
     } catch (e) {
@@ -81,12 +86,8 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Clientes'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: _openForm,
-          ),
-        ],
+        // "+" só no botão flutuante (o do topo era redundante)
+        actions: const [HomeAction()],
       ),
       body: Column(
         children: [
@@ -117,7 +118,7 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
                     Text('Nenhum cliente ainda',
                         style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),
-                    Text('Toque em + pra adicionar o primeiro',
+                    Text('Toque em + para adicionar o primeiro',
                         style: Theme.of(context)
                             .textTheme
                             .bodyMedium
@@ -141,7 +142,13 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
                         child: Text(c.name[0].toUpperCase(),
                             style: const TextStyle(color: Colors.white)),
                       ),
-                      title: Text(c.name),
+                      title: Row(children: [
+                        Flexible(child: Text(c.name)),
+                        if (c.fromPublicLink) ...[
+                          const SizedBox(width: 6),
+                          const PublicLinkBadge(),
+                        ],
+                      ]),
                       subtitle: Text(c.phoneE164),
                       trailing: PopupMenuButton<String>(
                         onSelected: (v) {
@@ -179,12 +186,18 @@ class Client {
   final String? email;
   final DateTime? birthday;
 
+  /// 'app' (cadastrado aqui) | 'public_link' (se cadastrou sozinho no
+  /// agendamento online — só nome e celular).
+  final String origin;
+  bool get fromPublicLink => origin == 'public_link';
+
   Client(
       {required this.id,
       required this.name,
       required this.phoneE164,
       this.email,
-      this.birthday});
+      this.birthday,
+      this.origin = 'app'});
 
   factory Client.fromJson(Map<String, dynamic> j) => Client(
         id: j['id'],
@@ -192,5 +205,6 @@ class Client {
         phoneE164: j['phone_e164'] ?? j['phoneE164'] ?? '',
         email: j['email'],
         birthday: j['birthday'] != null ? DateTime.parse(j['birthday']) : null,
+        origin: j['origin'] as String? ?? 'app',
       );
 }

@@ -175,7 +175,7 @@ class _ClientProfileFieldsState extends State<ClientProfileFields> {
       if (!mounted || generation != _lookupGeneration) return;
       setState(() {
         if (r == null) {
-          _cepMessage = 'CEP não encontrado. Preenche o endereço à mão.';
+          _cepMessage = 'CEP não encontrado. Preencha o endereço manualmente.';
         } else {
           d.street.text = r.street;
           d.district.text = r.district;
@@ -280,7 +280,7 @@ class _ClientProfileFieldsState extends State<ClientProfileFields> {
             labelText: 'CEP',
             hintText: '00000-000',
             prefixIcon: const Icon(Icons.location_on_outlined),
-            helperText: _cepMessage ?? 'Digite o CEP pra preencher o endereço',
+            helperText: _cepMessage ?? 'Digite o CEP para preencher o endereço',
             suffixIcon: _searching
                 ? const Padding(
                     padding: EdgeInsets.all(12),

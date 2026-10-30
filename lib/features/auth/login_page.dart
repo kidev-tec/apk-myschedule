@@ -116,8 +116,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       style: Theme.of(sheetContext).textTheme.titleLarge),
                   const SizedBox(height: 8),
                   const Text(
-                      'Digita teu e-mail de cadastro que a gente te manda '
-                      'um link pra criar uma senha nova.',
+                      'Digite o e-mail do seu cadastro e enviaremos '
+                      'um link para criar uma senha nova.',
                       style: TextStyle(fontSize: 14)),
                   const SizedBox(height: 24),
                   TextFormField(
@@ -151,21 +151,21 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   const Icon(Icons.mark_email_read_outlined,
                       size: 72, color: AppColors.success),
                   const SizedBox(height: 16),
-                  Text('Confere tua caixa de entrada',
+                  Text('Confira sua caixa de entrada',
                       textAlign: TextAlign.center,
                       style: Theme.of(sheetContext).textTheme.titleLarge),
                   const SizedBox(height: 8),
                   Text(
-                    'Mandamos um link de recuperação pra\n${emailCtrl.text.trim()}\n\n'
-                    'Clica no link pra criar tua senha nova. '
-                    'Se não chegar em alguns minutos, olha o spam.',
+                    'Enviamos um link de recuperação para\n${emailCtrl.text.trim()}\n\n'
+                    'Clique no link para criar sua senha nova. '
+                    'Se não chegar em alguns minutos, verifique o spam.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontSize: 14, height: 1.5),
                   ),
                   const SizedBox(height: 20),
                   OutlinedButton(
                     onPressed: () => Navigator.pop(sheetContext),
-                    child: const Text('Voltar pro login'),
+                    child: const Text('Voltar para o login'),
                   ),
                   TextButton(
                     onPressed: () => ref
@@ -226,13 +226,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               ),
               const SizedBox(height: 48),
               // Form
-              Text(_isLogin ? 'Bem-vindo de volta' : 'Cria tua conta',
+              Text(_isLogin ? 'Bem-vindo de volta' : 'Crie sua conta',
                   style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 8),
               Text(
                   _isLogin
-                      ? 'Entra com teu e-mail e senha'
-                      : 'É rápido, a gente promete',
+                      ? 'Entre com seu e-mail e senha'
+                      : 'É rápido e simples',
                   style: Theme.of(context)
                       .textTheme
                       .bodyMedium
@@ -246,8 +246,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   textCapitalization: TextCapitalization.words,
                   textInputAction: TextInputAction.next,
                   decoration: const InputDecoration(
-                    labelText: 'Teu nome',
-                    hintText: 'Como os clientes vão te ver',
+                    labelText: 'Seu nome',
+                    hintText: 'Como os clientes vão ver você',
                     prefixIcon: Icon(Icons.person_outline),
                   ),
                 ),
@@ -271,7 +271,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 onSubmitted: (_) => _submit(),
                 decoration: InputDecoration(
                   labelText: 'Senha',
-                  hintText: _isLogin ? 'Tua senha' : 'Mínimo 8 caracteres',
+                  hintText: _isLogin ? 'Sua senha' : 'Mínimo 8 caracteres',
                   prefixIcon: const Icon(Icons.lock_outline),
                   suffixIcon: IconButton(
                     icon: Icon(_obscurePassword

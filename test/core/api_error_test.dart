@@ -18,23 +18,23 @@ void main() {
 
   test('resposta sem error → mensagem genérica, nunca a exceção crua', () {
     final msg = humanError(resposta(500, '<html>'));
-    expect(msg, 'Algo deu errado no servidor. Tenta de novo.');
+    expect(msg, 'Algo deu errado no servidor. Tente novamente.');
     expect(msg, isNot(contains('DioException')));
   });
 
   test('sem conexão → avisa que não conectou', () {
     final e = DioException(
         requestOptions: req, type: DioExceptionType.connectionError);
-    expect(humanError(e), 'Sem conexão com o servidor. Confere a internet.');
+    expect(humanError(e), 'Sem conexão com o servidor. Verifique a internet.');
   });
 
   test('timeout → avisa que não conectou', () {
     final e = DioException(
         requestOptions: req, type: DioExceptionType.receiveTimeout);
-    expect(humanError(e), 'Sem conexão com o servidor. Confere a internet.');
+    expect(humanError(e), 'Sem conexão com o servidor. Verifique a internet.');
   });
 
   test('erro que não é da rede → mensagem genérica', () {
-    expect(humanError(StateError('x')), 'Algo deu errado. Tenta de novo.');
+    expect(humanError(StateError('x')), 'Algo deu errado. Tente novamente.');
   });
 }

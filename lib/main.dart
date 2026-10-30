@@ -16,6 +16,7 @@ import 'features/agenda/agenda_page.dart';
 import 'features/agenda/booking_wizard.dart' as booking;
 import 'features/clients/clients_page.dart';
 import 'features/clients/client_form_page.dart';
+import 'features/notifications/notifications_page.dart';
 import 'features/services/services_page.dart';
 import 'features/settings/time_offs_page.dart';
 import 'features/settings/waitlist_page.dart';
@@ -156,12 +157,22 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: 'new',
             builder: (_, __) => const ServiceFormPage(),
           ),
+          // kit (combo) de serviços
+          GoRoute(
+            path: 'new-kit',
+            builder: (_, __) => const ServiceFormPage(kit: true),
+          ),
           GoRoute(
             path: ':id/edit',
             builder: (_, state) =>
                 ServiceFormPage(serviceId: state.pathParameters['id']),
           ),
         ],
+      ),
+      // central de notificações (sino da agenda)
+      GoRoute(
+        path: '/notifications',
+        builder: (_, __) => const NotificationsPage(),
       ),
       GoRoute(
         path: '/settings',

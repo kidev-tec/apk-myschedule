@@ -53,7 +53,7 @@ class ApiClient {
         // 402 → paywall: trial vencido/assinatura cancelada (RF-14)
         if (error.response?.statusCode == 402) {
           PaywallFlag.hit('Período de teste encerrado. Renove a assinatura '
-              'pra continuar agendando.');
+              'para continuar agendando.');
         }
         handler.next(error);
       },

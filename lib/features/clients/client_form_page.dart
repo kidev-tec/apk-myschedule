@@ -7,6 +7,7 @@ import '../../core/cep/cep_service.dart';
 import '../../core/utils/phone_br.dart';
 import '../../theme/app_theme.dart';
 import 'client_profile_fields.dart';
+import '../../core/widgets/home_action.dart';
 
 class ClientFormPage extends ConsumerStatefulWidget {
   final String? clientId; // null = novo
@@ -57,7 +58,8 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
       final resp = await api.dio.get('/clients/${widget.clientId}');
       final data = resp.data;
       _nameController.text = data['name'];
-      _phoneController.text = data['phone_e164'] ?? data['phoneE164'] ?? '';
+      _phoneController.text =
+          phoneForDisplay(data['phone_e164'] ?? data['phoneE164'] ?? '');
       _emailController.text = data['email'] ?? '';
       _notesController.text = data['notes'] ?? '';
       _profile.loadFrom(Map<String, dynamic>.from(data as Map));
@@ -111,8 +113,9 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar:
-          AppBar(title: Text(_isEditing ? 'Editar cliente' : 'Novo cliente')),
+      appBar: AppBar(
+          title: Text(_isEditing ? 'Editar cliente' : 'Novo cliente'),
+          actions: const [HomeAction()]),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : Form(
@@ -140,10 +143,13 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
                   TextFormField(
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
+                    // (11) 98765-4321 enquanto digita
+                    inputFormatters: [PhoneBrInputFormatter()],
                     decoration: const InputDecoration(
                       labelText: 'WhatsApp *',
                       hintText: '(11) 99999-9999',
-                      helperText: 'Com DDD — o 55 do Brasil entra sozinho',
+                      helperText:
+                          'Com DDD — o código 55 do Brasil é adicionado automaticamente',
                       prefixIcon: Icon(Icons.phone_outlined),
                     ),
                     validator: (v) => normalizePhoneBr(v ?? '').isEmpty
