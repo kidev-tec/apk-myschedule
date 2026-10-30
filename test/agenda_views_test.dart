@@ -179,6 +179,102 @@ void main() {
     expect(find.text('Ana'), findsOneWidget);
   });
 
+  testWidgets('card mostra o ícone de cadastro pelo link (toque explica)',
+      (tester) async {
+    Map<String, dynamic> appt(
+        String id, String nome, int hora, String? origin) {
+      final hoje = DateTime.now();
+      final base = DateTime(hoje.year, hoje.month, hoje.day, hora);
+      return {
+        'id': id,
+        'client_name': nome,
+        'client_phone': '+5514999990001',
+        'service_name': 'Barba',
+        'starts_at': base.toIso8601String(),
+        'ends_at': base.add(const Duration(minutes: 30)).toIso8601String(),
+        'status': 'pending',
+        'source': 'public_link',
+        if (origin != null) 'client_origin': origin,
+      };
+    }
+
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [
+                appt('p1', 'Teste de cadastro', 15, 'public_link'),
+                appt('p2', 'Cliente Antigo', 16, 'app'),
+                appt('p3', 'Sem Origem', 17, null),
+              ]
+            }),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+    await pumpPage(tester);
+
+    expect(find.byKey(const Key('client-public-link-badge')), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.widgetWithText(Card, 'Teste de cadastro'),
+            matching: find.byKey(const Key('client-public-link-badge'))),
+        findsOneWidget);
+    await tester.tap(find.byKey(const Key('client-public-link-badge')));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.textContaining('Cadastro feito pelo cliente'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('Ver bloqueio mostra dia, horário, duração e motivo; libera',
+      (tester) async {
+    final amanha = DateTime.now().add(const Duration(days: 1));
+    final ini = DateTime(amanha.year, amanha.month, amanha.day, 16, 40);
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [
+                {
+                  'id': 'b1',
+                  'client_name': '— bloqueio —',
+                  'client_phone': '',
+                  'service_name': 'Bloqueio',
+                  'starts_at': ini.toIso8601String(),
+                  'ends_at':
+                      ini.add(const Duration(minutes: 50)).toIso8601String(),
+                  'status': 'confirmed',
+                  'source': 'block',
+                  'canceled_reason': 'Almoço',
+                },
+              ]
+            }),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+    final patches = <String>[];
+    adapter.onPatch('/appointments/b1', (s) {
+      patches.add('b1');
+      return s.reply(200, {'appointment': {}});
+    }, data: Matchers.any);
+    await pumpPage(tester);
+    // vai pro dia do bloqueio
+    await tester.tap(find.byIcon(Icons.chevron_right).last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(PopupMenuButton<String>).first);
+    await tester.pumpAndSettle();
+    expect(find.text('Ver bloqueio'), findsOneWidget);
+    await tester.tap(find.text('Ver bloqueio'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('block-details')), findsOneWidget);
+    expect(
+        tester.widget<Text>(find.byKey(const Key('block-details-time'))).data,
+        '16:40 às 17:30 (50 minutos)');
+    expect(
+        tester.widget<Text>(find.byKey(const Key('block-details-reason'))).data,
+        'Almoço');
+
+    await tester.tap(find.byKey(const Key('block-details-release')));
+    await tester.pumpAndSettle();
+    expect(patches, ['b1']);
+  });
+
   testWidgets('cadeado abre a tela de bloqueio no dia aberto na agenda',
       (tester) async {
     await pumpPage(tester);

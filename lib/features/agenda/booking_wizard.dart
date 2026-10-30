@@ -42,7 +42,38 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
   final _notesCtrl = TextEditingController();
 
   Client? _selectedClient;
-  Service? _selectedService;
+
+  /// Serviços escolhidos (vários = um horário só "A + B"; kit vai sozinho).
+  final List<Service> _picked = [];
+
+  /// O que vai pro horário: 1 serviço ou a soma dos escolhidos.
+  Service? get _selectedService {
+    if (_picked.isEmpty) return null;
+    if (_picked.length == 1) return _picked.first;
+    return Service(
+      id: '',
+      name: _picked.map((s) => s.name).join(' + '),
+      durationMin: _picked.fold(0, (a, s) => a + s.durationMin),
+      priceCents: _picked.fold(0, (a, s) => a + s.priceCents),
+    );
+  }
+
+  /// Avulso: marca/desmarca (vários). Kit: vai sozinho, não soma com outros.
+  void _togglePick(Service s) {
+    setState(() {
+      final on = _picked.any((p) => p.id == s.id);
+      if (s.isKit) {
+        _picked
+          ..clear()
+          ..addAll(on ? [] : [s]);
+      } else {
+        _picked.removeWhere((p) => p.isKit);
+        on ? _picked.removeWhere((p) => p.id == s.id) : _picked.add(s);
+      }
+      _durationOverrideMin = null; // volta pra duração somada
+    });
+  }
+
   DateTime? _selectedSlot;
 
   /// Duração deste agendamento — null = a padrão do serviço.
@@ -214,7 +245,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
       final dur = r.endsAt.difference(r.startsAt).inMinutes;
       // Serviço excluído não vem na lista de ativos: remarca com os dados
       // do próprio agendamento (o histórico mantém o serviço).
-      _selectedService =
+      final original =
           _services.where((s) => s.id == r.serviceId).firstOrNull ??
               (r.serviceId == null
                   ? null
@@ -223,6 +254,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                       name: r.serviceName ?? 'Serviço',
                       durationMin: dur,
                       priceCents: r.servicePriceCents ?? 0));
+      if (original != null) _picked.add(original);
       if (dur != _selectedService?.durationMin) _durationOverrideMin = dur;
       if (r.bufferMin != _defaultBufferMin) _bufferOverrideMin = r.bufferMin;
       // pré-seleciona o horário atual, que continua válido (excludeId)
@@ -306,7 +338,11 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
             }
           : {
               'clientId': _selectedClient!.id,
-              'serviceId': _selectedService!.id,
+              // vários → a API monta o horário "A + B"
+              if (_picked.length > 1)
+                'serviceIds': [for (final p in _picked) p.id]
+              else
+                'serviceId': _picked.first.id,
               if (_notesCtrl.text.trim().isNotEmpty)
                 'notes': _notesCtrl.text.trim(),
               'startsAt': _selectedSlot!.toUtc().toIso8601String(),
@@ -475,7 +511,10 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
 
   Future<void> _openAddClientSheet() async {
     final nameCtrl = TextEditingController();
-    final phoneCtrl = TextEditingController(text: _query.trim());
+    // busca só com números vira o telefone (já com máscara)
+    final q = _query.trim();
+    final phoneCtrl = TextEditingController(
+        text: RegExp(r'^[0-9()\s+-]+$').hasMatch(q) ? maskPhoneBr(q) : '');
     final emailCtrl = TextEditingController();
     final notesCtrl = TextEditingController();
     // "Mais dados": e-mail, apelido, aniversário, CPF, origem, LGPD, endereço
@@ -583,6 +622,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                       TextFormField(
                         controller: phoneCtrl,
                         keyboardType: TextInputType.phone,
+                        inputFormatters: [PhoneBrInputFormatter()],
                         decoration: const InputDecoration(
                           labelText: 'WhatsApp *',
                           hintText: '(14) 99999-9999',
@@ -778,12 +818,39 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
   }
 
   Widget _buildServiceStep() {
+    final combo = _picked.length > 1 ? _selectedService : null;
+    final money = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+        child: Text(
+          combo == null
+              ? 'Pode marcar mais de um — fica tudo num horário só.'
+              : '${_picked.length} serviços · ${combo.durationMin} min · '
+                  '${money.format(combo.priceCents / 100)}',
+          key: const Key('services-picked-summary'),
+          style: combo == null
+              ? Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: AppColors.neutral)
+              : Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(color: AppColors.primaryOf(context)),
+        ),
+      ),
+      Expanded(child: _buildServiceList()),
+    ]);
+  }
+
+  Widget _buildServiceList() {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: _services.length,
       itemBuilder: (_, i) {
         final s = _services[i];
-        final selected = _selectedService?.id == s.id;
+        final selected = _picked.any((p) => p.id == s.id);
         return Card(
           color: selected ? AppColors.softOf(context) : null,
           margin: const EdgeInsets.only(bottom: 12),
@@ -804,10 +871,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
             trailing: selected
                 ? Icon(Icons.check_circle, color: AppColors.primaryOf(context))
                 : null,
-            onTap: () => setState(() {
-              _selectedService = s;
-              _durationOverrideMin = null; // volta pra duração do serviço
-            }),
+            onTap: () => _togglePick(s),
           ),
         );
       },

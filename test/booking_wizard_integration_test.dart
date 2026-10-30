@@ -78,6 +78,12 @@ void main() {
                 'duration_min': 60,
                 'price_cents': 5000
               },
+              {
+                'id': 's2',
+                'name': 'Barba',
+                'duration_min': 30,
+                'price_cents': 3000
+              },
             ]));
     // folga padrão do negócio (intervalo entre atendimentos)
     adapter.onGet('/me', (s) => s.reply(200, {'buffer_min': 0}));
@@ -313,6 +319,54 @@ void main() {
     final start = DateTime.parse(posted.first['startsAt'] as String);
     final end = DateTime.parse(posted.first['endsAt'] as String);
     expect(end.difference(start), const Duration(minutes: 60));
+  });
+
+  testWidgets('vários serviços num horário só: soma e manda serviceIds',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(_wrapWithApi(api));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ana'));
+    await tester.pump();
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pode marcar mais de um — fica tudo num horário só.'),
+        findsOneWidget);
+    await tester.tap(find.text('Corte'));
+    await tester.pump();
+    await tester.tap(find.text('Barba'));
+    await tester.pump();
+    expect(find.textContaining('2 serviços · 90 min'), findsOneWidget);
+    // desmarca e marca de novo (ordem: Corte, Barba)
+    await tester.tap(find.text('Barba'));
+    await tester.pump();
+    expect(find.textContaining('2 serviços'), findsNothing);
+    await tester.tap(find.text('Barba'));
+    await tester.pump();
+
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
+    final days = (DateTime.monday - DateTime.now().weekday) % 7;
+    for (var i = 0; i < (days == 0 ? 7 : days); i++) {
+      await tester.tap(find.byIcon(Icons.chevron_right));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('90 min'), findsOneWidget); // duração somada
+    await tester.tap(find.text('10:00'));
+    await tester.pump();
+    await goToReview(tester);
+    expect(find.textContaining('Corte + Barba'), findsOneWidget);
+    expect(find.text('10:00 às 11:30 (90 min)'), findsOneWidget);
+    await tester.tap(find.text('Confirmar agendamento'));
+    await tester.pumpAndSettle();
+
+    final post = posted.single;
+    expect(post['serviceIds'], ['s1', 's2']);
+    expect(post.containsKey('serviceId'), isFalse);
+    expect(post['duration_min'], 90);
   });
 
   testWidgets('ajusta duração e intervalo do agendamento → vai no POST',

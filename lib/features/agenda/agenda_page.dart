@@ -9,10 +9,12 @@ import '../../core/push/push_events.dart';
 import '../../core/storage/local_cache.dart';
 import '../../core/storage/connectivity_provider.dart';
 import '../../core/storage/sync_queue.dart';
+import '../../core/utils/duration_text.dart';
 import '../../core/utils/phone_br.dart';
 import '../../core/api/paywall_flag.dart';
 import '../../core/update/update_service.dart';
 import '../../theme/app_theme.dart';
+import '../clients/public_link_badge.dart';
 import 'block_time_page.dart';
 import 'booking_wizard.dart' as booking show Appointment;
 import 'booking_logic.dart' as booking_logic
@@ -530,9 +532,19 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             ),
           ),
         ),
-        title: Text(
-            a.isBlock ? (a.canceledReason ?? 'Bloqueado') : a.clientName,
-            style: Theme.of(context).textTheme.titleMedium),
+        // ícone 🌐 ao lado do nome: cliente se cadastrou pelo link (toque
+        // mostra a explicação)
+        title: Row(children: [
+          Flexible(
+            child: Text(
+                a.isBlock ? (a.canceledReason ?? 'Bloqueado') : a.clientName,
+                style: Theme.of(context).textTheme.titleMedium),
+          ),
+          if (a.clientFromPublicLink) ...[
+            const SizedBox(width: 6),
+            const PublicLinkBadge(),
+          ],
+        ]),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -543,6 +555,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                 style: a.isBlock
                     ? const TextStyle(fontStyle: FontStyle.italic)
                     : null),
+            // cliente se cadastrou sozinho no agendamento online
             // observações do prestador (privadas)
             if (a.notes != null && a.notes!.isNotEmpty)
               Padding(
@@ -581,13 +594,100 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   /// Menu "⋮" de ações do agendamento (compartilhado entre lista e grade).
   /// Remarcado não tem menu: é histórico — o agendamento novo já existe e
   /// remarcar de novo criaria um duplicado.
+  /// "Ver bloqueio": dia, horário, duração e motivo. Devolve true se o
+  /// prestador tocou em "Liberar horário" (só pra bloqueio futuro).
+  Future<bool?> _showBlockDetails(Appointment a) {
+    final theme = Theme.of(context);
+    final dia = DateFormat("EEEE, d 'de' MMMM", 'pt_BR').format(a.startsAt);
+    final hm = DateFormat('HH:mm', 'pt_BR');
+    final motivo = (a.canceledReason ?? '').trim();
+    Widget row(IconData icon, String label, String value, {Key? key}) =>
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 20, color: AppColors.primaryOf(context)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label,
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: AppColors.neutral)),
+                    Text(value, key: key, style: theme.textTheme.bodyLarge),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+    return showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        // rolável: em tela pequena o painel não estoura
+        child: SingleChildScrollView(
+            child: Padding(
+          key: const Key('block-details'),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(children: [
+                const Text('🔒 ', style: TextStyle(fontSize: 20)),
+                Text('Bloqueio', style: theme.textTheme.titleLarge),
+              ]),
+              const SizedBox(height: 8),
+              row(Icons.event, 'Dia',
+                  '${dia[0].toUpperCase()}${dia.substring(1)}'),
+              row(
+                  Icons.schedule,
+                  'Horário',
+                  '${hm.format(a.startsAt)} às ${hm.format(a.endsAt)} '
+                      '(${humanDuration(a.endsAt.difference(a.startsAt).inMinutes)})',
+                  key: const Key('block-details-time')),
+              row(Icons.notes, 'Motivo',
+                  motivo.isEmpty ? 'Sem motivo informado' : motivo,
+                  key: const Key('block-details-reason')),
+              if (_isPast(a))
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text('Esse horário já passou.',
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: AppColors.neutral)),
+                ),
+              const SizedBox(height: 12),
+              if (!_isPast(a))
+                OutlinedButton.icon(
+                  key: const Key('block-details-release'),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  icon: const Icon(Icons.lock_open),
+                  label: const Text('Liberar horário'),
+                ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Fechar'),
+              ),
+            ],
+          ),
+        )),
+      ),
+    );
+  }
+
   Widget? _buildActionsMenu(Appointment a) {
     if (_statusKind(a) == _StatusKind.remarcado) return null;
     return a.isBlock
         ? PopupMenuButton<String>(
             onSelected: (v) => _handleAppointmentAction(v, a),
             itemBuilder: (_) => [
-              // Horário já passou: sem ações (nada a liberar).
+              const PopupMenuItem(
+                  value: 'view_block', child: Text('Ver bloqueio')),
+              // Horário já passou: nada a liberar.
               if (!_isPast(a))
                 const PopupMenuItem(
                     value: 'cancel', child: Text('Liberar horário')),
@@ -1291,6 +1391,13 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   }
 
   Future<void> _handleAppointmentAction(String action, Appointment a) async {
+    if (action == 'view_block') {
+      final liberar = await _showBlockDetails(a);
+      if (liberar == true && mounted) {
+        await _handleAppointmentAction('cancel', a);
+      }
+      return;
+    }
     final api = ref.read(agendaApiProvider);
     try {
       switch (action) {
@@ -1392,6 +1499,10 @@ class Appointment {
   /// Folga depois do atendimento (min) — remarcar preserva.
   final int bufferMin;
 
+  /// 'public_link' = o cliente se cadastrou no agendamento online.
+  final String clientOrigin;
+  bool get clientFromPublicLink => clientOrigin == 'public_link';
+
   bool get isBlock => source == 'block';
 
   Appointment({
@@ -1410,6 +1521,7 @@ class Appointment {
     this.serviceId,
     this.servicePriceCents = 0,
     this.bufferMin = 0,
+    this.clientOrigin = 'app',
   });
 
   factory Appointment.fromJson(Map<String, dynamic> j) => Appointment(
@@ -1428,6 +1540,7 @@ class Appointment {
         serviceId: j['service_id'] ?? j['serviceId'],
         servicePriceCents: (j['service_price_cents'] ?? 0) as int,
         bufferMin: (j['buffer_min'] ?? j['bufferMin'] ?? 0) as int,
+        clientOrigin: j['client_origin'] as String? ?? 'app',
       );
 }
 

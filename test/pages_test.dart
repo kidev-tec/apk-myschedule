@@ -44,7 +44,12 @@ void main() {
 
     expect(find.text('Clientes'), findsOneWidget);
     expect(find.text('Buscar'), findsOneWidget);
-    expect(find.byIcon(Icons.add), findsWidgets); // appbar + FAB
+    // "+" só no botão flutuante, não no topo
+    expect(find.byIcon(Icons.add), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byType(AppBar), matching: find.byIcon(Icons.add)),
+        findsNothing);
   });
 
   testWidgets('ServicesPage: API falha → empty state com CTA', (tester) async {
