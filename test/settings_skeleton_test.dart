@@ -86,6 +86,38 @@ class _ScriptedAdapter implements HttpClientAdapter {
   }
 }
 
+/// Adapter por rota: GET /me devolve [me]; PATCH /me grava o body em
+/// [patches] e responde 200; o resto responde 400 (gcal etc. — ignorado).
+class _MeAdapter implements HttpClientAdapter {
+  _MeAdapter(this.me);
+  final String me;
+  final patches = <String>[];
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    ResponseBody json(int status, String body) =>
+        ResponseBody.fromString(body, status, headers: {
+          'content-type': ['application/json'],
+        });
+    if (options.path.endsWith('/me') && options.method == 'GET') {
+      return json(200, me);
+    }
+    if (options.path.endsWith('/me') && options.method == 'PATCH') {
+      final chunks = await requestStream?.toList() ?? [];
+      patches.add(String.fromCharCodes(chunks.expand((c) => c)));
+      return json(200, '{"ok":true}');
+    }
+    return json(400, '{"error":"n/a"}');
+  }
+}
+
 Widget _wrap(ApiClient api) {
   final router = GoRouter(initialLocation: '/settings', routes: [
     GoRoute(path: '/settings', builder: (_, __) => SettingsPage(api: api)),
@@ -175,5 +207,31 @@ void main() {
     expect(find.text('Tema e identidade visual'), findsOneWidget);
     // cadastro de clientes acessível pelas Configurações
     expect(find.text('Meus clientes'), findsOneWidget);
+  });
+
+  testWidgets('intervalo entre atendimentos: mostra o padrão e salva via PATCH',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 6000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final adapter = _MeAdapter('{"name":"Studio","business_type":"beauty",'
+        '"subscription_status":"active","trial_ends_at":null,'
+        '"buffer_min":0}');
+
+    await tester.pumpWidget(_wrap(ApiClient(adapter: adapter)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Intervalo entre atendimentos'), findsOneWidget);
+    expect(find.textContaining('Sem intervalo'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('settings-buffer')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('buffer-option-15')));
+    await tester.pumpAndSettle();
+
+    expect(adapter.patches, hasLength(1));
+    expect(adapter.patches.single, contains('"buffer_min":15'));
+    expect(
+        find.text('15 min livres depois de cada atendimento'), findsOneWidget);
   });
 }

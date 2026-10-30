@@ -6,7 +6,8 @@ import 'package:minha_agenda/features/agenda/booking_wizard.dart'
 
 /// Testes da lógica pura de slots extraída do BookingWizardPage.
 /// A regra de negócio é: slot válido só se cabe na janela de trabalho,
-/// não sobrepõe agendamento pending/confirmed, step de 15 min.
+/// não sobrepõe agendamento pending/confirmed (contando a folga), step de
+/// 10 min.
 void main() {
   // Segunda-feira 15/09/2026 (weekday 1 → %7 = 1)
   final segunda = DateTime(2026, 9, 14, 0, 0);
@@ -42,7 +43,7 @@ void main() {
       expect(slots, isEmpty);
     });
 
-    test('janela 09:00-12:00, serviço 60min → slots a cada 15min', () {
+    test('janela 09:00-12:00, serviço 60min → slots a cada 10min', () {
       final slots = generateSlots(
         date: segunda,
         workingHours: [wh(1, '09:00', '12:00')],
@@ -50,17 +51,17 @@ void main() {
         durationMin: 60,
       );
       // último slot que cabe: 11:00 + 60 = 12:00 (isAtSameMomentAs end) ✓
-      // slots: 09:00, 09:15, ..., 11:00 → 9 slots
-      expect(slots.length, 9);
+      // slots: 09:00, 09:10, ..., 11:00 → 13 slots
+      expect(slots.length, 13);
       expect(slots.first.hour, 9);
       expect(slots.first.minute, 0);
       expect(slots.last.hour, 11);
       expect(slots.last.minute, 0);
-      // step de 15 min
+      // step de 10 min
       for (var i = 1; i < slots.length; i++) {
         expect(
           slots[i].difference(slots[i - 1]),
-          const Duration(minutes: 15),
+          const Duration(minutes: 10),
         );
       }
     });
@@ -72,8 +73,8 @@ void main() {
         appointments: [],
         durationMin: 30,
       );
-      // último: 11:30 + 30 = 12:00 → 09:00..11:30 = 11 slots
-      expect(slots30.length, 11);
+      // último: 11:30 + 30 = 12:00 → 09:00..11:30 = 16 slots
+      expect(slots30.length, 16);
     });
 
     test('appointment confirmado bloqueia slots sobrepostos', () {
@@ -115,7 +116,7 @@ void main() {
         ],
         durationMin: 60,
       );
-      expect(slots.length, 9); // dia inteiro livre
+      expect(slots.length, 13); // dia inteiro livre
     });
 
     test('appointment de OUTRO dia não interfere', () {
@@ -127,7 +128,7 @@ void main() {
         ],
         durationMin: 60,
       );
-      expect(slots.length, 9);
+      expect(slots.length, 13);
     });
 
     test('contorno: appt que só toca na borda (fim == início do slot) libera',
@@ -199,9 +200,64 @@ void main() {
         durationMin: 60,
         notBefore: DateTime(2026, 9, 14, 10, 10),
       );
-      expect(slots.first, DateTime(2026, 9, 14, 10, 15));
+      expect(slots.first, DateTime(2026, 9, 14, 10, 10));
       expect(
           slots.any((s) => s.isBefore(DateTime(2026, 9, 14, 10, 10))), isFalse);
+    });
+  });
+
+  group('generateSlots com intervalo entre atendimentos (folga)', () {
+    Appointment comFolga(String start, String end, int bufferMin) =>
+        Appointment(
+          id: 'f-$start',
+          startsAt: DateTime.parse(start),
+          endsAt: DateTime.parse(end),
+          status: 'confirmed',
+          bufferMin: bufferMin,
+        );
+
+    test('folga do existente empurra o próximo horário livre', () {
+      final slots = generateSlots(
+        date: segunda,
+        workingHours: [wh(1, '09:00', '12:00')],
+        appointments: [
+          comFolga('2026-09-14T09:00:00', '2026-09-14T10:00:00', 10),
+        ],
+        durationMin: 30,
+      );
+      expect(slots.first, DateTime(2026, 9, 14, 10, 10));
+    });
+
+    test('folga do NOVO não pode invadir o próximo agendamento', () {
+      final slots = generateSlots(
+        date: segunda,
+        workingHours: [wh(1, '09:00', '12:00')],
+        appointments: [
+          comFolga('2026-09-14T10:00:00', '2026-09-14T11:00:00', 0),
+        ],
+        durationMin: 30,
+        bufferMin: 10,
+      );
+      // 09:20 + 30 + 10 = 10:00 encosta ✓; 09:30 + 40 = 10:10 invade ✗
+      expect(slots.contains(DateTime(2026, 9, 14, 9, 20)), isTrue);
+      expect(slots.contains(DateTime(2026, 9, 14, 9, 30)), isFalse);
+    });
+
+    test('folga pode passar do fechamento', () {
+      final slots = generateSlots(
+        date: segunda,
+        workingHours: [wh(1, '09:00', '12:00')],
+        appointments: [],
+        durationMin: 30,
+        bufferMin: 15,
+      );
+      expect(slots.last, DateTime(2026, 9, 14, 11, 30));
+    });
+
+    test('rótulo das opções', () {
+      expect(bufferLabel(0), 'Sem intervalo');
+      expect(bufferLabel(15), '15 min');
+      expect(bufferOptionsMin.first, 0);
     });
   });
 }

@@ -44,6 +44,17 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
   Service? _selectedService;
   DateTime? _selectedSlot;
 
+  /// Duração deste agendamento — null = a padrão do serviço.
+  int? _durationOverrideMin;
+
+  /// Folga padrão do negócio (GET /me) e override deste agendamento.
+  int _defaultBufferMin = 0;
+  int? _bufferOverrideMin;
+
+  int get _effectiveDurationMin =>
+      _durationOverrideMin ?? _selectedService?.durationMin ?? 60;
+  int get _effectiveBufferMin => _bufferOverrideMin ?? _defaultBufferMin;
+
   bool _loading = true;
 
   // F4 — histórico do cliente selecionado
@@ -185,6 +196,14 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     } catch (e) {
       debugPrint('[wizard] falha ao carregar dados: $e');
     }
+    // Folga padrão do negócio: falha aqui não impede agendar (fica 0).
+    try {
+      final me = await api.dio.get('/me');
+      final b = me.data is Map<String, dynamic> ? me.data['buffer_min'] : null;
+      if (b is int) _defaultBufferMin = b;
+    } catch (e) {
+      debugPrint('[wizard] falha ao carregar intervalo padrão: $e');
+    }
     // B3: modo remarcar — casa as FKs do agendamento com os registros
     // carregados (clients/services) pra pré-selecionar.
     final r = widget.reschedule;
@@ -192,6 +211,10 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
       _selectedClient = _clients.where((c) => c.id == r.clientId).firstOrNull;
       _selectedService =
           _services.where((s) => s.id == r.serviceId).firstOrNull;
+      // remarcar mantém a duração e a folga que o agendamento já tinha
+      final dur = r.endsAt.difference(r.startsAt).inMinutes;
+      if (dur != _selectedService?.durationMin) _durationOverrideMin = dur;
+      if (r.bufferMin != _defaultBufferMin) _bufferOverrideMin = r.bufferMin;
       // pré-seleciona o horário atual, que continua válido (excludeId)
       _selectedSlot = _generateSlots(_selectedDate)
           .where((s) => _sameHM(s, r.startsAt))
@@ -217,14 +240,15 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
       date: date,
       workingHours: _workingHours,
       appointments: _existingAppointments,
-      durationMin: _selectedService?.durationMin ?? 60,
+      durationMin: _effectiveDurationMin,
+      bufferMin: _effectiveBufferMin,
       excludeId: widget.reschedule?.id, // B3: não colidir consigo mesmo
       notBefore: widget.clock(), // horário que já passou não é oferecido
     );
   }
 
   void _nextStep() {
-    if (_step < 2) {
+    if (_step < _reviewStep) {
       _pageController.nextPage(
           duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
     } else {
@@ -261,10 +285,14 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
               // remarcar: envia sempre (vazio apaga)
               'notes': _notesCtrl.text.trim(),
               'startsAt': _selectedSlot!.toUtc().toIso8601String(),
+              'duration_min': _effectiveDurationMin,
+              // endsAt coerente com duration_min: API antiga (sem duração
+              // flexível) ainda exige; a nova valida que bate.
               'endsAt': _selectedSlot!
-                  .add(Duration(minutes: _selectedService!.durationMin))
+                  .add(Duration(minutes: _effectiveDurationMin))
                   .toUtc()
                   .toIso8601String(),
+              'buffer_min': _effectiveBufferMin,
             }
           : {
               'clientId': _selectedClient!.id,
@@ -272,10 +300,14 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
               if (_notesCtrl.text.trim().isNotEmpty)
                 'notes': _notesCtrl.text.trim(),
               'startsAt': _selectedSlot!.toUtc().toIso8601String(),
+              'duration_min': _effectiveDurationMin,
+              // endsAt coerente com duration_min: API antiga (sem duração
+              // flexível) ainda exige; a nova valida que bate.
               'endsAt': _selectedSlot!
-                  .add(Duration(minutes: _selectedService!.durationMin))
+                  .add(Duration(minutes: _effectiveDurationMin))
                   .toUtc()
                   .toIso8601String(),
+              'buffer_min': _effectiveBufferMin,
             },
       queuedAt: DateTime.now(),
       description: isReschedule
@@ -375,7 +407,8 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
             : [
                 'Escolhe o cliente',
                 'Escolhe o serviço',
-                'Escolhe o horário'
+                'Escolhe o horário',
+                'Confirma o agendamento'
               ][_step]),
         leading: _step > 0
             ? IconButton(
@@ -390,6 +423,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
           _buildClientStep(),
           _buildServiceStep(),
           _buildSlotStep(),
+          _buildReviewStep(),
         ],
       ),
       bottomNavigationBar: _loading
@@ -401,7 +435,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                 child: FilledButton(
                   key: const Key('wizard-save'),
                   onPressed: _canProceed() ? _nextStep : null,
-                  child: Text(_step == 2
+                  child: Text(_step == _reviewStep
                       ? (widget.reschedule != null
                           ? 'Salvar novo horário'
                           : 'Confirmar agendamento')
@@ -419,6 +453,8 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
       case 1:
         return _selectedService != null;
       case 2:
+        return _selectedSlot != null;
+      case _reviewStep:
         return _selectedSlot != null;
       default:
         return false;
@@ -753,10 +789,199 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
             trailing: selected
                 ? Icon(Icons.check_circle, color: AppColors.primaryOf(context))
                 : null,
-            onTap: () => setState(() => _selectedService = s),
+            onTap: () => setState(() {
+              _selectedService = s;
+              _durationOverrideMin = null; // volta pra duração do serviço
+            }),
           ),
         );
       },
+    );
+  }
+
+  /// Último passo: resumo do que vai ser salvo + observações em destaque.
+  /// (Antes as observações ficavam no fim da grade de horários, escondidas
+  /// atrás do botão — ninguém via.)
+  static const _reviewStep = 3;
+
+  Widget _buildReviewStep() {
+    final slot = _selectedSlot;
+    if (slot == null) return const SizedBox.shrink();
+    final end = slot.add(Duration(minutes: _effectiveDurationMin));
+    final timeFmt = DateFormat('HH:mm', 'pt_BR');
+    final dateFmt = DateFormat("EEEE, d 'de' MMMM", 'pt_BR');
+    final price = _selectedService == null
+        ? null
+        : NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$')
+            .format(_selectedService!.priceCents / 100);
+    final muted = Theme.of(context)
+        .textTheme
+        .bodySmall
+        ?.copyWith(color: AppColors.neutral);
+
+    Widget row(IconData icon, String label, String value, {Key? key}) =>
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 20, color: AppColors.primaryOf(context)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: muted),
+                    Text(value,
+                        key: key, style: Theme.of(context).textTheme.bodyLarge),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+
+    // SingleChildScrollView (não ListView): poucos itens, e o campo precisa
+    // existir mesmo com o teclado ocupando metade da tela pequena.
+    return SingleChildScrollView(
+      key: const Key('wizard-review'),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Card(
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+              child: Column(
+                children: [
+                  row(Icons.person_outline, 'Cliente',
+                      _selectedClient?.name ?? '—'),
+                  row(Icons.content_cut, 'Serviço',
+                      '${_selectedService?.name ?? '—'}${price != null ? ' · $price' : ''}'),
+                  row(Icons.event, 'Dia', dateFmt.format(slot).capitalize()),
+                  row(
+                      Icons.schedule,
+                      'Horário',
+                      '${timeFmt.format(slot)} às ${timeFmt.format(end)} '
+                          '($_effectiveDurationMin min)',
+                      key: const Key('review-time')),
+                  row(Icons.more_time, 'Intervalo depois',
+                      logic.bufferLabel(_effectiveBufferMin)),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      key: const Key('review-change-time'),
+                      icon: const Icon(Icons.edit_calendar_outlined, size: 18),
+                      label: const Text('Alterar horário'),
+                      onPressed: _prevStep,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text('Detalhes / Observações do atendimento',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text('Opcional. Só você vê — o cliente não recebe.', style: muted),
+          const SizedBox(height: 8),
+          TextField(
+            key: const Key('wizard-notes'),
+            controller: _notesCtrl,
+            minLines: 3,
+            maxLines: 6,
+            maxLength: 1000,
+            textCapitalization: TextCapitalization.sentences,
+            scrollPadding: const EdgeInsets.only(bottom: 120),
+            decoration: const InputDecoration(
+              hintText: 'Ex.: prefere máquina 2, alergia a tal produto…',
+              border: OutlineInputBorder(),
+              alignLabelWithHint: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Muda duração/folga e solta o horário escolhido se ele deixou de caber.
+  void _adjust({int? durationMin, int? bufferMin}) {
+    setState(() {
+      if (durationMin != null) _durationOverrideMin = durationMin;
+      if (bufferMin != null) _bufferOverrideMin = bufferMin;
+      if (_selectedSlot != null &&
+          !_generateSlots(_selectedDate).contains(_selectedSlot)) {
+        _selectedSlot = null;
+      }
+    });
+  }
+
+  /// Duração deste atendimento (−/+ de 5 em 5) e intervalo depois dele.
+  Widget _buildTimeAdjustments() {
+    const step = 5;
+    final dur = _effectiveDurationMin;
+    final buf = _effectiveBufferMin;
+    final serviceDur = _selectedService?.durationMin;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(child: Text('Duração')),
+              IconButton.outlined(
+                key: const Key('duration-minus'),
+                tooltip: 'Diminuir 5 minutos',
+                onPressed:
+                    dur <= step ? null : () => _adjust(durationMin: dur - step),
+                icon: const Icon(Icons.remove),
+              ),
+              SizedBox(
+                width: 72,
+                child: Text('$dur min',
+                    key: const Key('duration-value'),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium),
+              ),
+              IconButton.outlined(
+                key: const Key('duration-plus'),
+                tooltip: 'Aumentar 5 minutos',
+                onPressed:
+                    dur >= 480 ? null : () => _adjust(durationMin: dur + step),
+                icon: const Icon(Icons.add),
+              ),
+            ],
+          ),
+          if (serviceDur != null && dur != serviceDur)
+            Text('Padrão do serviço: $serviceDur min',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: AppColors.neutral)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Expanded(child: Text('Intervalo depois')),
+              DropdownButton<int>(
+                key: const Key('buffer-select'),
+                value: buf,
+                items: {...logic.bufferOptionsMin, buf}
+                    .toList()
+                    .map((m) => DropdownMenuItem(
+                        value: m, child: Text(logic.bufferLabel(m))))
+                    .toList()
+                  ..sort((a, b) => a.value!.compareTo(b.value!)),
+                onChanged: (m) {
+                  if (m != null) _adjust(bufferMin: m);
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -794,6 +1019,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
             ],
           ),
         )),
+        SliverToBoxAdapter(child: _buildTimeAdjustments()),
         if (slots.isEmpty)
           SliverToBoxAdapter(
               child: Padding(
@@ -860,25 +1086,6 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
               }, childCount: slots.length),
             ),
           ),
-        // Observações: só depois de escolher o horário; privadas do prestador.
-        if (_selectedSlot != null)
-          SliverToBoxAdapter(
-              child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: TextField(
-              key: const Key('wizard-notes'),
-              controller: _notesCtrl,
-              minLines: 1,
-              maxLines: 3,
-              maxLength: 1000,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Detalhes / Observações',
-                helperText: 'Só você vê — o cliente não recebe.',
-                prefixIcon: Icon(Icons.sticky_note_2_outlined),
-              ),
-            ),
-          )),
       ],
     );
   }
@@ -955,6 +1162,9 @@ class Appointment {
   /// Observações do prestador (privadas).
   final String? notes;
 
+  /// Folga depois do atendimento (min) — o próximo só começa após ela.
+  final int bufferMin;
+
   Appointment(
       {required this.id,
       required this.startsAt,
@@ -962,7 +1172,8 @@ class Appointment {
       required this.status,
       this.clientId,
       this.serviceId,
-      this.notes});
+      this.notes,
+      this.bufferMin = 0});
 
   factory Appointment.fromJson(Map<String, dynamic> j) => Appointment(
         id: j['id'],
@@ -972,6 +1183,7 @@ class Appointment {
         clientId: j['client_id'] ?? j['clientId'],
         serviceId: j['service_id'] ?? j['serviceId'],
         notes: j['notes'] as String?,
+        bufferMin: (j['buffer_min'] ?? j['bufferMin'] ?? 0) as int,
       );
 }
 

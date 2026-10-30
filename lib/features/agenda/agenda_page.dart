@@ -422,6 +422,15 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                                     _buildLayoutToggle(_AgendaLayout.grade,
                                         Icons.grid_view_outlined, 'Grade'),
                                   ],
+                                  // Dia: mesmo semáforo de status da Semana
+                                  if (_view == _AgendaView.dia &&
+                                      _appointments.isNotEmpty)
+                                    Padding(
+                                      key: const Key('day-semaphore'),
+                                      padding: const EdgeInsets.only(left: 4),
+                                      child:
+                                          _buildStatusSemaphore(_appointments),
+                                    ),
                                 ],
                               ),
                             ),
@@ -775,20 +784,29 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
               Expanded(child: _buildWeekStrip())
             else if (_view == _AgendaView.dia)
               // Dia: tocar na data abre o seletor de dias do mês.
-              TextButton.icon(
-                onPressed: _pickDayOfMonth,
-                iconAlignment: IconAlignment.end,
-                icon: const Icon(Icons.arrow_drop_down),
-                label: Text(DateFormat('dd/MM').format(_focusedDay)),
-                style: TextButton.styleFrom(
-                  foregroundColor:
-                      Theme.of(context).textTheme.titleMedium?.color,
-                  textStyle: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w600),
-                ),
-              )
+              // Flexible+FittedBox: "Quarta-feira, 30/10" encolhe em 360dp.
+              Flexible(
+                  child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: TextButton.icon(
+                        onPressed: _pickDayOfMonth,
+                        iconAlignment: IconAlignment.end,
+                        icon: const Icon(Icons.arrow_drop_down),
+                        // "Sexta-feira, 30/10": nome do dia antes da data
+                        label: Text(
+                            DateFormat("EEEE, dd/MM", 'pt_BR')
+                                .format(_focusedDay)
+                                .capitalize(),
+                            key: const Key('day-footer-label')),
+                        style: TextButton.styleFrom(
+                          foregroundColor:
+                              Theme.of(context).textTheme.titleMedium?.color,
+                          textStyle: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                      )))
             else
               Text(
                 _view == _AgendaView.mes
@@ -1935,8 +1953,10 @@ class _AppointmentDetailsSheetState extends State<_AppointmentDetailsSheet> {
             ],
             const Divider(height: 24),
             Row(children: [
-              Text('Detalhes / Observações', style: theme.textTheme.titleSmall),
-              const Spacer(),
+              Expanded(
+                child: Text('Detalhes / Observações do atendimento',
+                    style: theme.textTheme.titleSmall),
+              ),
               if (!_editing)
                 TextButton.icon(
                   key: const Key('details-edit'),

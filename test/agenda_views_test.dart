@@ -422,8 +422,23 @@ void main() {
             }),
         queryParameters: {'from': Matchers.any, 'to': Matchers.any});
     await pumpPage(tester);
+
+    // DIA também mostra o semáforo, ao lado dos botões de layout
+    String contagemDia(String tipo) => (tester
+        .widget<Text>(find.descendant(
+            of: find.descendant(
+                of: find.byKey(const Key('day-semaphore')),
+                matching: find.byKey(Key('semaforo-$tipo'))),
+            matching: find.byType(Text)))
+        .data)!;
+    expect(contagemDia('confirmado'), '3');
+    expect(contagemDia('cancelado'), '1');
+    expect(contagemDia('remarcado'), '2');
+    expect(contagemDia('concluido'), '1');
+
     await tester.tap(find.text('Semana'));
     await tester.pumpAndSettle();
+    expect(find.byKey(const Key('day-semaphore')), findsNothing);
 
     String contagem(String tipo) => (tester
         .widget<Text>(find.descendant(
@@ -793,9 +808,12 @@ void main() {
       (tester) async {
     await pumpPage(tester);
     final now = DateTime.now();
-    final hoje = DateFormat('dd/MM').format(now);
+    // rodapé do Dia: "Sexta-feira, 30/10" (nome do dia + data)
+    final hoje = DateFormat("EEEE, dd/MM", 'pt_BR').format(now);
+    expect(find.text('${hoje[0].toUpperCase()}${hoje.substring(1)}'),
+        findsOneWidget);
 
-    await tester.tap(find.text(hoje));
+    await tester.tap(find.byKey(const Key('day-footer-label')));
     await tester.pumpAndSettle();
     final popup = find.byKey(const Key('day-picker'));
     expect(popup, findsOneWidget);

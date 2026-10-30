@@ -16,6 +16,7 @@ import '../../core/auth/auth_controller.dart';
 import '../../core/storage/onboarding_store.dart';
 import '../../theme/app_theme.dart';
 import 'gcal_service.dart';
+import '../agenda/booking_logic.dart' show bufferOptionsMin, bufferLabel;
 
 class SettingsPage extends ConsumerStatefulWidget {
   final ApiClient? api; // DI pra testes (mesma padrão do client_form)
@@ -176,6 +177,62 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       ShareParams(
           text: 'Agende comigo: $_publicUrl', subject: 'Agendamento online'),
     );
+  }
+
+  int get _bufferMin => _me?['buffer_min'] as int? ?? 0;
+
+  /// Intervalo padrão entre atendimentos (folga depois de cada um). Dá pra
+  /// trocar por agendamento no wizard; aqui é o valor que já vem marcado.
+  Future<void> _pickBuffer() async {
+    final chosen = await showDialog<int>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Intervalo entre atendimentos'),
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
+            child: Text(
+                'Tempo livre depois de cada atendimento, antes do próximo '
+                'cliente (limpeza, preparo). Vale também pro link público.'),
+          ),
+          for (final m in bufferOptionsMin)
+            SimpleDialogOption(
+              key: Key('buffer-option-$m'),
+              onPressed: () => Navigator.pop(ctx, m),
+              child: Row(
+                children: [
+                  Icon(
+                      m == _bufferMin
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                      color: AppColors.primaryOf(ctx)),
+                  const SizedBox(width: 12),
+                  Text(bufferLabel(m)),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+    if (chosen == null || chosen == _bufferMin || !mounted) return;
+    try {
+      final api = widget.api ?? ApiClient();
+      await api.dio.patch('/me', data: {'buffer_min': chosen});
+      if (!mounted) return;
+      setState(() => _me = {...?_me, 'buffer_min': chosen});
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Intervalo entre atendimentos: ${bufferLabel(chosen)}'),
+          backgroundColor: Colors.green));
+    } on DioException catch (e) {
+      if (!mounted) return;
+      final data = e.response?.data;
+      final msg =
+          data is Map<String, dynamic> ? data['error'] as String? : null;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:
+              Text(msg ?? 'Não deu pra salvar o intervalo. Tenta de novo.'),
+          backgroundColor: AppColors.error));
+    }
   }
 
   String get _subscriptionStatus =>
@@ -625,6 +682,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 subtitle: const Text('Quando tu atende, dia a dia'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => context.push('/working-hours'),
+              ),
+            ),
+          const SizedBox(height: 8),
+          if (_me != null)
+            Card(
+              child: ListTile(
+                key: const Key('settings-buffer'),
+                leading:
+                    Icon(Icons.more_time, color: AppColors.primaryOf(context)),
+                title: const Text('Intervalo entre atendimentos'),
+                subtitle: Text(_bufferMin == 0
+                    ? 'Sem intervalo — um cliente logo após o outro'
+                    : '${bufferLabel(_bufferMin)} livres depois de cada atendimento'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _pickBuffer,
               ),
             ),
           const SizedBox(height: 8),

@@ -19,6 +19,13 @@ import 'package:minha_agenda/features/agenda/booking_wizard.dart';
 /// CA3 — salvar faz PATCH e devolve a nova linha para a agenda.
 /// CA4 — Appointment.fromJson parseia clientId/serviceId.
 
+/// Observações e resumo ficam no último passo ("Confirma o agendamento"):
+/// avança pra ele a partir da escolha do horário.
+Future<void> goToReview(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('wizard-save')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async => await initializeDateFormatting('pt_BR', null));
@@ -156,6 +163,8 @@ void main() {
                   'price_cents': 5000
                 },
               ]));
+      // folga padrão do negócio (intervalo entre atendimentos)
+      adapter.onGet('/me', (s) => s.reply(200, {'buffer_min': 0}));
       adapter.onGet(
           '/working-hours',
           (s) => s.reply(200, [
@@ -276,6 +285,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // horário atual pré-selecionado → campo visível e preenchido
+      await goToReview(tester);
       final campo =
           tester.widget<TextField>(find.byKey(const Key('wizard-notes')));
       expect(campo.controller?.text, 'prefere máquina 2');
@@ -294,8 +304,11 @@ void main() {
       await tester.pumpAndSettle();
 
       // horário atual já pré-selecionado; salva direto
+      await tester.ensureVisible(find.text('10:00').first);
+      await tester.pumpAndSettle();
       await tester.tap(find.text('10:00').first);
       await tester.pumpAndSettle();
+      await goToReview(tester);
       await tester.tap(find.byKey(const Key('wizard-save')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
