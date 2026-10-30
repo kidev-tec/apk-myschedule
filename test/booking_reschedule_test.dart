@@ -329,5 +329,50 @@ void main() {
       expect(find.byType(BookingWizardPage), findsNothing);
       expect(find.text('ABRIR'), findsOneWidget);
     });
+
+    testWidgets(
+        'serviço excluído: remarca com os dados do agendamento e mantém a folga',
+        (tester) async {
+      FlutterSecureStorage.setMockInitialValues({});
+      final (api, calls) = fakeApi();
+      // 's-old' não vem em GET /services (arquivado)
+      final antigo = Appointment(
+          id: 'appt-9',
+          startsAt: DateTime(2026, 10, 28, 10),
+          endsAt: DateTime(2026, 10, 28, 11, 10),
+          status: 'pending',
+          clientId: 'c1',
+          serviceId: 's-old',
+          serviceName: 'Depilação',
+          servicePriceCents: 15000,
+          bufferMin: 10);
+      await tester.pumpWidget(wrapWithApi(api, antigo));
+      await tester.tap(find.byKey(const Key('open-wizard')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pumpAndSettle();
+
+      // duração e folga originais preservadas
+      expect(find.text('70 min'), findsOneWidget);
+      expect(find.text('10 min'), findsOneWidget);
+      await tester.ensureVisible(find.text('10:00').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('10:00').first);
+      await tester.pumpAndSettle();
+      await goToReview(tester);
+
+      // (NumberFormat usa espaço não-quebrável depois do R\$)
+      expect(find.textContaining(RegExp(r'^Depilação · R\$.150,00$')),
+          findsOneWidget);
+      expect(find.text('10:00 às 11:10 (70 min)'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('wizard-save')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pumpAndSettle();
+      expect(
+          calls.any(
+              (c) => c.key == 'PATCH' && c.value == '/v1/appointments/appt-9'),
+          isTrue);
+    });
   });
 }

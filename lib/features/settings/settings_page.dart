@@ -624,7 +624,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           if (_me != null)
             Card(
               child: ListTile(
-                leading: Icon(Icons.content_cut,
+                leading: Icon(Icons.miscellaneous_services,
                     color: AppColors.primaryOf(context)),
                 title: const Text('Meus serviços'),
                 subtitle:

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
 import '../../theme/app_theme.dart';
+import '../../core/widgets/home_action.dart';
 
 /// F5 — Lista de espera: quem quer vaga em um dia específico.
 /// Ao cancelar um horário, o prestador vê quem avisar e marca como
@@ -71,7 +72,8 @@ class _WaitlistPageState extends ConsumerState<WaitlistPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Lista de espera')),
+      appBar: AppBar(
+          title: const Text('Lista de espera'), actions: const [HomeAction()]),
       body: Column(
         children: [
           Padding(

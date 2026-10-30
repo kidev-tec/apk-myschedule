@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
 import '../../theme/app_theme.dart';
+import '../../core/widgets/home_action.dart';
 
 /// F3 — Bloqueios de agenda: almoço, feriado, férias, compromissos.
 /// Janelas em que o profissional não aceita agendamentos mesmo dentro
@@ -143,7 +144,9 @@ class _TimeOffsPageState extends ConsumerState<TimeOffsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Bloqueios de agenda')),
+      appBar: AppBar(
+          title: const Text('Bloqueios de agenda'),
+          actions: const [HomeAction()]),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(

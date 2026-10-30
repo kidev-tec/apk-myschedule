@@ -7,6 +7,7 @@ import '../../core/cep/cep_service.dart';
 import '../../core/utils/phone_br.dart';
 import '../../theme/app_theme.dart';
 import 'client_profile_fields.dart';
+import '../../core/widgets/home_action.dart';
 
 class ClientFormPage extends ConsumerStatefulWidget {
   final String? clientId; // null = novo
@@ -111,8 +112,9 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar:
-          AppBar(title: Text(_isEditing ? 'Editar cliente' : 'Novo cliente')),
+      appBar: AppBar(
+          title: Text(_isEditing ? 'Editar cliente' : 'Novo cliente'),
+          actions: const [HomeAction()]),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : Form(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../theme/app_theme.dart';
+import '../../core/widgets/home_action.dart';
 
 class ClientsPage extends ConsumerStatefulWidget {
   const ClientsPage({super.key});
@@ -86,6 +87,7 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
             icon: const Icon(Icons.add),
             onPressed: _openForm,
           ),
+          const HomeAction(),
         ],
       ),
       body: Column(

@@ -183,8 +183,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         }
         // B3: mesma regra da API — 15..480, múltiplo de 15
         final dur = int.tryParse(_serviceDurationController.text);
-        if (dur == null || dur < 15 || dur > 480 || dur % 15 != 0) {
-          _showError('Duração entre 15 e 480 minutos, de 15 em 15');
+        if (dur == null || dur < 5 || dur > 480 || dur % 5 != 0) {
+          _showError('Duração entre 5 e 480 minutos, de 5 em 5');
           return false;
         }
         final price =
@@ -475,7 +475,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             decoration: const InputDecoration(
               labelText: 'Nome do serviço',
               hintText: 'Ex: Corte feminino',
-              prefixIcon: Icon(Icons.content_cut_outlined),
+              prefixIcon: Icon(Icons.miscellaneous_services_outlined),
             ),
           ),
           const SizedBox(height: 16),

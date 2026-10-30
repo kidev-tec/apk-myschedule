@@ -15,6 +15,7 @@ import 'package:intl/intl.dart';
 import 'package:minha_agenda/core/api/api_client.dart';
 import 'package:minha_agenda/core/push/push_events.dart';
 import 'package:minha_agenda/features/agenda/agenda_page.dart';
+import 'package:minha_agenda/features/agenda/block_time_page.dart';
 import 'package:minha_agenda/features/agenda/booking_wizard.dart' as booking;
 
 Widget _wrap(ApiClient api, {booking.Appointment? rescheduleResult}) {
@@ -176,6 +177,18 @@ void main() {
     // começa no domingo da semana do dia focado
     expect(from.weekday, DateTime.sunday);
     expect(find.text('Ana'), findsOneWidget);
+  });
+
+  testWidgets('cadeado abre a tela de bloqueio no dia aberto na agenda',
+      (tester) async {
+    await pumpPage(tester);
+    await tester.tap(find.byTooltip('Bloquear horário'));
+    await tester.pumpAndSettle();
+    final page = tester.widget<BlockTimePage>(find.byType(BlockTimePage));
+    final hoje = DateTime.now();
+    expect(page.initialDate.year, hoje.year);
+    expect(page.initialDate.month, hoje.month);
+    expect(page.initialDate.day, hoje.day);
   });
 
   testWidgets(
@@ -435,6 +448,14 @@ void main() {
     expect(contagemDia('cancelado'), '1');
     expect(contagemDia('remarcado'), '2');
     expect(contagemDia('concluido'), '1');
+    // linha própria abaixo dos botões, alinhada à direita
+    final semaforo = find.byKey(const Key('day-semaphore'));
+    expect(
+        tester.getTopLeft(semaforo).dy,
+        greaterThan(
+            tester.getBottomLeft(find.byTooltip('Bloquear horário')).dy));
+    expect(tester.getCenter(find.byKey(const Key('semaforo-remarcado'))).dx,
+        greaterThan(tester.getCenter(find.byTooltip('Grade')).dx));
 
     await tester.tap(find.text('Semana'));
     await tester.pumpAndSettle();

@@ -7,6 +7,7 @@ import '../../core/api/api_error.dart';
 import '../../main.dart' show segmentPresetProvider;
 import '../../theme/app_theme.dart';
 import '../../theme/theme_palette.dart';
+import '../../core/widgets/home_action.dart';
 
 /// Configurações → Tema e identidade visual: escolhe a cor do app a partir da
 /// paleta (ou volta pra cor do segmento). Salva no negócio (PATCH /me
@@ -54,7 +55,9 @@ class _ThemePageState extends ConsumerState<ThemePage> {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Tema e identidade visual')),
+      appBar: AppBar(
+          title: const Text('Tema e identidade visual'),
+          actions: const [HomeAction()]),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

@@ -1,5 +1,5 @@
 // B7: testes widget do onboarding — copy exata do passo 2, botão Pular
-// (cria "Atendimento" 60min R$0), validação de duração 15..480 step 15.
+// (cria "Atendimento" 60min R$0), validação de duração 5..480 step 5.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -70,15 +70,15 @@ void main() {
     expect(find.widgetWithText(TextField, 'Atendimento'), findsNothing);
   });
 
-  testWidgets('validação: duração fora do step 15 é rejeitada', (tester) async {
+  testWidgets('validação: duração fora do step 5 é rejeitada', (tester) async {
     await goToStep2(tester);
     final fields = find.byType(TextField);
-    await tester.enterText(fields.at(1), '40'); // não é múltiplo de 15
+    await tester.enterText(fields.at(1), '42'); // não é múltiplo de 5
     await tester.enterText(fields.at(2), '80,00');
     await tester.tap(find.text('Começar'));
     await tester.pump();
-    expect(find.text('Duração entre 15 e 480 minutos, de 15 em 15'),
-        findsOneWidget);
+    expect(
+        find.text('Duração entre 5 e 480 minutos, de 5 em 5'), findsOneWidget);
   });
 
   testWidgets('fluxo completo com serviço válido chega no passo 3',

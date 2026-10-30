@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../theme/app_theme.dart';
+import '../../core/widgets/home_action.dart';
 
 /// Edição do negócio pós-onboarding: nome, segmento e endereço.
 /// Serve pros prestadores antigos (adesão antes do F1) adicionarem
@@ -171,7 +172,8 @@ class _EditBusinessPageState extends ConsumerState<EditBusinessPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Meu negócio')),
+      appBar: AppBar(
+          title: const Text('Meu negócio'), actions: const [HomeAction()]),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : Form(

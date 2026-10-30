@@ -55,7 +55,7 @@ void main() {
     expect(find.text('Nenhum serviço ainda'), findsOneWidget);
     expect(find.text('Toque em + pra criar o primeiro'), findsOneWidget);
     expect(find.byType(FloatingActionButton), findsOneWidget);
-    expect(find.byIcon(Icons.content_cut_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.miscellaneous_services_outlined), findsOneWidget);
   });
 
   testWidgets('ServicesPage: renderiza AppBar', (tester) async {
@@ -63,5 +63,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Serviços'), findsOneWidget);
+    // "+" só no botão flutuante, não no topo
+    expect(
+        find.descendant(
+            of: find.byType(AppBar), matching: find.byIcon(Icons.add)),
+        findsNothing);
+    expect(find.byType(FloatingActionButton), findsOneWidget);
   });
 }

@@ -156,6 +156,11 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: 'new',
             builder: (_, __) => const ServiceFormPage(),
           ),
+          // kit (combo) de serviços
+          GoRoute(
+            path: 'new-kit',
+            builder: (_, __) => const ServiceFormPage(kit: true),
+          ),
           GoRoute(
             path: ':id/edit',
             builder: (_, state) =>

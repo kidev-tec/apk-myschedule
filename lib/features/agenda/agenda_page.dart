@@ -13,6 +13,7 @@ import '../../core/utils/phone_br.dart';
 import '../../core/api/paywall_flag.dart';
 import '../../core/update/update_service.dart';
 import '../../theme/app_theme.dart';
+import 'block_time_page.dart';
 import 'booking_wizard.dart' as booking show Appointment;
 import 'booking_logic.dart' as booking_logic
     show buildRescheduleMessage, formatWhen, greetingName;
@@ -422,18 +423,22 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                                     _buildLayoutToggle(_AgendaLayout.grade,
                                         Icons.grid_view_outlined, 'Grade'),
                                   ],
-                                  // Dia: mesmo semáforo de status da Semana
-                                  if (_view == _AgendaView.dia &&
-                                      _appointments.isNotEmpty)
-                                    Padding(
-                                      key: const Key('day-semaphore'),
-                                      padding: const EdgeInsets.only(left: 4),
-                                      child:
-                                          _buildStatusSemaphore(_appointments),
-                                    ),
                                 ],
                               ),
                             ),
+                            // Dia: semáforo de status numa linha própria,
+                            // abaixo dos botões (alinhado à direita)
+                            if (_view == _AgendaView.dia &&
+                                _appointments.isNotEmpty)
+                              Padding(
+                                key: const Key('day-semaphore'),
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: _buildStatusSemaphore(_appointments),
+                                ),
+                              ),
                             const SizedBox(height: 8),
                             Expanded(
                               child: _view == _AgendaView.mes
@@ -1269,156 +1274,20 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
 
   /// RF-A01..A03: sheet de bloqueio de horário. Cria appointment
   /// source='block' ocupando o intervalo escolhido do dia focado.
+  /// RF-A: tela própria de bloqueio — mostra o dia (expediente,
+  /// agendamentos, bloqueios) e só deixa escolher o que está livre.
   Future<void> _showBlockSheet() async {
     final api = ref.read(agendaApiProvider);
-    final day = _focusedDay;
-    TimeOfDay start = const TimeOfDay(hour: 12, minute: 0);
-    TimeOfDay end = const TimeOfDay(hour: 13, minute: 0);
-    final reasonCtrl = TextEditingController();
-
-    final ok = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          // barra de gestos + teclado (padrão do commit 888d475)
-          bottom: MediaQuery.of(ctx).viewInsets.bottom +
-              MediaQuery.of(ctx).padding.bottom +
-              24,
-        ),
-        child: StatefulBuilder(
-          builder: (ctx, setSheet) => Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Bloquear horário',
-                  style: Theme.of(ctx).textTheme.titleLarge),
-              const SizedBox(height: 8),
-              Text(
-                  '${DateFormat('EEEE, d \'de\' MMMM', 'pt_BR').format(day)} — clientes não verão este intervalo.',
-                  style: Theme.of(ctx).textTheme.bodySmall),
-              const SizedBox(height: 16),
-              Row(children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () async {
-                      final t = await showTimePicker(
-                          context: ctx, initialTime: start);
-                      if (t != null) setSheet(() => start = t);
-                    },
-                    child: Text('Início ${start.format(ctx)}'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () async {
-                      final t =
-                          await showTimePicker(context: ctx, initialTime: end);
-                      if (t != null) setSheet(() => end = t);
-                    },
-                    child: Text('Fim ${end.format(ctx)}'),
-                  ),
-                ),
-              ]),
-              const SizedBox(height: 12),
-              TextField(
-                controller: reasonCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Motivo (opcional, só você vê)',
-                  hintText: 'ex.: dentista',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                icon: const Icon(Icons.lock_outline),
-                label: const Text('Bloquear'),
-                onPressed: () {
-                  if (start.hour * 60 + start.minute >=
-                      end.hour * 60 + end.minute) {
-                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-                        content: Text('O fim deve ser depois do início')));
-                    return;
-                  }
-                  Navigator.pop(ctx, true);
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (ok != true || !mounted) return;
-
-    try {
-      // find-or-create do par cliente/serviço técnico do bloqueio
-      final blockIds = await _ensureBlockClientAndService(api);
-      final startDt =
-          DateTime(day.year, day.month, day.day, start.hour, start.minute);
-      final endDt =
-          DateTime(day.year, day.month, day.day, end.hour, end.minute);
-      await api.dio.post('/appointments', data: {
-        'clientId': blockIds['clientId'],
-        'serviceId': blockIds['serviceId'],
-        'startsAt': startDt.toUtc().toIso8601String(),
-        'endsAt': endDt.toUtc().toIso8601String(),
-        'source': 'block',
-        if (reasonCtrl.text.trim().isNotEmpty)
-          'canceledReason': reasonCtrl.text.trim(),
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Horário bloqueado 🔒')));
-        await _loadAppointments();
-      }
-    } catch (e) {
-      debugPrint('[agenda] falha ao bloquear: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Não consegui bloquear: ${humanError(e)}'),
-            backgroundColor: AppColors.error));
-      }
-    }
-  }
-
-  /// RF-A: o schema exige clientId+serviceId; bloqueio usa par técnico
-  /// reutilizável (cliente '— bloqueio —', serviço 'Bloqueio', preço 0).
-  Future<Map<String, String>> _ensureBlockClientAndService(
-      ApiClient api) async {
-    final clientsRes = await api.dio.get('/clients');
-    final clients = (clientsRes.data['clients'] as List? ?? []);
-    final existingClient = clients.firstWhere(
-      (c) => (c is Map) && c['name'] == '— bloqueio —',
-      orElse: () => null,
-    );
-    String clientId;
-    if (existingClient != null) {
-      clientId = existingClient['id'] as String;
-    } else {
-      final created =
-          await api.dio.post('/clients', data: {'name': '— bloqueio —'});
-      clientId = (created.data['client'] as Map)['id'] as String;
-    }
-
-    final servicesRes = await api.dio.get('/services');
-    final services = (servicesRes.data['services'] as List? ?? []);
-    final existingService = services.firstWhere(
-      (s) => (s is Map) && s['name'] == 'Bloqueio',
-      orElse: () => null,
-    );
-    String serviceId;
-    if (existingService != null) {
-      serviceId = existingService['id'] as String;
-    } else {
-      final created = await api.dio.post('/services',
-          data: {'name': 'Bloqueio', 'duration_min': 60, 'price_cents': 0});
-      serviceId = (created.data['service'] as Map)['id'] as String;
-    }
-    return {'clientId': clientId, 'serviceId': serviceId};
+    final created = await Navigator.of(context).push<int>(MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => BlockTimePage(api: api, initialDate: _focusedDay),
+    ));
+    if (!mounted || created == null || created == 0) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(created == 1
+            ? 'Horário bloqueado 🔒'
+            : '$created horários bloqueados 🔒')));
+    await _loadAppointments();
   }
 
   Future<void> _handleAppointmentAction(String action, Appointment a) async {
@@ -1456,6 +1325,11 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             clientId: a.clientId,
             serviceId: a.serviceId,
             notes: a.notes,
+            // folga original (antes ia 0 e a remarcação perdia a folga)
+            bufferMin: a.bufferMin,
+            // serviço pode ter sido excluído: o wizard usa estes dados
+            serviceName: a.serviceName,
+            servicePriceCents: a.servicePriceCents,
           );
           final changed = await context.push<booking.Appointment?>(
               '/agenda/booking',
@@ -1512,6 +1386,12 @@ class Appointment {
   final String? clientId;
   final String? serviceId;
 
+  /// Preço do serviço (pro resumo da remarcação, mesmo se ele foi excluído).
+  final int servicePriceCents;
+
+  /// Folga depois do atendimento (min) — remarcar preserva.
+  final int bufferMin;
+
   bool get isBlock => source == 'block';
 
   Appointment({
@@ -1528,6 +1408,8 @@ class Appointment {
     this.clientNickname,
     this.clientId,
     this.serviceId,
+    this.servicePriceCents = 0,
+    this.bufferMin = 0,
   });
 
   factory Appointment.fromJson(Map<String, dynamic> j) => Appointment(
@@ -1544,6 +1426,8 @@ class Appointment {
         clientNickname: j['client_nickname'] as String?,
         clientId: j['client_id'] ?? j['clientId'],
         serviceId: j['service_id'] ?? j['serviceId'],
+        servicePriceCents: (j['service_price_cents'] ?? 0) as int,
+        bufferMin: (j['buffer_min'] ?? j['bufferMin'] ?? 0) as int,
       );
 }
 
@@ -1893,7 +1777,7 @@ class _AppointmentDetailsSheetState extends State<_AppointmentDetailsSheet> {
             Text(a.clientName, style: theme.textTheme.titleLarge),
             const SizedBox(height: 12),
             row(Icons.event, booking_logic.formatWhen(a.startsAt)),
-            row(Icons.content_cut, a.serviceName),
+            row(Icons.miscellaneous_services, a.serviceName),
             row(Icons.info_outline, widget.statusLabel),
             if (a.clientPhone.isNotEmpty) row(Icons.phone, a.clientPhone),
             if (widget.loadClientNotes != null) ...[

@@ -9,6 +9,7 @@ import '../../core/utils/phone_br.dart';
 import '../../theme/app_theme.dart';
 import '../clients/client_profile_fields.dart';
 import 'booking_logic.dart' as logic;
+import '../services/service_subtitle.dart';
 
 /// Provider do ApiClient — DI pra testes de integração sobrescreverem
 /// a rede com http_mock_adapter. Em prod, resolve pro default (network real).
@@ -209,10 +210,19 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     final r = widget.reschedule;
     if (r != null) {
       _selectedClient = _clients.where((c) => c.id == r.clientId).firstOrNull;
-      _selectedService =
-          _services.where((s) => s.id == r.serviceId).firstOrNull;
       // remarcar mantém a duração e a folga que o agendamento já tinha
       final dur = r.endsAt.difference(r.startsAt).inMinutes;
+      // Serviço excluído não vem na lista de ativos: remarca com os dados
+      // do próprio agendamento (o histórico mantém o serviço).
+      _selectedService =
+          _services.where((s) => s.id == r.serviceId).firstOrNull ??
+              (r.serviceId == null
+                  ? null
+                  : Service(
+                      id: r.serviceId!,
+                      name: r.serviceName ?? 'Serviço',
+                      durationMin: dur,
+                      priceCents: r.servicePriceCents ?? 0));
       if (dur != _selectedService?.durationMin) _durationOverrideMin = dur;
       if (r.bufferMin != _defaultBufferMin) _bufferOverrideMin = r.bufferMin;
       // pré-seleciona o horário atual, que continua válido (excludeId)
@@ -774,18 +784,23 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
       itemBuilder: (_, i) {
         final s = _services[i];
         final selected = _selectedService?.id == s.id;
-        final priceFmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
         return Card(
           color: selected ? AppColors.softOf(context) : null,
           margin: const EdgeInsets.only(bottom: 12),
           child: ListTile(
             leading: CircleAvatar(
               backgroundColor: AppColors.primaryOf(context),
-              child: const Icon(Icons.content_cut, color: Colors.white),
+              child: Icon(
+                  s.isKit ? Icons.style_outlined : Icons.miscellaneous_services,
+                  color: Colors.white),
             ),
             title: Text(s.name),
-            subtitle: Text(
-                '${s.durationMin} min • ${priceFmt.format(s.priceCents / 100)}'),
+            subtitle: ServiceSubtitle(
+                durationMin: s.durationMin,
+                priceCents: s.priceCents,
+                kitItems: s.kitItems,
+                kitFullCents: s.kitFullCents),
+            isThreeLine: s.isKit,
             trailing: selected
                 ? Icon(Icons.check_circle, color: AppColors.primaryOf(context))
                 : null,
@@ -857,7 +872,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                 children: [
                   row(Icons.person_outline, 'Cliente',
                       _selectedClient?.name ?? '—'),
-                  row(Icons.content_cut, 'Serviço',
+                  row(Icons.miscellaneous_services, 'Serviço',
                       '${_selectedService?.name ?? '—'}${price != null ? ' · $price' : ''}'),
                   row(Icons.event, 'Dia', dateFmt.format(slot).capitalize()),
                   row(
@@ -1117,17 +1132,33 @@ class Service {
   final int durationMin;
   final int priceCents;
 
+  /// Kit (combo): nomes dos serviços incluídos.
+  final List<String> kitItems;
+  bool get isKit => kitItems.isNotEmpty;
+
+  /// Soma dos preços dos itens do kit (pra mostrar o desconto).
+  final int kitFullCents;
+
   Service(
       {required this.id,
       required this.name,
       required this.durationMin,
-      required this.priceCents});
+      required this.priceCents,
+      this.kitItems = const [],
+      this.kitFullCents = 0});
 
   factory Service.fromJson(Map<String, dynamic> j) => Service(
         id: j['id'],
         name: j['name'],
         durationMin: j['duration_min'] ?? j['durationMin'],
         priceCents: j['price_cents'] ?? j['priceCents'],
+        kitItems: [
+          for (final i in (j['items'] as List? ?? [])) i['name'] as String,
+        ],
+        kitFullCents: [
+          for (final i in (j['items'] as List? ?? []))
+            (i['price_cents'] ?? 0) as int,
+        ].fold(0, (a, b) => a + b),
       );
 }
 
@@ -1165,6 +1196,11 @@ class Appointment {
   /// Folga depois do atendimento (min) — o próximo só começa após ela.
   final int bufferMin;
 
+  /// Nome/preço do serviço como o agendamento conhece — remarcar funciona
+  /// mesmo se o serviço foi excluído (não vem mais em GET /services).
+  final String? serviceName;
+  final int? servicePriceCents;
+
   Appointment(
       {required this.id,
       required this.startsAt,
@@ -1173,7 +1209,9 @@ class Appointment {
       this.clientId,
       this.serviceId,
       this.notes,
-      this.bufferMin = 0});
+      this.bufferMin = 0,
+      this.serviceName,
+      this.servicePriceCents});
 
   factory Appointment.fromJson(Map<String, dynamic> j) => Appointment(
         id: j['id'],

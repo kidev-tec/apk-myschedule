@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../theme/app_theme.dart';
+import '../../core/widgets/home_action.dart';
 
 /// Edição de horário de funcionamento (RF-04) — acessível a qualquer
 /// momento nas Configurações, não só no onboarding.
@@ -155,6 +156,7 @@ class _WorkingHoursPageState extends ConsumerState<WorkingHoursPage> {
                   )
                 : const Text('Salvar'),
           ),
+          const HomeAction(),
         ],
       ),
       body: _loading
