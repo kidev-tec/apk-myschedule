@@ -20,6 +20,10 @@ class _Backend implements HttpClientAdapter {
   final posts = <Map<String, dynamic>>[];
   int failPostStatus = 0;
 
+  /// Atraso só da 1ª leitura de horários (trocar de dia durante a carga).
+  Duration firstHoursDelay = Duration.zero;
+  bool _hoursDelayed = false;
+
   @override
   void close({bool force = false}) {}
 
@@ -33,6 +37,10 @@ class _Backend implements HttpClientAdapter {
     String iso(int h, [int m = 0]) =>
         DateTime(2030, 1, 7, h, m).toUtc().toIso8601String();
     if (o.path.endsWith('/working-hours')) {
+      if (!_hoursDelayed) {
+        _hoursDelayed = true;
+        await Future<void>.delayed(firstHoursDelay);
+      }
       return json(200, [
         {'weekday': 1, 'start_time': '09:00:00', 'end_time': '18:00:00'}
       ]);
@@ -120,6 +128,35 @@ void main() {
     await tester.tap(find.byKey(Key('cell-$hm')));
     await tester.pump();
   }
+
+  testWidgets('trocar de dia durante a carga: só a última resposta vale',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final backend = _Backend()..firstHoursDelay = const Duration(seconds: 1);
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('pt', 'BR')],
+      home: BlockTimePage(
+          api: ApiClient(adapter: backend),
+          initialDate: DateTime(2030, 1, 7),
+          clock: () => DateTime(2030, 1, 7, 8)),
+    ));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('block-next-day')));
+    await tester.pumpAndSettle();
+    // a resposta atrasada do 1º dia chega depois: não pode estragar a grade
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(find.text('Terça-feira, 8 de janeiro'), findsOneWidget);
+    expect(find.byIcon(Icons.cloud_off), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
 
   testWidgets('grade do dia: ocupados (com folga) e livres', (tester) async {
     await open(tester);

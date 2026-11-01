@@ -38,6 +38,7 @@ class _BlockTimePageState extends State<BlockTimePage> {
   bool _loading = true;
   bool _saving = false;
   String? _loadError;
+  int _loadSeq = 0;
 
   /// Quadradinhos marcados (início de cada um) e o "início" pendente de um
   /// trecho (primeiro toque; o segundo toque fecha o trecho).
@@ -69,6 +70,9 @@ class _BlockTimePageState extends State<BlockTimePage> {
   List<(DateTime, DateTime)> get _ranges => mergeSelection(_selected);
 
   Future<void> _load() async {
+    // trocou de dia antes de terminar: só a última carga vale
+    final seq = ++_loadSeq;
+    final needHours = _hours.isEmpty;
     setState(() {
       _loading = true;
       _loadError = null;
@@ -77,15 +81,16 @@ class _BlockTimePageState extends State<BlockTimePage> {
     });
     try {
       final results = await Future.wait([
-        if (_hours.isEmpty) widget.api.dio.get('/working-hours'),
+        if (needHours) widget.api.dio.get('/working-hours'),
         widget.api.dio.get('/appointments', queryParameters: {
           'from': _day.toUtc().toIso8601String(),
           'to': _day.add(const Duration(days: 1)).toUtc().toIso8601String(),
         }),
         widget.api.dio.get('/time-offs'),
       ]);
+      if (seq != _loadSeq) return;
       var i = 0;
-      if (_hours.isEmpty) {
+      if (needHours) {
         _hours = (results[i++].data as List)
             .map((j) => WorkingHour.fromJson(j as Map<String, dynamic>))
             .toList();
@@ -122,6 +127,7 @@ class _BlockTimePageState extends State<BlockTimePage> {
         ],
       );
     } catch (e) {
+      if (seq != _loadSeq) return;
       _loadError = humanError(e);
     }
     if (mounted) setState(() => _loading = false);

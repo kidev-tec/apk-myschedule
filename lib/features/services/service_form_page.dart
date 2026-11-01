@@ -290,7 +290,12 @@ class _ServiceFormPageState extends ConsumerState<ServiceFormPage> {
     );
   }
 
+  /// Kit sem a lista de serviços carregada não tem soma nem preço: salvar
+  /// agora gravaria R$ 0 por cima do preço do kit.
+  bool get _kitOptionsPending => _isKit && (_optionsLoading || _optionsError);
+
   Future<void> _save() async {
+    if (_kitOptionsPending) return;
     final formOk = _formKey.currentState!.validate();
     if (_isKit && _items.length < 2) {
       setState(() => _itemsError = 'Escolha pelo menos 2 serviços para o kit');
@@ -647,7 +652,7 @@ class _ServiceFormPageState extends ConsumerState<ServiceFormPage> {
                   if (_isKit) _kitSumInfo(),
                   const SizedBox(height: 24),
                   FilledButton(
-                    onPressed: _loading ? null : _save,
+                    onPressed: _loading || _kitOptionsPending ? null : _save,
                     child: _loading
                         ? const SizedBox(
                             height: 20,

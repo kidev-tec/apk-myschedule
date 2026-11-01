@@ -487,6 +487,64 @@ void main() {
         6000);
   });
 
+  testWidgets('editar kit: não salva sem a lista de serviços (preço não zera)',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final backend = _FakeServicesAdapter();
+    backend.services.add({
+      'id': 'k1',
+      'name': 'Combo',
+      'duration_min': 50,
+      'price_cents': 6000,
+      'is_kit': true,
+      'items': [backend.services[0], backend.services[1]],
+    });
+    bool enabled() =>
+        tester
+            .widget<FilledButton>(
+                find.widgetWithText(FilledButton, 'Salvar alterações'))
+            .onPressed !=
+        null;
+    await tester.pumpWidget(_wrap(ApiClient(adapter: backend)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Meus serviços'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(PopupMenuButton<String>).last); // Combo
+    await tester.pumpAndSettle();
+
+    // rede lenta: enquanto a lista não chega, Salvar fica desligado
+    backend.listDelay = const Duration(seconds: 2);
+    await tester.tap(find.text('Editar'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Editar kit'), findsOneWidget);
+    expect(enabled(), isFalse);
+    await tester.pumpAndSettle();
+    expect(enabled(), isTrue);
+
+    // falhou: continua desligado até "Tentar de novo" dar certo
+    backend.listDelay = Duration.zero;
+    backend.listFailures = 1;
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(PopupMenuButton<String>).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Editar'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('kit-items-retry')), findsOneWidget);
+    expect(enabled(), isFalse);
+    await tester.tap(find.byKey(const Key('kit-items-retry')));
+    await tester.pumpAndSettle();
+    expect(enabled(), isTrue);
+    await tester.ensureVisible(find.text('Salvar alterações'));
+    await tester.tap(find.text('Salvar alterações'));
+    await tester.pumpAndSettle();
+    expect(backend.services.firstWhere((x) => x['id'] == 'k1')['price_cents'],
+        6000);
+  });
+
   testWidgets('setas do desconto: 1 em 1 ponto %, encaixa e respeita 0..100',
       (tester) async {
     final backend = _FakeServicesAdapter();
