@@ -25,10 +25,13 @@ import 'booking_logic.dart' as booking_logic
 final agendaApiProvider = Provider<ApiClient>((ref) => ApiClient());
 
 class AgendaPage extends ConsumerStatefulWidget {
-  const AgendaPage({super.key, this.onCheckUpdate});
+  const AgendaPage({super.key, this.onCheckUpdate, this.onInstallUpdate});
 
-  /// Checagem de update pós-frame (injetável; testes passam noop).
-  final Future<void> Function()? onCheckUpdate;
+  /// Checagem de update (injetável; testes passam noop ou uma versão fake).
+  final Future<UpdateInfo?> Function()? onCheckUpdate;
+
+  /// Baixa e instala (injetável nos testes).
+  final Future<void> Function(UpdateInfo info)? onInstallUpdate;
 
   @override
   ConsumerState<AgendaPage> createState() => _AgendaPageState();
@@ -46,19 +49,35 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   final Set<DateTime> _collapsedDays = {};
 
   final ValueNotifier<bool> _updateBanner = ValueNotifier(false);
+  UpdateInfo? _updateInfo;
   bool _downloading = false;
   DateTime? _offlineSync;
 
+  Future<void> _checkUpdate() async {
+    final info = await (widget.onCheckUpdate ?? UpdateService.check)();
+    if (info == null || !mounted || UpdateService.dismissed) return;
+    _updateInfo = info;
+    _updateBanner.value = true;
+  }
+
+  /// X da faixa: esconde até o app ser aberto de novo.
+  void _dismissUpdate() {
+    UpdateService.dismissed = true;
+    _updateBanner.value = false;
+  }
+
   Future<void> _doUpdate() async {
-    final info = UpdateService.lastCheck;
+    final info = _updateInfo;
     if (info == null || _downloading) return;
     setState(() => _downloading = true);
     try {
-      await UpdateService.downloadAndInstall(info);
+      await (widget.onInstallUpdate ?? UpdateService.downloadAndInstall)(info);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Falha ao atualizar: $e'),
+            content: Text(e is UpdateException
+                ? e.message
+                : 'Não foi possível atualizar agora. Tente de novo em instantes.'),
             backgroundColor: AppColors.error));
       }
     }
@@ -70,10 +89,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     super.initState();
     // Cliente agendou pelo link (push) → recarrega a agenda aberta.
     PushEvents.instance.agendaChanged.addListener(_onPushAgendaChanged);
-    (widget.onCheckUpdate ??
-        () => UpdateService.check().then((info) {
-              if (info != null && mounted) _updateBanner.value = true;
-            }))();
+    _checkUpdate();
     _loadAppointments();
     // Offline fase 2: voltou a rede → replay da fila de escritas.
     _connRemove =
@@ -302,12 +318,26 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                                       height: 20,
                                       child: CircularProgressIndicator(
                                           strokeWidth: 2, color: Colors.white))
-                                  : TextButton(
-                                      onPressed: _doUpdate,
-                                      child: const Text('Atualizar',
-                                          style: TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold)),
+                                  : Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        TextButton(
+                                          key: const Key('update-install'),
+                                          onPressed: _doUpdate,
+                                          child: const Text('Atualizar',
+                                              style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold)),
+                                        ),
+                                        IconButton(
+                                          key: const Key('update-dismiss'),
+                                          tooltip: 'Fechar',
+                                          visualDensity: VisualDensity.compact,
+                                          icon: const Icon(Icons.close,
+                                              color: Colors.white, size: 20),
+                                          onPressed: _dismissUpdate,
+                                        ),
+                                      ],
                                     ),
                             ),
                           ),

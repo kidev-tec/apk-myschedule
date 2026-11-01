@@ -14,14 +14,21 @@ import 'package:intl/intl.dart';
 
 import 'package:minha_agenda/core/api/api_client.dart';
 import 'package:minha_agenda/core/push/push_events.dart';
+import 'package:minha_agenda/core/update/update_service.dart';
 import 'package:minha_agenda/features/agenda/agenda_page.dart';
 import 'package:minha_agenda/features/agenda/block_time_page.dart';
 import 'package:minha_agenda/features/agenda/booking_wizard.dart' as booking;
 
-Widget _wrap(ApiClient api, {booking.Appointment? rescheduleResult}) {
+Widget _wrap(ApiClient api,
+    {booking.Appointment? rescheduleResult,
+    Future<UpdateInfo?> Function()? checkUpdate,
+    Future<void> Function(UpdateInfo)? installUpdate}) {
   final router = GoRouter(initialLocation: '/', routes: [
     GoRoute(
-        path: '/', builder: (_, __) => AgendaPage(onCheckUpdate: () async {})),
+        path: '/',
+        builder: (_, __) => AgendaPage(
+            onCheckUpdate: checkUpdate ?? () async => null,
+            onInstallUpdate: installUpdate)),
     GoRoute(
         path: '/settings',
         builder: (_, __) => const Scaffold(body: Text('SETTINGS'))),
@@ -1109,5 +1116,76 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Nada agendado neste mês'), findsNothing);
+  });
+
+  group('faixa de nova versão', () {
+    const nova = UpdateInfo(
+        currentVersion: '1.4.0',
+        remoteVersion: '1.5.0',
+        changelog: '',
+        apkUrl: '/apks/agenva-1.5.0.apk');
+    tearDown(() => UpdateService.dismissed = false);
+
+    testWidgets('X fecha e ela não volta até reabrir o app', (tester) async {
+      await tester.pumpWidget(_wrap(api, checkUpdate: () async => nova));
+      await tester.pumpAndSettle();
+      expect(find.text('Nova versão disponível'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('update-dismiss')));
+      await tester.pumpAndSettle();
+      expect(find.text('Nova versão disponível'), findsNothing);
+      expect(UpdateService.dismissed, isTrue);
+
+      // volta pra Agenda (tela recriada) na mesma execução do app: escondida
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(_wrap(api, checkUpdate: () async => nova));
+      await tester.pumpAndSettle();
+      expect(find.text('Nova versão disponível'), findsNothing);
+
+      // app aberto de novo (flag do processo zerada): aparece outra vez
+      UpdateService.dismissed = false;
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(_wrap(api, checkUpdate: () async => nova));
+      await tester.pumpAndSettle();
+      expect(find.text('Nova versão disponível'), findsOneWidget);
+    });
+
+    testWidgets('sem versão nova (ou iOS): sem faixa', (tester) async {
+      await tester.pumpWidget(_wrap(api));
+      await tester.pumpAndSettle();
+      expect(find.text('Nova versão disponível'), findsNothing);
+    });
+
+    testWidgets('Atualizar com falha mostra mensagem amigável', (tester) async {
+      UpdateInfo? installed;
+      await tester.pumpWidget(_wrap(api,
+          checkUpdate: () async => nova,
+          installUpdate: (i) async {
+            installed = i;
+            throw const UpdateException(
+                'Não foi possível baixar a atualização. '
+                'Verifique a internet e tente de novo.');
+          }));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('update-install')));
+      await tester.pumpAndSettle();
+      expect(installed?.remoteVersion, '1.5.0');
+      expect(
+          find.text('Não foi possível baixar a atualização. '
+              'Verifique a internet e tente de novo.'),
+          findsOneWidget);
+      // erro inesperado também vira texto humano
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(_wrap(api,
+          checkUpdate: () async => nova,
+          installUpdate: (_) async => throw StateError('x')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('update-install')));
+      await tester.pumpAndSettle();
+      expect(
+          find.text(
+              'Não foi possível atualizar agora. Tente de novo em instantes.'),
+          findsOneWidget);
+    });
   });
 }

@@ -100,9 +100,27 @@ void main() {
   group(
       'UpdateService.check — contrato (integração real no teste de integração)',
       () {
-    test('placeholder — check() depende de Dio sem injeção; integração cobre',
-        () {
-      expect(true, isTrue);
+    final original = UpdateService.supportsInAppUpdate;
+    tearDown(() => UpdateService.supportsInAppUpdate = original);
+
+    test('iOS (sem atualização pelo app): check nem consulta a API', () async {
+      UpdateService.supportsInAppUpdate = () => false;
+      expect(await UpdateService.check(), isNull);
+      expect(UpdateService.lastCheck, isNull);
+    });
+
+    test('iOS: Atualizar avisa da loja antes de baixar qualquer coisa',
+        () async {
+      UpdateService.supportsInAppUpdate = () => false;
+      await expectLater(
+        UpdateService.downloadAndInstall(const UpdateInfo(
+            currentVersion: '1.0.0',
+            remoteVersion: '1.5.0',
+            changelog: '',
+            apkUrl: '/apks/x.apk')),
+        throwsA(isA<UpdateException>().having((e) => e.message, 'message',
+            'Neste aparelho a atualização é feita pela loja de aplicativos.')),
+      );
     });
   });
 }
