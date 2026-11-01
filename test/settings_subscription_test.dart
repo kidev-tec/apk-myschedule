@@ -167,7 +167,7 @@ void main() {
             }));
     await pumpPage(tester);
     expect(find.text('Pagamento pendente'), findsOneWidget);
-    expect(find.text('Confere no teu e-mail'), findsOneWidget);
+    expect(find.text('Confira no seu e-mail'), findsOneWidget);
     expect(find.text('Assinar agora'), findsOneWidget);
   });
 

@@ -7,14 +7,26 @@ import 'booking_wizard.dart' show Client, WorkingHour, Appointment;
 ///
 /// Regras:
 /// - só gera slots em dias que têm WorkingHour pro weekday (0=dom..6=sáb)
-/// - slot cabe dentro da janela (start + duration <= end)
-/// - step de 15 min entre slots candidatos
-/// - slot é descartado se sobrepõe appointment pending/confirmed do dia
+/// - slot cabe dentro da janela (start + duration <= end); a folga pode
+///   passar do fechamento
+/// - step de [stepMin] (10 min) entre slots candidatos
+/// - slot é descartado se sobrepõe appointment pending/confirmed do dia,
+///   considerando a folga (intervalo entre atendimentos) dos dois lados:
+///   cada um ocupa [início, fim + folga)
+const slotStepMin = 10;
+
+/// Opções do intervalo (folga) entre atendimentos, em minutos.
+const bufferOptionsMin = [0, 5, 10, 15, 20, 30];
+
+String bufferLabel(int min) => min == 0 ? 'Sem intervalo' : '$min min';
+
 List<DateTime> generateSlots({
   required DateTime date,
   required List<WorkingHour> workingHours,
   required List<Appointment> appointments,
   required int durationMin,
+  int bufferMin = 0,
+  int stepMin = slotStepMin,
   String? excludeId,
   DateTime? notBefore,
 }) {
@@ -42,13 +54,14 @@ List<DateTime> generateSlots({
 
     while (cursor.add(Duration(minutes: durationMin)).isBefore(end) ||
         cursor.add(Duration(minutes: durationMin)).isAtSameMomentAs(end)) {
-      final slotEnd = cursor.add(Duration(minutes: durationMin));
-      final overlaps = dayAppointments
-          .any((a) => a.startsAt.isBefore(slotEnd) && a.endsAt.isAfter(cursor));
+      final busyUntil = cursor.add(Duration(minutes: durationMin + bufferMin));
+      final overlaps = dayAppointments.any((a) =>
+          a.startsAt.isBefore(busyUntil) &&
+          a.endsAt.add(Duration(minutes: a.bufferMin)).isAfter(cursor));
       // notBefore: horário que já passou não é oferecido.
       final past = notBefore != null && cursor.isBefore(notBefore);
       if (!overlaps && !past) slots.add(cursor);
-      cursor = cursor.add(const Duration(minutes: 15)); // step 15 min
+      cursor = cursor.add(Duration(minutes: stepMin));
     }
   }
   return slots;
@@ -81,8 +94,8 @@ String greetingName(String name, String? nickname) =>
 
 String buildRescheduleMessage(String clientName, Appointment? novo) {
   final when = novo == null ? 'o novo horário' : formatWhen(novo.startsAt);
-  return 'Oi $clientName! Remarquei teu horário pra $when. '
-      'Confirma se esse novo horário funciona pra você? 🙂';
+  return 'Olá, $clientName! Remarquei seu horário para $when. '
+      'Pode confirmar se esse novo horário funciona para você? 🙂';
 }
 
 class BookingWizardLogic {

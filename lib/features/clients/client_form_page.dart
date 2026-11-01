@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +8,7 @@ import '../../core/cep/cep_service.dart';
 import '../../core/utils/phone_br.dart';
 import '../../theme/app_theme.dart';
 import 'client_profile_fields.dart';
+import '../../core/widgets/home_action.dart';
 
 class ClientFormPage extends ConsumerStatefulWidget {
   final String? clientId; // null = novo
@@ -57,7 +59,8 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
       final resp = await api.dio.get('/clients/${widget.clientId}');
       final data = resp.data;
       _nameController.text = data['name'];
-      _phoneController.text = data['phone_e164'] ?? data['phoneE164'] ?? '';
+      _phoneController.text =
+          phoneForDisplay(data['phone_e164'] ?? data['phoneE164'] ?? '');
       _emailController.text = data['email'] ?? '';
       _notesController.text = data['notes'] ?? '';
       _profile.loadFrom(Map<String, dynamic>.from(data as Map));
@@ -96,23 +99,75 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
       } else {
         context.go('/clients');
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Não consegui salvar: ${humanError(e)}'),
-              backgroundColor: AppColors.error),
-        );
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (e.response?.statusCode == 409 &&
+          data is Map &&
+          data['existing'] is Map &&
+          mounted) {
+        setState(() => _loading = false);
+        await _onDuplicatePhone(Map<String, dynamic>.from(data));
+        return;
       }
+      _saveError(e);
+    } catch (e) {
+      _saveError(e);
     }
     if (mounted) setState(() => _loading = false);
+  }
+
+  void _saveError(Object e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text('Não foi possível salvar: ${humanError(e)}'),
+          backgroundColor: AppColors.error),
+    );
+  }
+
+  /// Celular já é de outro cliente: mostra quem é e oferece abrir o
+  /// cadastro dele (ou reativar, se estiver arquivado) em vez de duplicar.
+  Future<void> _onDuplicatePhone(Map<String, dynamic> data) async {
+    final existing = Map<String, dynamic>.from(data['existing'] as Map);
+    final archived = data['archived'] == true;
+    final name = existing['name'] as String? ?? 'outro cliente';
+    final open = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Celular já cadastrado'),
+        content: Text('${data['error'] ?? 'Esse celular já é de $name'}.\n\n'
+            '${archived ? 'Você pode reativar o cadastro de $name, com todo o histórico, em vez de criar outro.' : 'Use o cadastro de $name para não duplicar o cliente.'}'),
+        actions: [
+          TextButton(
+              key: const Key('duplicate-fix-phone'),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Corrigir número')),
+          FilledButton(
+              key: const Key('duplicate-open-existing'),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(archived ? 'Reativar $name' : 'Abrir $name')),
+        ],
+      ),
+    );
+    if (open != true || !mounted) return;
+    final id = existing['id'] as String;
+    if (archived) {
+      try {
+        await (widget.api ?? ApiClient()).dio.post('/clients/$id/restore');
+      } catch (e) {
+        _saveError(e);
+        return;
+      }
+    }
+    if (mounted) context.pushReplacement('/clients/$id/edit');
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar:
-          AppBar(title: Text(_isEditing ? 'Editar cliente' : 'Novo cliente')),
+      appBar: AppBar(
+          title: Text(_isEditing ? 'Editar cliente' : 'Novo cliente'),
+          actions: const [HomeAction()]),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : Form(
@@ -140,10 +195,13 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
                   TextFormField(
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
+                    // (11) 98765-4321 enquanto digita
+                    inputFormatters: [PhoneBrInputFormatter()],
                     decoration: const InputDecoration(
                       labelText: 'WhatsApp *',
                       hintText: '(11) 99999-9999',
-                      helperText: 'Com DDD — o 55 do Brasil entra sozinho',
+                      helperText:
+                          'Com DDD — o código 55 do Brasil é adicionado automaticamente',
                       prefixIcon: Icon(Icons.phone_outlined),
                     ),
                     validator: (v) => normalizePhoneBr(v ?? '').isEmpty

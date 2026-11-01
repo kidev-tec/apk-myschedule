@@ -55,7 +55,7 @@ class CepService {
       );
     } on DioException {
       throw const CepException(
-          'Não consegui buscar o CEP agora. Preenche o endereço à mão.');
+          'Não foi possível buscar o CEP agora. Preencha o endereço manualmente.');
     }
   }
 }

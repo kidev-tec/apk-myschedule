@@ -63,7 +63,7 @@ class AuthController extends StateNotifier<AuthState> {
           state = state.copyWith(
             isLoading: false,
             error:
-                'Falha de rede ao validar sessão. Verifica o Wi-Fi e tenta de novo.',
+                'Falha de rede ao validar a sessão. Verifique o Wi-Fi e tente novamente.',
           );
           await _auth.signOut();
         }
@@ -129,7 +129,7 @@ class AuthController extends StateNotifier<AuthState> {
         state = state.copyWith(
           isLoading: false,
           error:
-              'Não deu pra excluir agora. Verifica a internet e tenta de novo.',
+              'Não foi possível excluir agora. Verifique a internet e tente novamente.',
         );
         return;
       }
@@ -141,7 +141,7 @@ class AuthController extends StateNotifier<AuthState> {
       state = state.copyWith(
         isLoading: false,
         error: e.code == 'requires-recent-login'
-            ? 'Por segurança, sai da conta e entra de novo antes de excluir.'
+            ? 'Por segurança, saia da conta e entre novamente antes de excluir.'
             : _friendlyError(e.code),
       );
       rethrow;
@@ -165,7 +165,8 @@ class AuthController extends StateNotifier<AuthState> {
       await _auth.signInWithCredential(credential);
     } catch (e) {
       state = state.copyWith(
-          isLoading: false, error: 'Falha no login com Google. Tenta de novo.');
+          isLoading: false,
+          error: 'Falha no login com Google. Tente novamente.');
       rethrow;
     }
   }
@@ -189,7 +190,7 @@ class AuthController extends StateNotifier<AuthState> {
       case 'weak-password':
         return 'Senha muito curta. Mínimo 8 caracteres.';
       case 'email-already-in-use':
-        return 'Este e-mail já tem conta. Faz login ou recupera a senha.';
+        return 'Este e-mail já tem conta. Faça login ou recupere a senha.';
       case 'invalid-email':
         return 'E-mail inválido.';
       case 'user-not-found':
@@ -197,9 +198,9 @@ class AuthController extends StateNotifier<AuthState> {
       case 'invalid-credential':
         return 'E-mail ou senha incorretos.';
       case 'network-request-failed':
-        return 'Sem internet. Verifica a conexão.';
+        return 'Sem internet. Verifique a conexão.';
       default:
-        return 'Erro ao acessar a conta. Tenta de novo.';
+        return 'Erro ao acessar a conta. Tente novamente.';
     }
   }
 }
