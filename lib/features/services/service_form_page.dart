@@ -147,7 +147,13 @@ class _ServiceFormPageState extends ConsumerState<ServiceFormPage> {
     return (_sumCents * v / 100).round().clamp(0, _sumCents);
   }
 
-  int get _kitPriceCents => _sumCents - _discountCents;
+  /// Sem mexer no kit, o preço salvo é mantido, mesmo se os serviços ficaram
+  /// mais baratos que ele (a soma menor não pode trocar o preço escondido).
+  int get _kitPriceCents {
+    final saved = _savedKitPrice;
+    if (!_kitEdited && saved != null) return saved;
+    return _sumCents - _discountCents;
+  }
 
   /// Nome automático do kit quando o prestador não digita: "Corte + Barba"
   /// (ordem em que marcou; API aceita até 120 caracteres).

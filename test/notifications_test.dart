@@ -2,6 +2,7 @@
 // push), lista agrupada por dia, marcar lida/todas, abrir o dia do
 // agendamento, estados vazio/erro e "carregar mais".
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -27,6 +28,9 @@ class _Backend implements HttpClientAdapter {
   bool fail = false;
   int unreadOverride = -1;
 
+  /// Segura o read-all até completar: true = responde erro.
+  Completer<bool>? readAllGate;
+
   @override
   void close({bool force = false}) {}
 
@@ -46,6 +50,9 @@ class _Backend implements HttpClientAdapter {
           200, {'unread': unreadOverride >= 0 ? unreadOverride : unread});
     }
     if (o.path.endsWith('/read-all')) {
+      if (readAllGate != null && await readAllGate!.future) {
+        return json(500, {'error': 'Servidor fora do ar'});
+      }
       for (final n in items) {
         n['read'] = true;
       }
@@ -233,5 +240,37 @@ void main() {
     await tester.scrollUntilVisible(find.text('Lembrete 30'), 400);
     expect(find.text('Lembrete 30'), findsOneWidget);
     expect(find.byKey(const Key('notifications-more')), findsNothing);
+  });
+
+  testWidgets('marcar todas falha depois de Carregar mais: desfaz e avisa',
+      (tester) async {
+    final b = _Backend([
+      for (var i = 0; i < 31; i++)
+        _n('m$i', 'reminder', 'Lembrete $i',
+            _now.subtract(Duration(minutes: i))),
+    ])
+      ..readAllGate = Completer<bool>();
+    await tester.pumpWidget(
+        _app(NotificationsPage(api: ApiClient(adapter: b), clock: () => _now)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('notifications-read-all')));
+    await tester.pump();
+    expect(find.byKey(const Key('notification-unread-m0')), findsNothing);
+
+    // com o pedido no ar, a lista cresce
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('notifications-more')), 400);
+    await tester.tap(find.byKey(const Key('notifications-more')));
+    await tester.pumpAndSettle();
+
+    b.readAllGate!.complete(true);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(
+        find.text('Não consegui marcar: Servidor fora do ar'), findsOneWidget);
+    expect(b.items.where((n) => n['read'] == true), isEmpty);
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('notification-unread-m29')), -400);
+    expect(find.byKey(const Key('notification-unread-m29')), findsOneWidget);
   });
 }

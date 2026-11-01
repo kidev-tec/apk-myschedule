@@ -139,7 +139,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
   }
 
   Future<void> _readAll() async {
-    final before = [for (final n in _items) n.read];
+    // por id: "Carregar mais" pode mudar a lista enquanto o pedido está no ar
+    final before = {for (final n in _items) n.id: n.read};
     setState(() {
       for (final n in _items) {
         n.read = true;
@@ -150,8 +151,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        for (var i = 0; i < _items.length; i++) {
-          _items[i].read = before[i];
+        for (final n in _items) {
+          n.read = before[n.id] ?? n.read;
         }
       });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(

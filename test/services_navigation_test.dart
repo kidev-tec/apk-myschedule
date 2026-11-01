@@ -33,6 +33,9 @@ class _FakeServicesAdapter implements HttpClientAdapter {
   int listFailures = 0;
   final deletes = <RequestOptions>[];
 
+  /// Simula a API recusando "excluir junto com os kits".
+  bool failKitArchive = false;
+
   @override
   void close({bool force = false}) {}
 
@@ -96,6 +99,7 @@ class _FakeServicesAdapter implements HttpClientAdapter {
           ],
         });
       }
+      if (failKitArchive) return json(400, {'error': 'Tem agendamento ativo'});
       services.removeWhere((x) => x['id'] == id || kits.contains(x));
       return json(200, {'ok': true});
     }
@@ -543,6 +547,71 @@ void main() {
     await tester.pumpAndSettle();
     expect(backend.services.firstWhere((x) => x['id'] == 'k1')['price_cents'],
         6000);
+  });
+
+  testWidgets('excluir junto com o kit falhou: mostra o erro da API',
+      (tester) async {
+    final backend = _FakeServicesAdapter()..failKitArchive = true;
+    backend.services.add({
+      'id': 'k1',
+      'name': 'Combo',
+      'duration_min': 50,
+      'price_cents': 6000,
+      'is_kit': true,
+      'items': [backend.services[0], backend.services[1]],
+    });
+    await tester.pumpWidget(_wrap(ApiClient(adapter: backend)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Meus serviços'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(PopupMenuButton<String>).first); // Corte
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Excluir'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Excluir'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('delete-with-kits')));
+    await tester.pumpAndSettle();
+    expect(find.text('Não consegui excluir: Tem agendamento ativo'),
+        findsOneWidget);
+    expect(find.text('Corte'), findsOneWidget);
+  });
+
+  testWidgets(
+      'editar kit mais caro que a soma: salvar sem mexer mantém o preço',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final backend = _FakeServicesAdapter();
+    // kit de R\$ 80,00; os serviços dele hoje somam R\$ 70,00
+    backend.services.add({
+      'id': 'k1',
+      'name': 'Combo',
+      'duration_min': 50,
+      'price_cents': 8000,
+      'is_kit': true,
+      'items': [backend.services[0], backend.services[1]],
+    });
+    await tester.pumpWidget(_wrap(ApiClient(adapter: backend)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Meus serviços'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(PopupMenuButton<String>).last); // Combo
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Editar'));
+    await tester.pumpAndSettle();
+    expect(
+        tester
+            .widget<Text>(find.byKey(const Key('kit-price')))
+            .data!
+            .replaceAll('\u00a0', ' '),
+        'R\$ 80,00');
+    await tester.ensureVisible(find.text('Salvar alterações'));
+    await tester.tap(find.text('Salvar alterações'));
+    await tester.pumpAndSettle();
+    expect(backend.services.firstWhere((x) => x['id'] == 'k1')['price_cents'],
+        8000);
   });
 
   testWidgets('setas do desconto: 1 em 1 ponto %, encaixa e respeita 0..100',
