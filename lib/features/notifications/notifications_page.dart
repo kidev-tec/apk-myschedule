@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/api/api_client.dart';
@@ -60,7 +61,11 @@ class NotificationsPage extends StatefulWidget {
   final ApiClient? api;
   final DateTime Function() clock;
 
-  const NotificationsPage({super.key, this.api, this.clock = DateTime.now});
+  /// "Vaga abriu": abre a lista de espera no dia (injetável nos testes).
+  final void Function(String date)? onOpenWaitlist;
+
+  const NotificationsPage(
+      {super.key, this.api, this.clock = DateTime.now, this.onOpenWaitlist});
 
   @override
   State<NotificationsPage> createState() => _NotificationsPageState();
@@ -121,6 +126,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
           onError: (Object _) {
         if (mounted) setState(() => n.read = false);
       });
+    }
+    // vaga abriu: abre a lista de espera no dia
+    final wlDate = n.type == 'waitlist' ? n.data['date'] : null;
+    if (wlDate is String && mounted) {
+      (widget.onOpenWaitlist ??
+          (d) => context.push('/waitlist?date=$d'))(wlDate);
+      return;
     }
     final day = n.appointmentDay;
     if (day != null && mounted) Navigator.of(context).pop(day);

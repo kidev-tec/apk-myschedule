@@ -149,7 +149,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/waitlist',
-        builder: (_, __) => const WaitlistPage(),
+        builder: (_, state) => WaitlistPage(
+            initialDay:
+                DateTime.tryParse(state.uri.queryParameters['date'] ?? '')),
       ),
       GoRoute(
         path: '/edit-business',
