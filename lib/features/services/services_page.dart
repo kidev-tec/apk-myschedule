@@ -133,7 +133,11 @@ class _ServicesPageState extends ConsumerState<ServicesPage> {
             await api.dio.delete('/services/${s.id}',
                 queryParameters: {'kits': 'archive'});
           } catch (e2) {
-            debugPrint('[services] erro: $e2');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text('Não consegui excluir: ${humanError(e2)}'),
+                  backgroundColor: AppColors.error));
+            }
           }
           if (mounted) _loadServices();
         }
