@@ -154,6 +154,8 @@ void main() {
     expect(post, hasLength(1));
     expect(post.single.path, '/clients');
     expect(post.single.body['notes'], 'gosta de café');
+    // colado com +55: campo mascarado, API recebe o E.164
+    expect(post.single.body['phone_e164'], '5514999990002');
     expect(find.text('LISTA CLIENTES'), findsOneWidget);
   });
 

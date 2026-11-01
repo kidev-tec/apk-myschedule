@@ -11,9 +11,14 @@ class PushEvents {
   /// Incrementa quando a agenda precisa recarregar.
   final agendaChanged = ValueNotifier<int>(0);
 
+  /// Incrementa quando chega notificação nova (o sino recarrega a contagem).
+  final notificationsChanged = ValueNotifier<int>(0);
+
   /// Trata os dados (`data`) do push.
   void handle(Map<String, dynamic> data) {
     if (data['type'] == 'new_booking') agendaChanged.value++;
+    // todo push da central (notify) traz o id da notificação
+    if (data['notification_id'] != null) notificationsChanged.value++;
   }
 }
 

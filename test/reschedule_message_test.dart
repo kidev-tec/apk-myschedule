@@ -23,7 +23,7 @@ void main() {
     );
     final msg = logic.buildRescheduleMessage('Kim', novo);
     expect(msg, contains('30/10 às 14:30'));
-    expect(msg, isNot(contains('o novo horário. Confirma')));
+    expect(msg, isNot(contains('o novo horário. Pode confirmar')));
   });
 
   test('CA1b mensagem começa com nome do cliente e mantém tom da SPEC', () {
@@ -36,15 +36,15 @@ void main() {
       serviceId: 's1',
     );
     final msg = logic.buildRescheduleMessage('Kim', novo);
-    expect(msg, startsWith('Oi Kim!'));
+    expect(msg, startsWith('Olá, Kim!'));
     expect(msg, contains('02/11 às 09:00'));
-    expect(msg, contains('funciona pra você?'));
+    expect(msg, contains('funciona para você?'));
   });
 
   test('CA2 fallback sem dados novos mantém texto genérico', () {
     final msg = logic.buildRescheduleMessage('Kim', null);
     expect(msg, contains('o novo horário'));
-    expect(msg, startsWith('Oi Kim!'));
+    expect(msg, startsWith('Olá, Kim!'));
   });
 
   test('formatWhen: "dd/MM às HH:mm" (sem virar "à0")', () {

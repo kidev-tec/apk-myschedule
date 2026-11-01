@@ -31,10 +31,10 @@ class LogoService {
   String? validate(File file, String? mime) {
     final size = file.lengthSync();
     if (size > maxBytes) {
-      return 'A imagem passou de 2MB. Escolhe uma menor.';
+      return 'A imagem passou de 2MB. Escolha uma menor.';
     }
     if (mime == null || !allowedMimes.contains(mime)) {
-      return 'Formato não suportado. Usa PNG ou JPG.';
+      return 'Formato não suportado. Use PNG ou JPG.';
     }
     return null;
   }
@@ -53,18 +53,18 @@ class LogoService {
       final url = resp.data['logoUrl'] as String?;
       if (url == null || url.isEmpty) {
         return const LogoUploadResult.failure(
-            'Servidor não devolveu o endereço da logo. Tenta de novo.');
+            'O servidor não devolveu o endereço da logo. Tente novamente.');
       }
       return LogoUploadResult.success(url);
     } on DioException catch (e) {
       final msg = e.response?.data;
       final human = msg is Map && msg['error'] is String
           ? msg['error'] as String
-          : 'Não consegui enviar a logo. Verifica a internet e tenta de novo.';
+          : 'Não foi possível enviar a logo. Verifique a internet e tente novamente.';
       return LogoUploadResult.failure(human);
     } catch (_) {
       return const LogoUploadResult.failure(
-          'Não consegui enviar a logo. Verifica a internet e tenta de novo.');
+          'Não foi possível enviar a logo. Verifique a internet e tente novamente.');
     }
   }
 

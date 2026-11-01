@@ -11,9 +11,9 @@ String humanError(Object e) {
       return data['error'] as String;
     }
     if (e.response == null) {
-      return 'Sem conexão com o servidor. Confere a internet.';
+      return 'Sem conexão com o servidor. Verifique a internet.';
     }
-    return 'Algo deu errado no servidor. Tenta de novo.';
+    return 'Algo deu errado no servidor. Tente novamente.';
   }
-  return 'Algo deu errado. Tenta de novo.';
+  return 'Algo deu errado. Tente novamente.';
 }
