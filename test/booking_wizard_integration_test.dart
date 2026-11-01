@@ -111,7 +111,8 @@ void main() {
     // Captura o payload real do POST no dio DO ApiClient (o dio do adapter é
     // outro — interceptors lá não veem os requests do app).
     api.dio.interceptors.add(InterceptorsWrapper(onRequest: (options, handler) {
-      if (options.method == 'POST') {
+      // POST sem corpo (ex.: /clients/:id/restore) não entra na captura
+      if (options.method == 'POST' && options.data is Map) {
         posted.add(Map<String, dynamic>.from(options.data as Map));
       }
       handler.next(options);
@@ -650,6 +651,57 @@ void main() {
     final btn = tester
         .widget<FilledButton>(find.widgetWithText(FilledButton, 'Continuar'));
     expect(btn.onPressed, isNotNull);
+  });
+
+  testWidgets(
+      'celular de cliente arquivado → "Reativar e usar" reativa e seleciona',
+      (tester) async {
+    final restored = <String>[];
+    api.dio.interceptors.add(InterceptorsWrapper(onRequest: (o, h) {
+      if (o.path.endsWith('/restore')) restored.add(o.path);
+      h.next(o);
+    }));
+    adapter.onPost(
+        '/clients/c9/restore',
+        (s) => s.reply(200, {
+              'id': 'c9',
+              'name': 'Caio',
+              'phone_e164': '5514991110009',
+              'archived': false
+            }),
+        data: Matchers.any);
+    await tester.pumpWidget(_wrapWithApi(api));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Adicionar cliente'));
+    await tester.pumpAndSettle();
+    adapter.onPost(
+        '/clients',
+        (s) => s.reply(409, {
+              'error': 'Esse celular já é de Caio (cliente arquivado)',
+              'archived': true,
+              'existing': {
+                'id': 'c9',
+                'name': 'Caio',
+                'phone_e164': '5514991110009'
+              },
+            }),
+        data: Matchers.any);
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Nome *'), 'Caio Novo');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'WhatsApp *'), '(14) 99111-0009');
+    await tester.tap(find.text('Criar e usar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Esse celular já é de Caio (cliente arquivado)'),
+        findsOneWidget);
+    await tester.tap(find.text('Reativar e usar Caio'));
+    await tester.pumpAndSettle();
+    expect(restored, ['/clients/c9/restore']);
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(_clientCard(tester, 'Caio'), findsWidgets);
   });
 }
 

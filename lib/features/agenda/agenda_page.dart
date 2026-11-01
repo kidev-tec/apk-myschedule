@@ -1461,6 +1461,9 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             // serviço pode ter sido excluído: o wizard usa estes dados
             serviceName: a.serviceName,
             servicePriceCents: a.servicePriceCents,
+            // cliente pode estar arquivado (fora de GET /clients)
+            clientName: a.clientName,
+            clientPhone: a.clientPhone,
           );
           final changed = await context.push<booking.Appointment?>(
               '/agenda/booking',

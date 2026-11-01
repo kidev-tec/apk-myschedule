@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
+import '../../core/api/api_error.dart';
 import '../../core/storage/sync_queue.dart';
 import '../../core/utils/phone_br.dart';
 import '../../theme/app_theme.dart';
@@ -240,7 +241,15 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     // carregados (clients/services) pra pré-selecionar.
     final r = widget.reschedule;
     if (r != null) {
-      _selectedClient = _clients.where((c) => c.id == r.clientId).firstOrNull;
+      // cliente arquivado não vem em GET /clients: remarca com os dados do
+      // próprio agendamento (histórico preservado)
+      _selectedClient = _clients.where((c) => c.id == r.clientId).firstOrNull ??
+          (r.clientId == null
+              ? null
+              : Client(
+                  id: r.clientId!,
+                  name: r.clientName ?? 'Cliente',
+                  phoneE164: r.clientPhone ?? ''));
       // remarcar mantém a duração e a folga que o agendamento já tinha
       final dur = r.endsAt.difference(r.startsAt).inMinutes;
       // Serviço excluído não vem na lista de ativos: remarca com os dados
@@ -524,6 +533,8 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
     bool saving = false;
     String? duplicateError;
     Client? duplicate;
+    // celular é de um cliente arquivado: "Reativar e usar"
+    var duplicateArchived = false;
 
     final created = await showModalBottomSheet<Client>(
       context: context,
@@ -564,6 +575,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                     if (ex is Map<String, dynamic>) {
                       duplicate = Client.fromJson(ex);
                     }
+                    duplicateArchived = data['archived'] == true;
                   });
                 } else {
                   final msg =
@@ -680,9 +692,25 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                         if (duplicate != null)
                           TextButton.icon(
                             icon: const Icon(Icons.person_search),
-                            label: Text('Usar ${duplicate!.name}'),
-                            onPressed: () =>
-                                Navigator.pop(sheetContext, duplicate),
+                            key: const Key('use-existing-client'),
+                            label: Text(duplicateArchived
+                                ? 'Reativar e usar ${duplicate!.name}'
+                                : 'Usar ${duplicate!.name}'),
+                            onPressed: () async {
+                              if (duplicateArchived) {
+                                try {
+                                  await ref.read(wizardApiProvider).dio.post(
+                                      '/clients/${duplicate!.id}/restore');
+                                } catch (e) {
+                                  setSheetState(
+                                      () => duplicateError = humanError(e));
+                                  return;
+                                }
+                              }
+                              if (sheetContext.mounted) {
+                                Navigator.pop(sheetContext, duplicate);
+                              }
+                            },
                           ),
                       ],
                       const SizedBox(height: 16),
@@ -711,7 +739,11 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
 
     if (created != null && mounted) {
       setState(() {
-        _clients = [..._clients, created];
+        // cliente existente (celular repetido) pode já estar na lista
+        _clients = [
+          ..._clients.where((c) => c.id != created.id),
+          created,
+        ];
         _selectedClient = created;
         // limpa a busca: a lista volta completa com o selecionado visível
         _query = '';
@@ -1261,6 +1293,11 @@ class Appointment {
   /// Folga depois do atendimento (min) — o próximo só começa após ela.
   final int bufferMin;
 
+  /// Nome/telefone do cliente como o agendamento conhece — remarcar funciona
+  /// mesmo se o cliente foi arquivado.
+  final String? clientName;
+  final String? clientPhone;
+
   /// Nome/preço do serviço como o agendamento conhece — remarcar funciona
   /// mesmo se o serviço foi excluído (não vem mais em GET /services).
   final String? serviceName;
@@ -1276,7 +1313,9 @@ class Appointment {
       this.notes,
       this.bufferMin = 0,
       this.serviceName,
-      this.servicePriceCents});
+      this.servicePriceCents,
+      this.clientName,
+      this.clientPhone});
 
   factory Appointment.fromJson(Map<String, dynamic> j) => Appointment(
         id: j['id'],

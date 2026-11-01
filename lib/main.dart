@@ -15,6 +15,7 @@ import 'features/onboarding/onboarding_page.dart';
 import 'features/agenda/agenda_page.dart';
 import 'features/agenda/booking_wizard.dart' as booking;
 import 'features/clients/clients_page.dart';
+import 'features/clients/clients_ranking_page.dart';
 import 'features/clients/client_form_page.dart';
 import 'features/notifications/notifications_page.dart';
 import 'features/services/services_page.dart';
@@ -122,6 +123,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/clients',
         builder: (_, __) => const ClientsPage(),
         routes: [
+          // ranking (antes de ':id/edit')
+          GoRoute(
+            path: 'ranking',
+            builder: (_, __) => const ClientsRankingPage(),
+          ),
           GoRoute(
             path: 'new',
             builder: (_, __) => const ClientFormPage(),

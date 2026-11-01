@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -98,16 +99,67 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
       } else {
         context.go('/clients');
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Não consegui salvar: ${humanError(e)}'),
-              backgroundColor: AppColors.error),
-        );
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (e.response?.statusCode == 409 &&
+          data is Map &&
+          data['existing'] is Map &&
+          mounted) {
+        setState(() => _loading = false);
+        await _onDuplicatePhone(Map<String, dynamic>.from(data));
+        return;
       }
+      _saveError(e);
+    } catch (e) {
+      _saveError(e);
     }
     if (mounted) setState(() => _loading = false);
+  }
+
+  void _saveError(Object e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text('Não foi possível salvar: ${humanError(e)}'),
+          backgroundColor: AppColors.error),
+    );
+  }
+
+  /// Celular já é de outro cliente: mostra quem é e oferece abrir o
+  /// cadastro dele (ou reativar, se estiver arquivado) em vez de duplicar.
+  Future<void> _onDuplicatePhone(Map<String, dynamic> data) async {
+    final existing = Map<String, dynamic>.from(data['existing'] as Map);
+    final archived = data['archived'] == true;
+    final name = existing['name'] as String? ?? 'outro cliente';
+    final open = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Celular já cadastrado'),
+        content: Text('${data['error'] ?? 'Esse celular já é de $name'}.\n\n'
+            '${archived ? 'Você pode reativar o cadastro de $name, com todo o histórico, em vez de criar outro.' : 'Use o cadastro de $name para não duplicar o cliente.'}'),
+        actions: [
+          TextButton(
+              key: const Key('duplicate-fix-phone'),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Corrigir número')),
+          FilledButton(
+              key: const Key('duplicate-open-existing'),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(archived ? 'Reativar $name' : 'Abrir $name')),
+        ],
+      ),
+    );
+    if (open != true || !mounted) return;
+    final id = existing['id'] as String;
+    if (archived) {
+      try {
+        await (widget.api ?? ApiClient()).dio.post('/clients/$id/restore');
+      } catch (e) {
+        _saveError(e);
+        return;
+      }
+    }
+    if (mounted) context.pushReplacement('/clients/$id/edit');
   }
 
   @override
