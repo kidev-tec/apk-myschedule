@@ -1213,6 +1213,48 @@ void main() {
     expect(find.text('Dia antigo'), findsNothing);
   });
 
+  testWidgets('novo push durante a carga: abre o agendamento depois dela',
+      (tester) async {
+    final slow = _SlowBackend();
+    Future<void> untilPending(int n) async {
+      for (var i = 0; i < 50 && slow.pending.length < n; i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      expect(slow.pending, hasLength(n));
+    }
+
+    await tester.pumpWidget(_wrap(ApiClient(adapter: slow)));
+    await untilPending(1);
+    slow.release(0, 'Inicial');
+    await tester.pumpAndSettle();
+
+    // tocou na notificação (cargas 1 e 2) e chegou outro push (carga 3)
+    PushEvents.instance.handleOpened({
+      'type': 'new_booking',
+      'starts_at':
+          DateTime.now().add(const Duration(days: 3)).toUtc().toIso8601String(),
+      'appointment_id': 'x3',
+    });
+    await untilPending(3);
+    PushEvents.instance.handle({'type': 'new_booking'});
+    await untilPending(4);
+
+    // a carga substituída termina: ainda não pode concluir nada
+    slow.release(1, 'Velha');
+    slow.release(2, 'Substituída');
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(
+        find.text('Esse agendamento não está mais na agenda.'), findsNothing);
+    expect(find.byType(BottomSheet), findsNothing);
+
+    // a mais recente traz o agendamento: abre os detalhes
+    slow.release(3, 'Dia certo');
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(
+        find.text('Esse agendamento não está mais na agenda.'), findsNothing);
+  });
+
   group('toque na notificação do sistema', () {
     setUp(() {
       adapter.onPost(

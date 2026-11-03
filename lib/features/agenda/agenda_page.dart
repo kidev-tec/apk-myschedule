@@ -167,8 +167,20 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   /// Só a carga mais recente vale: uma resposta atrasada de outra janela não
   /// pode sobrescrever o dia que está na tela.
   int _loadSeq = 0;
+  Future<void> _latestLoad = Future.value();
 
-  Future<void> _loadAppointments() async {
+  Future<void> _loadAppointments() => _latestLoad = _fetchAppointments();
+
+  /// Espera a carga mais recente, mesmo que outra comece durante a espera.
+  Future<void> _settleLoads() async {
+    Future<void> seen;
+    do {
+      seen = _latestLoad;
+      await seen;
+    } while (!identical(seen, _latestLoad));
+  }
+
+  Future<void> _fetchAppointments() async {
     final seq = ++_loadSeq;
     setState(() => _loading = true);
     try {
@@ -276,7 +288,9 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
 
   /// Vai para o dia do agendamento e abre os detalhes dele.
   Future<void> _openTarget(PushTarget target) async {
-    await _openDay(target.day!);
+    _openDay(target.day!);
+    // chegou outro push no meio? A lista só vale depois da carga mais recente.
+    await _settleLoads();
     final id = target.appointmentId;
     if (id == null || !mounted) return;
     final found = _appointments.where((a) => a.id == id);
