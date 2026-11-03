@@ -164,7 +164,12 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     }
   }
 
+  /// Só a carga mais recente vale: uma resposta atrasada de outra janela não
+  /// pode sobrescrever o dia que está na tela.
+  int _loadSeq = 0;
+
   Future<void> _loadAppointments() async {
+    final seq = ++_loadSeq;
     setState(() => _loading = true);
     try {
       final api = ref.read(agendaApiProvider);
@@ -180,6 +185,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         'from': windowStart.toUtc().toIso8601String(),
         'to': end.toUtc().toIso8601String(),
       });
+      if (seq != _loadSeq) return;
       final list = resp.data is List
           ? resp.data as List
           : (resp.data as Map<String, dynamic>)['appointments'] as List? ?? [];
@@ -193,6 +199,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         // cache é best-effort
       }
     } catch (e) {
+      if (seq != _loadSeq) return;
       debugPrint('[agenda] falha ao carregar (tentando cache offline): $e');
       // Offline-first: sem rede, serve a última janela cacheada desse dia.
       try {
@@ -205,7 +212,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         _offlineSync = null;
       }
     }
-    if (mounted) setState(() => _loading = false);
+    if (mounted && seq == _loadSeq) setState(() => _loading = false);
   }
 
   /// Início da janela visível: dia focado, domingo da semana ou dia 1 do mês.
