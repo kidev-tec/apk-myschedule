@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/api/api_error.dart';
+import '../../core/push/push_events.dart';
 import '../../theme/app_theme.dart';
 
 /// Uma notificação da central (GET /notifications).
@@ -35,12 +37,6 @@ class AppNotification {
         read: j['read'] == true,
         createdAt: DateTime.parse(j['created_at'] as String).toLocal(),
       );
-
-  /// Dia do agendamento ligado à notificação (abre a agenda nele).
-  DateTime? get appointmentDay {
-    final s = data['starts_at'];
-    return s is String ? DateTime.tryParse(s)?.toLocal() : null;
-  }
 }
 
 /// Ícone e cor por tipo de notificação.
@@ -55,8 +51,8 @@ class AppNotification {
 
 /// Central de notificações: lista (mais novas primeiro, por dia), não lidas
 /// em destaque, "marcar todas como lidas". Tocar marca como lida e, se a
-/// notificação é de um agendamento, volta pra agenda no dia dele
-/// (pop com o DateTime).
+/// notificação é de um agendamento, volta pra agenda com os detalhes dele
+/// (pop com o [PushTarget]). Segurar alterna entre lida e não lida.
 class NotificationsPage extends StatefulWidget {
   final ApiClient? api;
   final DateTime Function() clock;
@@ -122,8 +118,10 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (!n.read) {
       setState(() => n.read = true);
       // otimista: marca na hora; se a API falhar, volta a "não lida"
-      _api.dio.post('/notifications/${n.id}/read').then((_) {},
-          onError: (Object _) {
+      _api.dio.post('/notifications/${n.id}/read').then((_) {
+        // sino: recarrega só depois que a API registrou a leitura
+        PushEvents.instance.notificationsChanged.value++;
+      }, onError: (Object _) {
         if (mounted) setState(() => n.read = false);
       });
     }
@@ -134,8 +132,28 @@ class _NotificationsPageState extends State<NotificationsPage> {
           (d) => context.push('/waitlist?date=$d'))(wlDate);
       return;
     }
-    final day = n.appointmentDay;
-    if (day != null && mounted) Navigator.of(context).pop(day);
+    final target = PushTarget.from(n.data);
+    if (target != null && mounted) Navigator.of(context).pop(target);
+  }
+
+  /// Segurar a notificação: alterna entre lida e não lida, sem sair da lista.
+  Future<void> _toggleRead(AppNotification n) async {
+    final read = !n.read;
+    setState(() => n.read = read);
+    HapticFeedback.selectionClick();
+    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+    try {
+      await _api.dio.post('/notifications/${n.id}/${read ? 'read' : 'unread'}');
+      PushEvents.instance.notificationsChanged.value++;
+      messenger.showSnackBar(SnackBar(
+          duration: const Duration(seconds: 2),
+          content:
+              Text(read ? 'Marcada como lida.' : 'Marcada como não lida.')));
+    } catch (e) {
+      if (mounted) setState(() => n.read = !read);
+      messenger.showSnackBar(SnackBar(
+          content: Text(humanError(e)), backgroundColor: AppColors.error));
+    }
   }
 
   Future<void> _readAll() async {
@@ -226,6 +244,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
         child: ListTile(
           key: Key('notification-${n.id}'),
           onTap: () => _open(n),
+          onLongPress: () => _toggleRead(n),
           leading: CircleAvatar(
             backgroundColor: color.withValues(alpha: 0.12),
             child: Icon(icon, color: color),

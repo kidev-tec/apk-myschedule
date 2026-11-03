@@ -1,7 +1,9 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/auth/auth_controller.dart';
+import '../../core/auth/saved_credentials.dart';
 import '../../core/api/api_client.dart';
 import '../../core/storage/onboarding_resolver.dart';
 import '../../theme/app_theme.dart';
@@ -19,6 +21,59 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final _nameController = TextEditingController();
   bool _isLogin = true; // true = login, false = create account
   bool _obscurePassword = true;
+
+  /// "Salvar senha neste aparelho" marcado.
+  bool _remember = false;
+
+  /// A senha no campo veio do aparelho: sem o olho, para ninguém ler a senha
+  /// salva num aparelho deslogado. Volta ao normal quando é editada.
+  bool _passwordFromSaved = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSaved();
+    _passwordController.addListener(_onPasswordChanged);
+  }
+
+  Future<void> _loadSaved() async {
+    final saved = await SavedCredentials.load();
+    if (saved == null || !mounted) return;
+    setState(() {
+      _remember = true;
+      _emailController.text = saved.email;
+      _passwordController.text = saved.password;
+      _passwordFromSaved = true;
+      _savedPassword = saved.password;
+    });
+  }
+
+  String? _savedPassword;
+
+  void _onPasswordChanged() {
+    if (_passwordFromSaved && _passwordController.text != _savedPassword) {
+      setState(() {
+        _passwordFromSaved = false;
+        _obscurePassword = true;
+      });
+    }
+  }
+
+  /// Desmarcar apaga na hora: o usuário não precisa entrar de novo para isso.
+  void _setRemember(bool value) {
+    setState(() => _remember = value);
+    if (!value) SavedCredentials.clear();
+  }
+
+  /// Senha salva recusada (foi trocada): não fica tentando a senha velha.
+  void _forgetRejectedPassword() {
+    SavedCredentials.clear();
+    setState(() {
+      _savedPassword = null;
+      _passwordFromSaved = false;
+      _passwordController.clear();
+    });
+  }
 
   @override
   void dispose() {
@@ -46,6 +101,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         await ref
             .read(authControllerProvider.notifier)
             .signInWithEmail(email, password);
+        if (_remember) {
+          await SavedCredentials.save(email, password);
+        } else {
+          await SavedCredentials.clear();
+        }
       } else {
         await ref
             .read(authControllerProvider.notifier)
@@ -63,6 +123,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             ? '/agenda'
             : '/onboarding');
       }
+    } on FirebaseAuthException catch (e) {
+      // erro aparece via provider
+      if (_passwordFromSaved &&
+          mounted &&
+          const {'wrong-password', 'invalid-credential', 'user-not-found'}
+              .contains(e.code)) {
+        _forgetRejectedPassword();
+      }
     } catch (_) {
       // error shown via provider
     }
@@ -71,7 +139,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   Future<void> _handleGoogleSignIn() async {
     final router = GoRouter.of(context);
     final notifier = ref.read(authControllerProvider.notifier);
-    await notifier.signInWithGoogle();
+    try {
+      await notifier.signInWithGoogle();
+    } catch (_) {
+      return; // erro aparece via provider e a causa vai para o log
+    }
     // ref/context NÃO podem ser usados pós-await (widget pode ter sido
     // desmontado — crash "Cannot use ref after disposed" visto no A15).
     // Captura tudo antes; usa os handles capturados depois.
@@ -253,35 +325,67 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 ),
                 const SizedBox(height: 16),
               ],
-              TextField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'E-mail',
-                  hintText: 'voce@exemplo.com',
-                  prefixIcon: Icon(Icons.email_outlined),
+              // Permite preencher por gerenciador de senhas. Quem salva aqui
+              // é a opção abaixo: cancel evita o sistema perguntar de novo.
+              AutofillGroup(
+                onDisposeAction: AutofillContextAction.cancel,
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [
+                        AutofillHints.username,
+                        AutofillHints.email,
+                      ],
+                      decoration: const InputDecoration(
+                        labelText: 'E-mail',
+                        hintText: 'voce@exemplo.com',
+                        prefixIcon: Icon(Icons.email_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _passwordController,
+                      obscureText: _obscurePassword,
+                      textInputAction: TextInputAction.done,
+                      autofillHints: [
+                        _isLogin
+                            ? AutofillHints.password
+                            : AutofillHints.newPassword,
+                      ],
+                      onSubmitted: (_) => _submit(),
+                      decoration: InputDecoration(
+                        labelText: 'Senha',
+                        hintText:
+                            _isLogin ? 'Sua senha' : 'Mínimo 8 caracteres',
+                        prefixIcon: const Icon(Icons.lock_outline),
+                        suffixIcon: _passwordFromSaved
+                            ? null
+                            : IconButton(
+                                key: const Key('toggle-password'),
+                                icon: Icon(_obscurePassword
+                                    ? Icons.visibility
+                                    : Icons.visibility_off),
+                                onPressed: () => setState(
+                                    () => _obscurePassword = !_obscurePassword),
+                              ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _passwordController,
-                obscureText: _obscurePassword,
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) => _submit(),
-                decoration: InputDecoration(
-                  labelText: 'Senha',
-                  hintText: _isLogin ? 'Sua senha' : 'Mínimo 8 caracteres',
-                  prefixIcon: const Icon(Icons.lock_outline),
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword
-                        ? Icons.visibility
-                        : Icons.visibility_off),
-                    onPressed: () =>
-                        setState(() => _obscurePassword = !_obscurePassword),
-                  ),
+              if (_isLogin)
+                CheckboxListTile(
+                  key: const Key('remember-password'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: const Text('Salvar senha neste aparelho'),
+                  value: _remember,
+                  onChanged: (v) => _setRemember(v ?? false),
                 ),
-              ),
               if (auth.error != null) ...[
                 const SizedBox(height: 12),
                 Text(auth.error!,

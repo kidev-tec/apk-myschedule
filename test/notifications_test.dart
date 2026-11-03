@@ -26,6 +26,7 @@ class _Backend implements HttpClientAdapter {
   final List<Map<String, dynamic>> items;
   final calls = <String>[];
   bool fail = false;
+  bool failToggle = false;
   int unreadOverride = -1;
 
   /// Segura o read-all até completar: true = responde erro.
@@ -58,9 +59,10 @@ class _Backend implements HttpClientAdapter {
       }
       return json(200, {'unread': 0});
     }
-    if (o.path.endsWith('/read')) {
+    if (o.path.endsWith('/read') || o.path.endsWith('/unread')) {
+      if (failToggle) return json(500, {'error': 'Não deu para marcar'});
       final id = o.path.split('/')[o.path.split('/').length - 2];
-      items.firstWhere((n) => n['id'] == id)['read'] = true;
+      items.firstWhere((n) => n['id'] == id)['read'] = o.path.endsWith('/read');
       return json(200, {'ok': true});
     }
     // lista com paginação simples (limit/before)
@@ -78,13 +80,16 @@ class _Backend implements HttpClientAdapter {
 }
 
 Map<String, dynamic> _n(String id, String type, String title, DateTime at,
-        {bool read = false, String? startsAt}) =>
+        {bool read = false, String? startsAt, String? appointmentId}) =>
     {
       'id': id,
       'type': type,
       'title': title,
       'body': 'Corpo $id',
-      'data': {if (startsAt != null) 'starts_at': startsAt},
+      'data': {
+        if (startsAt != null) 'starts_at': startsAt,
+        if (appointmentId != null) 'appointment_id': appointmentId,
+      },
       'read': read,
       'created_at': at.toUtc().toIso8601String(),
     };
@@ -106,7 +111,8 @@ void main() {
   List<Map<String, dynamic>> sample() => [
         _n('n1', 'new_booking', 'Novo agendamento',
             _now.subtract(const Duration(hours: 1)),
-            startsAt: DateTime(2026, 11, 2, 9).toUtc().toIso8601String()),
+            startsAt: DateTime(2026, 11, 2, 9).toUtc().toIso8601String(),
+            appointmentId: 'a1'),
         _n('n2', 'client_canceled', '❌ Cancelamento',
             _now.subtract(const Duration(hours: 3))),
         _n('n3', 'reminder', 'Lembrete de agendamento',
@@ -175,11 +181,11 @@ void main() {
   testWidgets('tocar marca como lida e volta com o dia do agendamento',
       (tester) async {
     final b = _Backend(sample());
-    DateTime? result;
+    PushTarget? result;
     await tester.pumpWidget(_app(Builder(
       builder: (ctx) => TextButton(
-        onPressed: () async => result = await Navigator.of(ctx).push<DateTime>(
-            MaterialPageRoute(
+        onPressed: () async => result = await Navigator.of(ctx)
+            .push<PushTarget>(MaterialPageRoute(
                 builder: (_) => NotificationsPage(
                     api: ApiClient(adapter: b), clock: () => _now))),
         child: const Text('ABRIR'),
@@ -189,8 +195,10 @@ void main() {
     await tester.pumpAndSettle();
 
     // sem agendamento ligado: marca como lida e fica na tela
+    final sinoAntes = PushEvents.instance.notificationsChanged.value;
     await tester.tap(find.text('❌ Cancelamento'));
     await tester.pumpAndSettle();
+    expect(PushEvents.instance.notificationsChanged.value, sinoAntes + 1);
     expect(b.calls, contains('POST /notifications/n2/read'));
     expect(find.byKey(const Key('notification-unread-n2')), findsNothing);
     expect(result, isNull);
@@ -199,7 +207,38 @@ void main() {
     await tester.tap(find.text('Novo agendamento'));
     await tester.pumpAndSettle();
     expect(b.calls, contains('POST /notifications/n1/read'));
-    expect(result, DateTime(2026, 11, 2, 9));
+    expect(result?.day, DateTime(2026, 11, 2, 9));
+    expect(result?.appointmentId, 'a1');
+  });
+
+  testWidgets('segurar alterna lida/não lida e não sai da lista',
+      (tester) async {
+    final b = _Backend(sample());
+    await tester.pumpWidget(
+        _app(NotificationsPage(api: ApiClient(adapter: b), clock: () => _now)));
+    await tester.pumpAndSettle();
+
+    // não lida → lida
+    await tester.longPress(find.text('Novo agendamento'));
+    await tester.pumpAndSettle();
+    expect(b.calls, contains('POST /notifications/n1/read'));
+    expect(find.byKey(const Key('notification-unread-n1')), findsNothing);
+    expect(find.text('Marcada como lida.'), findsOneWidget);
+    expect(find.text('Novo agendamento'), findsOneWidget);
+
+    // lida → não lida
+    await tester.longPress(find.text('Novo agendamento'));
+    await tester.pumpAndSettle();
+    expect(b.calls, contains('POST /notifications/n1/unread'));
+    expect(find.byKey(const Key('notification-unread-n1')), findsOneWidget);
+    expect(find.text('Marcada como não lida.'), findsOneWidget);
+
+    // falhou: desfaz e avisa
+    b.failToggle = true;
+    await tester.longPress(find.text('Novo agendamento'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('notification-unread-n1')), findsOneWidget);
+    expect(find.text('Não deu para marcar'), findsOneWidget);
   });
 
   testWidgets('vazio, erro com Tentar de novo e Carregar mais', (tester) async {

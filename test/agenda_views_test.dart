@@ -25,6 +25,10 @@ Widget _wrap(ApiClient api,
     Future<void> Function(UpdateInfo)? installUpdate}) {
   final router = GoRouter(initialLocation: '/', routes: [
     GoRoute(
+      path: '/agenda',
+      redirect: (_, __) => '/',
+    ),
+    GoRoute(
         path: '/',
         builder: (_, __) => AgendaPage(
             onCheckUpdate: checkUpdate ?? () async => null,
@@ -32,6 +36,10 @@ Widget _wrap(ApiClient api,
     GoRoute(
         path: '/settings',
         builder: (_, __) => const Scaffold(body: Text('SETTINGS'))),
+    GoRoute(
+        path: '/waitlist',
+        builder: (_, st) =>
+            Scaffold(body: Text('WAITLIST ${st.uri.queryParameters['date']}'))),
     GoRoute(
         path: '/agenda/booking',
         builder: (ctx, __) => Scaffold(
@@ -1116,6 +1124,83 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Nada agendado neste mês'), findsNothing);
+  });
+
+  group('toque na notificação do sistema', () {
+    setUp(() {
+      adapter.onPost(
+          '/notifications/n1/read', (s) => s.reply(200, {'ok': true}));
+      adapter.onGet(
+          '/notifications/unread-count', (s) => s.reply(200, {'unread': 0}));
+    });
+    tearDown(() => PushEvents.instance.opened.value = null);
+
+    testWidgets('novo agendamento abre o dia dele e marca como lida',
+        (tester) async {
+      await tester.pumpWidget(_wrap(api));
+      await tester.pumpAndSettle();
+      final antes = capturedQueries.length;
+      final day = DateTime(2030, 11, 3, 9);
+      PushEvents.instance.handleOpened({
+        'type': 'client_canceled',
+        'notification_id': 'n1',
+        'starts_at': day.toUtc().toIso8601String(),
+      });
+      await tester.pumpAndSettle();
+      expect(capturedQueries.length, greaterThan(antes));
+      final from = DateTime.parse(capturedQueries.last!['from'] as String);
+      expect(from.toLocal().year, 2030);
+      expect(from.toLocal().month, 11);
+      expect(PushEvents.instance.opened.value, isNull);
+    });
+
+    testWidgets('abre os detalhes do agendamento; sumiu: avisa',
+        (tester) async {
+      await tester.pumpWidget(_wrap(api));
+      await tester.pumpAndSettle();
+      expect(find.text('Ana'), findsOneWidget);
+      PushEvents.instance.handleOpened({
+        'type': 'new_booking',
+        'starts_at': DateTime.now().toUtc().toIso8601String(),
+        'appointment_id': 'a1',
+      });
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsOneWidget);
+      // telefone legível, não o número cru do banco
+      expect(find.text('(14) 99999-0001'), findsOneWidget);
+      expect(find.text('+5514999990001'), findsNothing);
+      Navigator.of(tester.element(find.byType(BottomSheet))).pop();
+      await tester.pumpAndSettle();
+
+      PushEvents.instance.handleOpened({
+        'type': 'new_booking',
+        'starts_at': DateTime.now().toUtc().toIso8601String(),
+        'appointment_id': 'sumiu',
+      });
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(find.text('Esse agendamento não está mais na agenda.'),
+          findsOneWidget);
+    });
+
+    testWidgets('vaga abriu abre a lista de espera do dia', (tester) async {
+      await tester.pumpWidget(_wrap(api));
+      await tester.pumpAndSettle();
+      PushEvents.instance
+          .handleOpened({'type': 'waitlist', 'date': '2030-11-03'});
+      await tester.pumpAndSettle();
+      expect(find.text('WAITLIST 2030-11-03'), findsOneWidget);
+    });
+
+    testWidgets('tocou antes da agenda abrir: trata ao abrir', (tester) async {
+      PushEvents.instance.opened.value = {
+        'type': 'waitlist',
+        'date': '2030-11-04',
+      };
+      await tester.pumpWidget(_wrap(api));
+      await tester.pumpAndSettle();
+      expect(find.text('WAITLIST 2030-11-04'), findsOneWidget);
+    });
   });
 
   group('faixa de nova versão', () {
