@@ -89,6 +89,9 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     super.initState();
     // Cliente agendou pelo link (push) → recarrega a agenda aberta.
     PushEvents.instance.agendaChanged.addListener(_onPushAgendaChanged);
+    // Tocou na notificação do sistema (também se foi o toque que abriu o app).
+    PushEvents.instance.opened.addListener(_onPushOpened);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onPushOpened());
     _checkUpdate();
     _loadAppointments();
     // Offline fase 2: voltou a rede → replay da fila de escritas.
@@ -103,6 +106,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   void dispose() {
     _connRemove?.call();
     PushEvents.instance.agendaChanged.removeListener(_onPushAgendaChanged);
+    PushEvents.instance.opened.removeListener(_onPushOpened);
     super.dispose();
   }
 
@@ -135,6 +139,29 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
 
   void _onPushAgendaChanged() {
     if (mounted) _loadAppointments();
+  }
+
+  /// Abre a tela da notificação tocada e a marca como lida (como na central).
+  void _onPushOpened() {
+    if (!mounted) return;
+    final data = PushEvents.instance.takeOpened();
+    if (data == null) return;
+    final id = data['notification_id'];
+    if (id is String) {
+      ref.read(agendaApiProvider).dio.post('/notifications/$id/read').then((_) {
+        PushEvents.instance.notificationsChanged.value++;
+      }, onError: (Object _) {});
+    }
+    final target = PushTarget.from(data);
+    if (target == null) return;
+    final router = GoRouter.of(context);
+    // pode estar em outra tela: volta para a agenda antes
+    router.go('/agenda');
+    if (target.waitlistDate != null) {
+      router.push('/waitlist?date=${target.waitlistDate}');
+    } else {
+      _openTarget(target);
+    }
   }
 
   Future<void> _loadAppointments() async {
@@ -234,18 +261,32 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   }
 
   /// Mês: tocar num dia abre a visão dia daquela data.
-  /// Abre as notificações; tocar numa de agendamento volta com o dia dele.
+  /// Abre as notificações; tocar numa de agendamento volta com ele.
   Future<void> _openNotifications() async {
-    final day = await context.push<DateTime>('/notifications');
-    if (day != null && mounted) _openDay(day);
+    final target = await context.push<PushTarget>('/notifications');
+    if (target != null && mounted) await _openTarget(target);
   }
 
-  void _openDay(DateTime day) {
+  /// Vai para o dia do agendamento e abre os detalhes dele.
+  Future<void> _openTarget(PushTarget target) async {
+    await _openDay(target.day!);
+    final id = target.appointmentId;
+    if (id == null || !mounted) return;
+    final found = _appointments.where((a) => a.id == id);
+    if (found.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Esse agendamento não está mais na agenda.')));
+      return;
+    }
+    await _showDetails(found.first);
+  }
+
+  Future<void> _openDay(DateTime day) {
     setState(() {
       _view = _AgendaView.dia;
       _focusedDay = day;
     });
-    _loadAppointments();
+    return _loadAppointments();
   }
 
   @override
@@ -1949,7 +1990,8 @@ class _AppointmentDetailsSheetState extends State<_AppointmentDetailsSheet> {
             row(Icons.event, booking_logic.formatWhen(a.startsAt)),
             row(Icons.miscellaneous_services, a.serviceName),
             row(Icons.info_outline, widget.statusLabel),
-            if (a.clientPhone.isNotEmpty) row(Icons.phone, a.clientPhone),
+            if (a.clientPhone.isNotEmpty)
+              row(Icons.phone, phoneForDisplay(a.clientPhone)),
             if (widget.loadClientNotes != null) ...[
               Align(
                 alignment: Alignment.centerLeft,

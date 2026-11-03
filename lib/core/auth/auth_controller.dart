@@ -1,7 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../api/api_client.dart';
+import 'auth_gate.dart';
+import 'saved_credentials.dart';
 
 class AuthState {
   final User? user;
@@ -9,11 +12,15 @@ class AuthState {
   final bool isLoading;
   final String? error;
 
+  /// Abrindo o app: o Firebase ainda não disse se há sessão salva.
+  final bool isResolving;
+
   const AuthState({
     this.user,
     this.idToken,
     this.isLoading = false,
     this.error,
+    this.isResolving = false,
   });
 
   AuthState copyWith(
@@ -40,7 +47,7 @@ class AuthController extends StateNotifier<AuthState> {
   AuthController.forTest({AuthState? initial})
       : super(initial ?? const AuthState());
 
-  AuthController() : super(const AuthState()) {
+  AuthController() : super(const AuthState(isResolving: true)) {
     _initAuthListener();
   }
 
@@ -51,21 +58,22 @@ class AuthController extends StateNotifier<AuthState> {
           // getIdToken() usa cache se estiver fresco — getIdToken(true)
           // força refresh na rede e pendura o state se a rede oscilar.
           final token = await user.getIdToken().timeout(
-                    const Duration(seconds: 20),
+                    const Duration(seconds: 8),
                     onTimeout: () => throw Exception('getIdToken timeout'),
                   ) ??
               '';
           await _api.storeTokens(token, ''); // refresh handled by Firebase
           state = state.copyWith(user: user, idToken: token, isLoading: false);
         } catch (e) {
-          // Token falhou: zera o loading e volta pro login com erro claro
-          // (não deixa o botão pendurado em loading eterno).
-          state = state.copyWith(
-            isLoading: false,
-            error:
-                'Falha de rede ao validar a sessão. Verifique o Wi-Fi e tente novamente.',
-          );
-          await _auth.signOut();
+          if (sessionEnded(e)) {
+            state =
+                const AuthState(error: 'Sua sessão expirou. Entre novamente.');
+            await _auth.signOut();
+          } else {
+            // Rede oscilando ao abrir (token venceu): segue logado. A API
+            // renova o token no próximo 401 (ver api_client.dart).
+            state = state.copyWith(user: user, idToken: '', isLoading: false);
+          }
         }
       } else {
         await _api.clearTokens();
@@ -134,6 +142,7 @@ class AuthController extends StateNotifier<AuthState> {
         return;
       }
       await _auth.currentUser?.delete();
+      await SavedCredentials.clear();
       state = const AuthState();
     } on FirebaseAuthException catch (e) {
       // requires-recent-login: pede login de novo e retry (fluxo do app
@@ -164,6 +173,8 @@ class AuthController extends StateNotifier<AuthState> {
       );
       await _auth.signInWithCredential(credential);
     } catch (e) {
+      // a causa fica só no log; o usuário vê a mensagem em português
+      debugPrint('[login] Google falhou: $e');
       state = state.copyWith(
           isLoading: false,
           error: 'Falha no login com Google. Tente novamente.');

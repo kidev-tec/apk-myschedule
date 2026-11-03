@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'push_init_service.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -377,6 +378,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       ),
     );
     if (confirm == true) {
+      // antes de sair: a API só desvincula com a sessão ativa
+      await PushInitService().unregisterCurrentToken();
       await ref.read(authControllerProvider.notifier).signOut();
       if (mounted) context.go('/login');
     }
