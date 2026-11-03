@@ -1,6 +1,10 @@
 // B6: testes widget das visões da agenda (dia/semana/mês).
 // DioAdapter mocka a API; UpdateService é noop via onCheckUpdate.
 
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -18,6 +22,55 @@ import 'package:minha_agenda/core/update/update_service.dart';
 import 'package:minha_agenda/features/agenda/agenda_page.dart';
 import 'package:minha_agenda/features/agenda/block_time_page.dart';
 import 'package:minha_agenda/features/agenda/booking_wizard.dart' as booking;
+
+/// Backend com resposta controlada: cada GET /appointments fica pendente até
+/// o teste liberar, na ordem que ele quiser.
+class _SlowBackend implements HttpClientAdapter {
+  final pending = <({String from, Completer<ResponseBody> done})>[];
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  Future<ResponseBody> fetch(
+      RequestOptions o, Stream<Uint8List>? body, Future<void>? cancel) async {
+    if (!o.path.endsWith('/appointments')) {
+      return ResponseBody.fromString('{"unread":0}', 200, headers: {
+        'content-type': ['application/json'],
+      });
+    }
+    final done = Completer<ResponseBody>();
+    pending.add((from: o.queryParameters['from'] as String, done: done));
+    return done.future;
+  }
+
+  void release(int i, String clientName) {
+    final start =
+        DateTime.parse(pending[i].from).add(const Duration(hours: 12));
+    pending[i].done.complete(ResponseBody.fromString(
+            jsonEncode({
+              'appointments': [
+                {
+                  'id': 'x$i',
+                  'client_name': clientName,
+                  'client_phone': '5514999990001',
+                  'service_name': 'Corte',
+                  'starts_at': start.toUtc().toIso8601String(),
+                  'ends_at': start
+                      .add(const Duration(minutes: 30))
+                      .toUtc()
+                      .toIso8601String(),
+                  'status': 'confirmed',
+                  'source': 'app',
+                },
+              ]
+            }),
+            200,
+            headers: {
+              'content-type': ['application/json'],
+            }));
+  }
+}
 
 Widget _wrap(ApiClient api,
     {booking.Appointment? rescheduleResult,
@@ -1124,6 +1177,82 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Nada agendado neste mês'), findsNothing);
+  });
+
+  testWidgets('resposta atrasada de outro dia não sobrescreve a agenda',
+      (tester) async {
+    final slow = _SlowBackend();
+    // o interceptor é assíncrono: espera a requisição chegar ao backend
+    Future<void> untilPending(int n) async {
+      for (var i = 0; i < 50 && slow.pending.length < n; i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      expect(slow.pending, hasLength(n));
+    }
+
+    await tester.pumpWidget(_wrap(ApiClient(adapter: slow)));
+    await untilPending(1);
+    slow.release(0, 'Inicial');
+    await tester.pumpAndSettle();
+
+    // novo agendamento de outro dia: uma carga do dia atual e outra do dia dele
+    PushEvents.instance.handleOpened({
+      'type': 'new_booking',
+      'starts_at':
+          DateTime.now().add(const Duration(days: 3)).toUtc().toIso8601String(),
+    });
+    await untilPending(3);
+
+    // a do dia certo termina primeiro; a antiga chega depois e é ignorada
+    slow.release(2, 'Dia certo');
+    await tester.pumpAndSettle();
+    expect(find.text('Dia certo'), findsOneWidget);
+    slow.release(1, 'Dia antigo');
+    await tester.pumpAndSettle();
+    expect(find.text('Dia certo'), findsOneWidget);
+    expect(find.text('Dia antigo'), findsNothing);
+  });
+
+  testWidgets('novo push durante a carga: abre o agendamento depois dela',
+      (tester) async {
+    final slow = _SlowBackend();
+    Future<void> untilPending(int n) async {
+      for (var i = 0; i < 50 && slow.pending.length < n; i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      expect(slow.pending, hasLength(n));
+    }
+
+    await tester.pumpWidget(_wrap(ApiClient(adapter: slow)));
+    await untilPending(1);
+    slow.release(0, 'Inicial');
+    await tester.pumpAndSettle();
+
+    // tocou na notificação (cargas 1 e 2) e chegou outro push (carga 3)
+    PushEvents.instance.handleOpened({
+      'type': 'new_booking',
+      'starts_at':
+          DateTime.now().add(const Duration(days: 3)).toUtc().toIso8601String(),
+      'appointment_id': 'x3',
+    });
+    await untilPending(3);
+    PushEvents.instance.handle({'type': 'new_booking'});
+    await untilPending(4);
+
+    // a carga substituída termina: ainda não pode concluir nada
+    slow.release(1, 'Velha');
+    slow.release(2, 'Substituída');
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(
+        find.text('Esse agendamento não está mais na agenda.'), findsNothing);
+    expect(find.byType(BottomSheet), findsNothing);
+
+    // a mais recente traz o agendamento: abre os detalhes
+    slow.release(3, 'Dia certo');
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(
+        find.text('Esse agendamento não está mais na agenda.'), findsNothing);
   });
 
   group('toque na notificação do sistema', () {

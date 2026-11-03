@@ -120,9 +120,18 @@ void main() {
           isTrue);
       expect(find.byKey(const Key('toggle-password')), findsNothing);
 
-      // editou a senha: o olho volta, sempre mostrando o campo oculto
+      // editar não libera o olho: a senha salva ainda poderia estar no campo
       await tester.enterText(
-          find.widgetWithText(TextField, 'Senha'), 'outra1234');
+          find.widgetWithText(TextField, 'Senha'), 'segredo1234');
+      await tester.pump();
+      expect(find.byKey(const Key('toggle-password')), findsNothing);
+
+      // só depois de apagar tudo o olho volta, com o campo oculto
+      await tester.enterText(find.widgetWithText(TextField, 'Senha'), '');
+      await tester.pump();
+      expect(find.byKey(const Key('toggle-password')), findsOneWidget);
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Senha'), 'nova12345');
       await tester.pump();
       expect(find.byKey(const Key('toggle-password')), findsOneWidget);
     });
@@ -160,6 +169,21 @@ void main() {
       expect(await SavedCredentials.load(), isNull);
       expect(find.text('velha12345'), findsNothing);
       expect(find.text('a@b.com'), findsOneWidget);
+    });
+
+    testWidgets('senha editada e recusada: mantém a salva', (tester) async {
+      await SavedCredentials.save('a@b.com', 'segredo123');
+      final c = _FakeAuthController(const AuthState(),
+          signInError: FirebaseAuthException(code: 'invalid-credential'));
+      await tester.pumpWidget(_wrap(controller: c));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Senha'), 'digitei-errado');
+      await tester.ensureVisible(find.text('Entrar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Entrar'));
+      await tester.pumpAndSettle();
+      expect((await SavedCredentials.load())?.password, 'segredo123');
     });
 
     testWidgets('falha de rede não apaga a senha salva', (tester) async {

@@ -164,7 +164,24 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     }
   }
 
-  Future<void> _loadAppointments() async {
+  /// Só a carga mais recente vale: uma resposta atrasada de outra janela não
+  /// pode sobrescrever o dia que está na tela.
+  int _loadSeq = 0;
+  Future<void> _latestLoad = Future.value();
+
+  Future<void> _loadAppointments() => _latestLoad = _fetchAppointments();
+
+  /// Espera a carga mais recente, mesmo que outra comece durante a espera.
+  Future<void> _settleLoads() async {
+    Future<void> seen;
+    do {
+      seen = _latestLoad;
+      await seen;
+    } while (!identical(seen, _latestLoad));
+  }
+
+  Future<void> _fetchAppointments() async {
+    final seq = ++_loadSeq;
     setState(() => _loading = true);
     try {
       final api = ref.read(agendaApiProvider);
@@ -180,6 +197,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         'from': windowStart.toUtc().toIso8601String(),
         'to': end.toUtc().toIso8601String(),
       });
+      if (seq != _loadSeq) return;
       final list = resp.data is List
           ? resp.data as List
           : (resp.data as Map<String, dynamic>)['appointments'] as List? ?? [];
@@ -193,6 +211,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         // cache é best-effort
       }
     } catch (e) {
+      if (seq != _loadSeq) return;
       debugPrint('[agenda] falha ao carregar (tentando cache offline): $e');
       // Offline-first: sem rede, serve a última janela cacheada desse dia.
       try {
@@ -205,7 +224,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         _offlineSync = null;
       }
     }
-    if (mounted) setState(() => _loading = false);
+    if (mounted && seq == _loadSeq) setState(() => _loading = false);
   }
 
   /// Início da janela visível: dia focado, domingo da semana ou dia 1 do mês.
@@ -269,7 +288,9 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
 
   /// Vai para o dia do agendamento e abre os detalhes dele.
   Future<void> _openTarget(PushTarget target) async {
-    await _openDay(target.day!);
+    _openDay(target.day!);
+    // chegou outro push no meio? A lista só vale depois da carga mais recente.
+    await _settleLoads();
     final id = target.appointmentId;
     if (id == null || !mounted) return;
     final found = _appointments.where((a) => a.id == id);

@@ -26,7 +26,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   bool _remember = false;
 
   /// A senha no campo veio do aparelho: sem o olho, para ninguém ler a senha
-  /// salva num aparelho deslogado. Volta ao normal quando é editada.
+  /// salva num aparelho deslogado. Editar não libera (ela ainda estaria no
+  /// campo); o olho só volta depois de apagar tudo.
   bool _passwordFromSaved = false;
 
   @override
@@ -51,7 +52,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   String? _savedPassword;
 
   void _onPasswordChanged() {
-    if (_passwordFromSaved && _passwordController.text != _savedPassword) {
+    if (_passwordFromSaved && _passwordController.text.isEmpty) {
       setState(() {
         _passwordFromSaved = false;
         _obscurePassword = true;
@@ -125,8 +126,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       }
     } on FirebaseAuthException catch (e) {
       // erro aparece via provider
-      if (_passwordFromSaved &&
-          mounted &&
+      // só a senha salva, sem edição: digitar errado não apaga a salva
+      if (mounted &&
+          password == _savedPassword &&
           const {'wrong-password', 'invalid-credential', 'user-not-found'}
               .contains(e.code)) {
         _forgetRejectedPassword();
