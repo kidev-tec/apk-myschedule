@@ -89,6 +89,9 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     super.initState();
     // Cliente agendou pelo link (push) → recarrega a agenda aberta.
     PushEvents.instance.agendaChanged.addListener(_onPushAgendaChanged);
+    // Tocou na notificação do sistema (também se foi o toque que abriu o app).
+    PushEvents.instance.opened.addListener(_onPushOpened);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onPushOpened());
     _checkUpdate();
     _loadAppointments();
     // Offline fase 2: voltou a rede → replay da fila de escritas.
@@ -103,6 +106,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   void dispose() {
     _connRemove?.call();
     PushEvents.instance.agendaChanged.removeListener(_onPushAgendaChanged);
+    PushEvents.instance.opened.removeListener(_onPushOpened);
     super.dispose();
   }
 
@@ -137,7 +141,47 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     if (mounted) _loadAppointments();
   }
 
-  Future<void> _loadAppointments() async {
+  /// Abre a tela da notificação tocada e a marca como lida (como na central).
+  void _onPushOpened() {
+    if (!mounted) return;
+    final data = PushEvents.instance.takeOpened();
+    if (data == null) return;
+    final id = data['notification_id'];
+    if (id is String) {
+      ref.read(agendaApiProvider).dio.post('/notifications/$id/read').then((_) {
+        PushEvents.instance.notificationsChanged.value++;
+      }, onError: (Object _) {});
+    }
+    final target = PushTarget.from(data);
+    if (target == null) return;
+    final router = GoRouter.of(context);
+    // pode estar em outra tela: volta para a agenda antes
+    router.go('/agenda');
+    if (target.waitlistDate != null) {
+      router.push('/waitlist?date=${target.waitlistDate}');
+    } else {
+      _openTarget(target);
+    }
+  }
+
+  /// Só a carga mais recente vale: uma resposta atrasada de outra janela não
+  /// pode sobrescrever o dia que está na tela.
+  int _loadSeq = 0;
+  Future<void> _latestLoad = Future.value();
+
+  Future<void> _loadAppointments() => _latestLoad = _fetchAppointments();
+
+  /// Espera a carga mais recente, mesmo que outra comece durante a espera.
+  Future<void> _settleLoads() async {
+    Future<void> seen;
+    do {
+      seen = _latestLoad;
+      await seen;
+    } while (!identical(seen, _latestLoad));
+  }
+
+  Future<void> _fetchAppointments() async {
+    final seq = ++_loadSeq;
     setState(() => _loading = true);
     try {
       final api = ref.read(agendaApiProvider);
@@ -153,6 +197,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         'from': windowStart.toUtc().toIso8601String(),
         'to': end.toUtc().toIso8601String(),
       });
+      if (seq != _loadSeq) return;
       final list = resp.data is List
           ? resp.data as List
           : (resp.data as Map<String, dynamic>)['appointments'] as List? ?? [];
@@ -166,6 +211,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         // cache é best-effort
       }
     } catch (e) {
+      if (seq != _loadSeq) return;
       debugPrint('[agenda] falha ao carregar (tentando cache offline): $e');
       // Offline-first: sem rede, serve a última janela cacheada desse dia.
       try {
@@ -178,7 +224,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         _offlineSync = null;
       }
     }
-    if (mounted) setState(() => _loading = false);
+    if (mounted && seq == _loadSeq) setState(() => _loading = false);
   }
 
   /// Início da janela visível: dia focado, domingo da semana ou dia 1 do mês.
@@ -234,18 +280,34 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   }
 
   /// Mês: tocar num dia abre a visão dia daquela data.
-  /// Abre as notificações; tocar numa de agendamento volta com o dia dele.
+  /// Abre as notificações; tocar numa de agendamento volta com ele.
   Future<void> _openNotifications() async {
-    final day = await context.push<DateTime>('/notifications');
-    if (day != null && mounted) _openDay(day);
+    final target = await context.push<PushTarget>('/notifications');
+    if (target != null && mounted) await _openTarget(target);
   }
 
-  void _openDay(DateTime day) {
+  /// Vai para o dia do agendamento e abre os detalhes dele.
+  Future<void> _openTarget(PushTarget target) async {
+    _openDay(target.day!);
+    // chegou outro push no meio? A lista só vale depois da carga mais recente.
+    await _settleLoads();
+    final id = target.appointmentId;
+    if (id == null || !mounted) return;
+    final found = _appointments.where((a) => a.id == id);
+    if (found.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Esse agendamento não está mais na agenda.')));
+      return;
+    }
+    await _showDetails(found.first);
+  }
+
+  Future<void> _openDay(DateTime day) {
     setState(() {
       _view = _AgendaView.dia;
       _focusedDay = day;
     });
-    _loadAppointments();
+    return _loadAppointments();
   }
 
   @override
@@ -1949,7 +2011,8 @@ class _AppointmentDetailsSheetState extends State<_AppointmentDetailsSheet> {
             row(Icons.event, booking_logic.formatWhen(a.startsAt)),
             row(Icons.miscellaneous_services, a.serviceName),
             row(Icons.info_outline, widget.statusLabel),
-            if (a.clientPhone.isNotEmpty) row(Icons.phone, a.clientPhone),
+            if (a.clientPhone.isNotEmpty)
+              row(Icons.phone, phoneForDisplay(a.clientPhone)),
             if (widget.loadClientNotes != null) ...[
               Align(
                 alignment: Alignment.centerLeft,

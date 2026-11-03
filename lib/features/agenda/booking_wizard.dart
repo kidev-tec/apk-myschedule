@@ -829,7 +829,7 @@ class _BookingWizardPageState extends ConsumerState<BookingWizardPage> {
                                 style: const TextStyle(color: Colors.white)),
                           ),
                           title: Text(c.name),
-                          subtitle: Text(c.phoneE164),
+                          subtitle: Text(phoneForDisplay(c.phoneE164)),
                           trailing: selected
                               ? Icon(Icons.check_circle,
                                   color: AppColors.primaryOf(context))

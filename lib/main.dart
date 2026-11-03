@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/auth/auth_controller.dart';
+import 'core/auth/auth_gate.dart';
 import 'features/auth/login_page.dart';
+import 'features/auth/splash_page.dart';
 import 'core/api/api_client.dart';
 import 'core/storage/local_cache.dart';
 import 'core/segment/segment_preset.dart';
@@ -44,24 +47,24 @@ final routerProvider = Provider<GoRouter>((ref) {
   bool segmentLoaded = false;
 
   return GoRouter(
-    initialLocation: '/login',
+    // Quem já tem sessão nunca passa pelo login: espera na abertura.
+    initialLocation: authState.isResolving || authState.isAuthenticated
+        ? splashRoute
+        : '/login',
     redirect: (context, state) async {
       final isAuthenticated = authState.isAuthenticated;
-      final isAuthRoute = state.matchedLocation == '/login';
-      final isOnboardingRoute = state.matchedLocation == '/onboarding';
-
-      // Se não autenticado e não está em rota de auth -> login
-      if (!isAuthenticated && !isAuthRoute && !isOnboardingRoute) {
-        return '/login';
-      }
-
-      // Se autenticado e está em login -> onboarding (1ª vez) ou agenda
-      if (isAuthenticated && isAuthRoute) {
+      final target = authGate(
+        isResolving: authState.isResolving,
+        isAuthenticated: isAuthenticated,
+        location: state.matchedLocation,
+      );
+      if (target == resolveOnboarding) {
         // Servidor é a fonte da verdade (feedback Ezequias 22/09);
         // fallback offline usa a flag local. Ver onboarding_resolver.dart.
         final done = await resolveOnboardingComplete(ApiClient());
         return done ? '/agenda' : '/onboarding';
       }
+      if (target != null) return target;
 
       // carrega o segmento do negócio uma vez por sessão (tema global)
       if (isAuthenticated && !segmentLoaded) {
@@ -96,6 +99,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           final extra = state.extra as Map<String, dynamic>?;
           return TermsPage(isPrivacy: extra?['isPrivacy'] == true);
         },
+      ),
+      GoRoute(
+        path: splashRoute,
+        builder: (_, __) => const SplashPage(),
       ),
       GoRoute(
         path: '/login',
@@ -231,8 +238,13 @@ void main() async {
     }
   }
 
-  // Ensure email/password auth is enabled (configured in Firebase Console)
-  // FirebaseAuth.instance.setLanguageCode('pt-BR');
+  // E-mails do Firebase (troca de senha, verificação) e a página do link em
+  // português. Best-effort: falha aqui não impede o app de abrir.
+  try {
+    await FirebaseAuth.instance.setLanguageCode('pt-BR');
+  } catch (e) {
+    debugPrint('[firebase] idioma não definido: $e');
+  }
 
   // Push (FCM): handler de background + registro do token na API.
   // Best-effort — falha não impede o app de abrir.
@@ -245,6 +257,7 @@ void main() async {
     },
     // novo agendamento pelo link → agenda aberta recarrega
     onData: PushEvents.instance.handle,
+    onOpened: PushEvents.instance.handleOpened,
   );
 
   // Offline-first: inicializa o cache local (best-effort — falha de storage
@@ -264,6 +277,13 @@ class MinhaAgendaApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+
+    // Entrou na conta (login ou sessão salva): vincula o aparelho, senão o
+    // primeiro login fica sem notificação até reabrir o app.
+    ref.listen<bool>(authControllerProvider.select((a) => a.isAuthenticated),
+        (was, isNow) {
+      if (isNow && was != true) PushInitService().registerCurrentToken();
+    });
 
     return MaterialApp.router(
       title: 'AGENVA',

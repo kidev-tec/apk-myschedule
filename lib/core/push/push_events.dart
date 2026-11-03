@@ -14,11 +14,50 @@ class PushEvents {
   /// Incrementa quando chega notificação nova (o sino recarrega a contagem).
   final notificationsChanged = ValueNotifier<int>(0);
 
+  /// Notificação tocada, à espera da agenda (que pode ainda nem estar aberta
+  /// se o toque abriu o app). Quem trata consome com [takeOpened].
+  final opened = ValueNotifier<Map<String, dynamic>?>(null);
+
+  /// Tocou na notificação do sistema.
+  void handleOpened(Map<String, dynamic> data) {
+    handle(data);
+    opened.value = data;
+  }
+
+  /// Devolve a notificação tocada e limpa (trata uma vez só).
+  Map<String, dynamic>? takeOpened() {
+    final data = opened.value;
+    opened.value = null;
+    return data;
+  }
+
   /// Trata os dados (`data`) do push.
   void handle(Map<String, dynamic> data) {
     if (data['type'] == 'new_booking') agendaChanged.value++;
     // todo push da central (notify) traz o id da notificação
     if (data['notification_id'] != null) notificationsChanged.value++;
+  }
+}
+
+/// Para onde vai o toque numa notificação: lista de espera ([waitlistDate],
+/// `YYYY-MM-DD`) ou o agendamento ([day], e [appointmentId] para abrir os
+/// detalhes dele). Nulo = só abre o app.
+class PushTarget {
+  const PushTarget({this.waitlistDate, this.day, this.appointmentId});
+  final String? waitlistDate;
+  final DateTime? day;
+  final String? appointmentId;
+
+  static PushTarget? from(Map<String, dynamic> data) {
+    final date = data['date'];
+    if (data['type'] == 'waitlist' && date is String) {
+      return PushTarget(waitlistDate: date);
+    }
+    final starts = data['starts_at'];
+    final day = starts is String ? DateTime.tryParse(starts)?.toLocal() : null;
+    if (day == null) return null;
+    final id = data['appointment_id'];
+    return PushTarget(day: day, appointmentId: id is String ? id : null);
   }
 }
 

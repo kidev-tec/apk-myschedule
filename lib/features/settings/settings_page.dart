@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'push_init_service.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -20,7 +21,8 @@ import '../agenda/booking_logic.dart' show bufferOptionsMin, bufferLabel;
 
 class SettingsPage extends ConsumerStatefulWidget {
   final ApiClient? api; // DI pra testes (mesma padrão do client_form)
-  const SettingsPage({super.key, this.api});
+  final PushInitService? push; // DI pra testes
+  const SettingsPage({super.key, this.api, this.push});
 
   @override
   ConsumerState<SettingsPage> createState() => _SettingsPageState();
@@ -376,10 +378,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ],
       ),
     );
-    if (confirm == true) {
-      await ref.read(authControllerProvider.notifier).signOut();
-      if (mounted) context.go('/login');
-    }
+    if (confirm != true || !mounted) return;
+    // Pega antes do await: a saída termina mesmo se a tela fechar durante a
+    // desvinculação (ref e context não valem depois do dispose).
+    final auth = ref.read(authControllerProvider.notifier);
+    final router = GoRouter.of(context);
+    // antes de sair: a API só desvincula com a sessão ativa
+    await (widget.push ?? PushInitService()).unregisterCurrentToken();
+    await auth.signOut();
+    router.go('/login');
   }
 
   /// Exclusão de conta com confirmação dupla: 1º diálogo explica e pede
@@ -798,7 +805,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 const ListTile(
                   leading: Icon(Icons.info_outline),
                   title: Text('Versão'),
-                  subtitle: Text('1.6.0'),
+                  subtitle: Text('1.7.0'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.privacy_tip_outlined),

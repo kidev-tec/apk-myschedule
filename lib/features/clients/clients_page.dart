@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
+import '../../core/utils/phone_br.dart';
 import '../../core/api/api_error.dart';
 import '../../theme/app_theme.dart';
 import 'public_link_badge.dart';
@@ -267,7 +268,7 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
                           const PublicLinkBadge(),
                         ],
                       ]),
-                      subtitle: Text(c.phoneE164),
+                      subtitle: Text(phoneForDisplay(c.phoneE164)),
                       trailing: c.archived
                           ? TextButton.icon(
                               key: Key('restore-${c.id}'),

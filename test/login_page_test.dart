@@ -1,9 +1,13 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_core_platform_interface/firebase_core_platform_interface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:minha_agenda/core/auth/auth_controller.dart';
+import 'package:minha_agenda/core/auth/saved_credentials.dart';
 import 'package:minha_agenda/features/auth/login_page.dart';
 
 /// Widget tests da LoginPage.
@@ -12,14 +16,31 @@ import 'package:minha_agenda/features/auth/login_page.dart';
 /// pra widget test a gente substitui o provider por um controller fake
 /// com o mesmo estado (não testamos o Firebase aqui, testamos a UI).
 class _FakeAuthController extends AuthController {
-  _FakeAuthController(AuthState initial) : super.forTest(initial: initial);
+  _FakeAuthController(AuthState initial, {this.signInError})
+      : super.forTest(initial: initial);
+
+  final Object? signInError;
+  final signIns = <String>[];
+
+  @override
+  Future<void> signInWithGoogle() async {
+    state =
+        state.copyWith(error: 'Falha no login com Google. Tente novamente.');
+    throw Exception('ApiException: 10');
+  }
+
+  @override
+  Future<void> signInWithEmail(String email, String password) async {
+    signIns.add('$email|$password');
+    if (signInError != null) throw signInError!;
+  }
 }
 
-Widget _wrap({AuthState? authState}) {
+Widget _wrap({AuthState? authState, _FakeAuthController? controller}) {
   return ProviderScope(
     overrides: [
-      authControllerProvider.overrideWith(
-          (ref) => _FakeAuthController(authState ?? const AuthState())),
+      authControllerProvider.overrideWith((ref) =>
+          controller ?? _FakeAuthController(authState ?? const AuthState())),
     ],
     child: const MaterialApp(home: LoginPage()),
   );
@@ -32,6 +53,161 @@ void main() {
   setUpAll(() async {
     FirebasePlatform.instance = _FakeFirebasePlatform();
     await Firebase.initializeApp();
+  });
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+
+  testWidgets('falha no Google: mostra a mensagem, sem erro sem tratamento',
+      (tester) async {
+    // a tela usa GoRouter.of no login com Google
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        authControllerProvider
+            .overrideWith((ref) => _FakeAuthController(const AuthState())),
+      ],
+      child: MaterialApp.router(
+        routerConfig: GoRouter(routes: [
+          GoRoute(path: '/', builder: (_, __) => const LoginPage()),
+        ]),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Continuar com Google'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continuar com Google'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Falha no login com Google. Tente novamente.'),
+        findsOneWidget);
+  });
+
+  group('salvar senha', () {
+    Future<void> login(WidgetTester tester, {bool tick = false}) async {
+      await tester.enterText(
+          find.widgetWithText(TextField, 'E-mail'), 'a@b.com');
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Senha'), 'segredo123');
+      if (tick) {
+        await tester.ensureVisible(find.byKey(const Key('remember-password')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('remember-password')));
+        await tester.pump();
+      }
+      await tester.ensureVisible(find.text('Entrar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Entrar'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('marcado: salva; reabrir preenche, sem o olho', (tester) async {
+      await tester.pumpWidget(_wrap());
+      await tester.pumpAndSettle();
+      expect(find.text('Salvar senha neste aparelho'), findsOneWidget);
+      await login(tester, tick: true);
+      final saved = await SavedCredentials.load();
+      expect(saved?.email, 'a@b.com');
+      expect(saved?.password, 'segredo123');
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(_wrap());
+      await tester.pumpAndSettle();
+      expect(find.text('a@b.com'), findsOneWidget);
+      expect(find.text('segredo123'), findsOneWidget);
+      expect(
+          tester
+              .widget<CheckboxListTile>(
+                  find.byKey(const Key('remember-password')))
+              .value,
+          isTrue);
+      expect(find.byKey(const Key('toggle-password')), findsNothing);
+
+      // editar não libera o olho: a senha salva ainda poderia estar no campo
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Senha'), 'segredo1234');
+      await tester.pump();
+      expect(find.byKey(const Key('toggle-password')), findsNothing);
+
+      // só depois de apagar tudo o olho volta, com o campo oculto
+      await tester.enterText(find.widgetWithText(TextField, 'Senha'), '');
+      await tester.pump();
+      expect(find.byKey(const Key('toggle-password')), findsOneWidget);
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Senha'), 'nova12345');
+      await tester.pump();
+      expect(find.byKey(const Key('toggle-password')), findsOneWidget);
+    });
+
+    testWidgets('sem marcar não salva; e entrar desmarcado apaga',
+        (tester) async {
+      await tester.pumpWidget(_wrap());
+      await tester.pumpAndSettle();
+      await login(tester);
+      expect(await SavedCredentials.load(), isNull);
+    });
+
+    testWidgets('desmarcar apaga na hora', (tester) async {
+      await SavedCredentials.save('a@b.com', 'segredo123');
+      await tester.pumpWidget(_wrap());
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('remember-password')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('remember-password')));
+      await tester.pumpAndSettle();
+      expect(await SavedCredentials.load(), isNull);
+    });
+
+    testWidgets('senha salva recusada: apaga e limpa o campo', (tester) async {
+      await SavedCredentials.save('a@b.com', 'velha12345');
+      final c = _FakeAuthController(const AuthState(),
+          signInError: FirebaseAuthException(code: 'invalid-credential'));
+      await tester.pumpWidget(_wrap(controller: c));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Entrar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Entrar'));
+      await tester.pumpAndSettle();
+      expect(c.signIns, ['a@b.com|velha12345']);
+      expect(await SavedCredentials.load(), isNull);
+      expect(find.text('velha12345'), findsNothing);
+      expect(find.text('a@b.com'), findsOneWidget);
+    });
+
+    testWidgets('senha editada e recusada: mantém a salva', (tester) async {
+      await SavedCredentials.save('a@b.com', 'segredo123');
+      final c = _FakeAuthController(const AuthState(),
+          signInError: FirebaseAuthException(code: 'invalid-credential'));
+      await tester.pumpWidget(_wrap(controller: c));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Senha'), 'digitei-errado');
+      await tester.ensureVisible(find.text('Entrar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Entrar'));
+      await tester.pumpAndSettle();
+      expect((await SavedCredentials.load())?.password, 'segredo123');
+    });
+
+    testWidgets('falha de rede não apaga a senha salva', (tester) async {
+      await SavedCredentials.save('a@b.com', 'segredo123');
+      final c = _FakeAuthController(const AuthState(),
+          signInError: FirebaseAuthException(code: 'network-request-failed'));
+      await tester.pumpWidget(_wrap(controller: c));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Entrar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Entrar'));
+      await tester.pumpAndSettle();
+      expect((await SavedCredentials.load())?.password, 'segredo123');
+    });
+
+    testWidgets('criar conta não mostra a opção', (tester) async {
+      await tester.pumpWidget(_wrap());
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Criar conta').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Criar conta').last);
+      await tester.pump();
+      expect(find.byKey(const Key('remember-password')), findsNothing);
+    });
   });
 
   testWidgets('renderiza título, campos e botões', (tester) async {
