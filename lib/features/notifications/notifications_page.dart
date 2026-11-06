@@ -46,6 +46,11 @@ class AppNotification {
       'client_canceled' => (Icons.cancel, Colors.red.shade700),
       'reminder' => (Icons.alarm, Colors.blue.shade700),
       'waitlist' => (Icons.hourglass_top, Colors.purple.shade600),
+      'link_request' => (Icons.person_add_alt_1, Colors.blue.shade700),
+      'link_accepted' => (Icons.handshake, Colors.green.shade700),
+      'link_rejected' => (Icons.person_off, Colors.red.shade700),
+      'link_ended' => (Icons.link_off, Colors.blueGrey),
+      'aggregator_booking' => (Icons.groups, Colors.green.shade700),
       _ => (Icons.notifications, Colors.blueGrey),
     };
 
@@ -60,8 +65,15 @@ class NotificationsPage extends StatefulWidget {
   /// "Vaga abriu": abre a lista de espera no dia (injetável nos testes).
   final void Function(String date)? onOpenWaitlist;
 
+  /// Aviso de vínculo: abre a tela de vínculos (injetável nos testes).
+  final VoidCallback? onOpenLinks;
+
   const NotificationsPage(
-      {super.key, this.api, this.clock = DateTime.now, this.onOpenWaitlist});
+      {super.key,
+      this.api,
+      this.clock = DateTime.now,
+      this.onOpenWaitlist,
+      this.onOpenLinks});
 
   @override
   State<NotificationsPage> createState() => _NotificationsPageState();
@@ -132,8 +144,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
           (d) => context.push('/waitlist?date=$d'))(wlDate);
       return;
     }
-    final target = PushTarget.from(n.data);
-    if (target != null && mounted) Navigator.of(context).pop(target);
+    // o tipo vem fora do `data` na central (no push ele vem junto)
+    final target = PushTarget.from({...n.data, 'type': n.type});
+    if (target == null || !mounted) return;
+    if (target.openLinks) {
+      (widget.onOpenLinks ?? () => context.push('/links'))();
+      return;
+    }
+    Navigator.of(context).pop(target);
   }
 
   /// Segurar a notificação: alterna entre lida e não lida, sem sair da lista.
