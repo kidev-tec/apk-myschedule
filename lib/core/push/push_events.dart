@@ -39,16 +39,35 @@ class PushEvents {
   }
 }
 
+/// Avisos de vínculo estabelecimento ↔ profissional (módulo agregador).
+const linkNotificationTypes = {
+  'link_request',
+  'link_accepted',
+  'link_rejected',
+  'link_ended',
+};
+
 /// Para onde vai o toque numa notificação: lista de espera ([waitlistDate],
-/// `YYYY-MM-DD`) ou o agendamento ([day], e [appointmentId] para abrir os
-/// detalhes dele). Nulo = só abre o app.
+/// `YYYY-MM-DD`), tela de vínculos ([openLinks]) ou o agendamento ([day], e
+/// [appointmentId] para abrir os detalhes dele). Nulo = só abre o app.
 class PushTarget {
-  const PushTarget({this.waitlistDate, this.day, this.appointmentId});
+  const PushTarget(
+      {this.waitlistDate,
+      this.day,
+      this.appointmentId,
+      this.openLinks = false});
   final String? waitlistDate;
   final DateTime? day;
   final String? appointmentId;
+  final bool openLinks;
 
   static PushTarget? from(Map<String, dynamic> data) {
+    if (linkNotificationTypes.contains(data['type'])) {
+      return const PushTarget(openLinks: true);
+    }
+    // agendamento pelo link do estabelecimento: fica na agenda do
+    // profissional, não na de quem recebe este aviso — só abre o app
+    if (data['type'] == 'aggregator_booking') return null;
     final date = data['date'];
     if (data['type'] == 'waitlist' && date is String) {
       return PushTarget(waitlistDate: date);

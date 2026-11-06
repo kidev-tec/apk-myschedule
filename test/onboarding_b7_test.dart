@@ -8,6 +8,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:minha_agenda/core/segment/segment_preset.dart';
 import 'package:minha_agenda/features/onboarding/onboarding_page.dart';
 
 Widget _wrap() {
@@ -37,8 +38,11 @@ void main() {
   Future<void> goToStep2(WidgetTester tester) async {
     await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
-    // passo 0: escolhe o primeiro segmento (_SegmentCard = InkWell)
-    await tester.tap(find.byType(InkWell).first);
+    // passo 0: tipo da conta — independente já vem marcado
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
+    // passo 1: escolhe o primeiro segmento
+    await tester.tap(find.text(SegmentPreset.all.first.label));
     await tester.pumpAndSettle();
     // avança pro passo 1
     await tester.tap(find.text('Continuar'));

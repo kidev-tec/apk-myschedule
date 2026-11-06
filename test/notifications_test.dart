@@ -211,6 +211,33 @@ void main() {
     expect(result?.appointmentId, 'a1');
   });
 
+  testWidgets('aviso de vínculo abre a tela de vínculos', (tester) async {
+    final b = _Backend([
+      _n('l1', 'link_request', 'Novo pedido de vínculo',
+          _now.subtract(const Duration(minutes: 5))),
+      _n('l2', 'aggregator_booking', 'Novo agendamento pelo seu link',
+          _now.subtract(const Duration(minutes: 9)),
+          startsAt: DateTime(2026, 11, 2, 9).toUtc().toIso8601String()),
+    ]);
+    var opened = 0;
+    await tester.pumpWidget(_app(NotificationsPage(
+        api: ApiClient(adapter: b),
+        clock: () => _now,
+        onOpenLinks: () => opened++)));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.person_add_alt_1), findsOneWidget);
+    expect(find.byIcon(Icons.groups), findsOneWidget);
+    await tester.tap(find.text('Novo pedido de vínculo'));
+    await tester.pumpAndSettle();
+    expect(opened, 1);
+    expect(b.calls, contains('POST /notifications/l1/read'));
+    // agendamento do estabelecimento: só marca como lida, fica na lista
+    await tester.tap(find.text('Novo agendamento pelo seu link'));
+    await tester.pumpAndSettle();
+    expect(opened, 1);
+    expect(find.text('Notificações'), findsOneWidget);
+  });
+
   testWidgets('segurar alterna lida/não lida e não sai da lista',
       (tester) async {
     final b = _Backend(sample());

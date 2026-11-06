@@ -9,15 +9,23 @@ import '../../core/segment/segment_preset.dart';
 import '../../core/storage/onboarding_store.dart';
 import '../../theme/app_theme.dart';
 
-/// Onboarding em 4 passos (copy leiga):
-/// 0. Teu segmento (define o tema e os serviços sugeridos)
-/// 1. Teu perfil (nome do negócio)
-/// 2. Teu primeiro serviço
-/// 3. Teus horários de atendimento
+/// Onboarding em 5 passos (copy leiga):
+/// 0. Tipo da conta: profissional independente (padrão, como sempre foi)
+///    ou estabelecimento agregador (docs/plano-agregador.md, API 0026)
+/// 1. Teu segmento (define o tema e os serviços sugeridos)
+/// 2. Teu perfil (nome do negócio)
+/// 3. Teu primeiro serviço
+/// 4. Teus horários de atendimento
+///
+/// Estabelecimento termina no passo 2: serviços e horários são de cada
+/// profissional (D4) — se o dono também atende, cadastra depois.
 ///
 /// A conta já foi criada na LoginPage — aqui só configuramos o negócio.
 class OnboardingPage extends ConsumerStatefulWidget {
-  const OnboardingPage({super.key});
+  /// Injetável em teste; padrão = ApiClient real.
+  final ApiClient? api;
+
+  const OnboardingPage({super.key, this.api});
 
   @override
   ConsumerState<OnboardingPage> createState() => _OnboardingPageState();
@@ -28,6 +36,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   int _currentStep = 0;
   bool _finishing = false;
   SegmentPreset _segment = SegmentPresets.beauty;
+  bool _aggregator = false;
   final _businessNameController = TextEditingController();
   final _addrStreetController = TextEditingController();
   final _addrNumberController = TextEditingController();
@@ -58,8 +67,15 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     super.dispose();
   }
 
+  /// Último passo: estabelecimento para no perfil; independente vai até os
+  /// horários.
+  int get _lastStep => _aggregator ? 2 : 4;
+
+  /// A partir de qual passo o botão principal diz "Começar".
+  int get _startStep => _aggregator ? 2 : 3;
+
   void _nextStep() {
-    if (_currentStep < 3) {
+    if (_currentStep < _lastStep) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
@@ -81,7 +97,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   Future<void> _finishOnboarding() async {
     setState(() => _finishing = true);
     try {
-      final api = ApiClient();
+      final api = widget.api ?? ApiClient();
 
       // 0. Garante provisionamento (user+business no Postgres) — ver
       // onboarding_provisioning.dart. Testado em onboarding_provisioning_test.dart.
@@ -100,6 +116,16 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         'business_type': _segment.id,
         if (address.isNotEmpty) 'address': address,
       });
+
+      if (_aggregator) {
+        // Estabelecimento: gera o código E- (idempotente). Serviços e
+        // horários ficam opcionais (D4).
+        await api.dio
+            .put('/me/account-kind', data: {'account_kind': 'aggregator'});
+        await OnboardingStore.markComplete();
+        if (mounted) context.go('/agenda');
+        return;
+      }
 
       // 2. Primeiro serviço
       final price =
@@ -158,6 +184,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   bool _validateCurrentStep() {
     switch (_currentStep) {
       case 0:
+        _nextStep();
+        return true;
+      case 1:
         // Segmento escolhido: pré-preenche o primeiro serviço sugerido
         // (pontos de partida, não prisão — usuário edita à vontade).
         final sug = _segment.suggestedServices;
@@ -170,14 +199,14 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         }
         _nextStep();
         return true;
-      case 1:
+      case 2:
         if (_businessNameController.text.trim().isEmpty) {
           _showError('Qual é o nome do seu espaço?');
           return false;
         }
         _nextStep();
         return true;
-      case 2:
+      case 3:
         if (_serviceNameController.text.trim().isEmpty) {
           _showError('Qual serviço você oferece?');
           return false;
@@ -196,7 +225,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         }
         _nextStep();
         return true;
-      case 3:
+      case 4:
         final hasAny = _workingHours.values.any((r) => r.isNotEmpty);
         if (!hasAny) {
           _showError('Marque pelo menos um dia com horário');
@@ -214,7 +243,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     );
   }
 
-  /// B7: "Pular" no passo 2 — cria o serviço genérico "Atendimento"
+  /// B7: "Pular" no passo do serviço — cria o serviço genérico "Atendimento"
   /// (60 min, R$ 0) e avança. Leigo nunca fica travado sem serviço.
   void _skipService() {
     _serviceNameController.text = 'Atendimento';
@@ -234,11 +263,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               padding: const EdgeInsets.all(24),
               child: Row(
                 children: List.generate(
-                  3,
+                  _lastStep + 1,
                   (i) => Expanded(
                     child: Container(
                       height: 4,
-                      margin: EdgeInsets.only(right: i < 2 ? 8 : 0),
+                      margin: EdgeInsets.only(right: i < _lastStep ? 8 : 0),
                       decoration: BoxDecoration(
                         color: i <= _currentStep
                             ? _segment.primary
@@ -257,6 +286,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                 physics: const NeverScrollableScrollPhysics(),
                 onPageChanged: (i) => setState(() => _currentStep = i),
                 children: [
+                  _buildKindStep(),
                   _buildStep0(),
                   _buildStep1(),
                   _buildStep2(),
@@ -278,7 +308,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                     ),
                     const SizedBox(width: 16),
                   ],
-                  if (_currentStep == 2) ...[
+                  if (_currentStep == 3) ...[
                     // B7: pular cria o serviço genérico — leigo nunca travado
                     Expanded(
                       child: TextButton(
@@ -298,7 +328,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                               child: CircularProgressIndicator(
                                   strokeWidth: 2, color: Colors.white),
                             )
-                          : Text(_currentStep == 2 ? 'Começar' : 'Continuar'),
+                          : Text(_currentStep >= _startStep
+                              ? 'Começar'
+                              : 'Continuar'),
                     ),
                   ),
                 ],
@@ -310,8 +342,49 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     );
   }
 
-  // PASSO 1 — Perfil
-  /// Passo 0: "Qual é o teu negócio?" — grade de segmentos. Define tema,
+  /// Passo 0: tipo da conta. Independente é o padrão (o app de sempre).
+  Widget _buildKindStep() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 8),
+          Text('Como você vai usar o Agenva?',
+              style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 8),
+          Text(
+            'Você pode mudar isso depois em Configurações.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 20),
+          _KindCard(
+            icon: Icons.person_outline,
+            title: 'Atendo meus clientes',
+            subtitle:
+                'Você tem a sua agenda e o seu link para os clientes marcarem horário.',
+            selected: !_aggregator,
+            color: _segment.primary,
+            onTap: () => setState(() => _aggregator = false),
+          ),
+          const SizedBox(height: 12),
+          _KindCard(
+            icon: Icons.groups_outlined,
+            title: 'Tenho um estabelecimento com profissionais',
+            subtitle:
+                'Os profissionais entram com o código do seu estabelecimento e, '
+                'no seu link, o cliente escolhe com quem quer marcar.',
+            selected: _aggregator,
+            color: _segment.primary,
+            onTap: () => setState(() => _aggregator = true),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // PASSO 2 — Perfil
+  /// Passo 1: "Qual é o teu negócio?" — grade de segmentos. Define tema,
   /// serviços sugeridos e copy. (Decisão multi-segmento 09/09/2026.)
   Widget _buildStep0() {
     return SingleChildScrollView(
@@ -360,10 +433,15 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Seu espaço', style: Theme.of(context).textTheme.headlineMedium),
+          Text(_aggregator ? 'Seu estabelecimento' : 'Seu espaço',
+              style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 8),
           Text(
-            'Qual é o nome do seu espaço ou atendimento? Ele aparece na agenda.',
+            _aggregator
+                ? 'Qual é o nome do estabelecimento? Ele aparece no seu link. '
+                    'Os serviços e horários são de cada profissional — se você '
+                    'também atende, cadastre os seus depois em Configurações.'
+                : 'Qual é o nome do seu espaço ou atendimento? Ele aparece na agenda.',
             style: Theme.of(context)
                 .textTheme
                 .bodyMedium
@@ -657,7 +735,75 @@ class _TimeRange {
       '${(endMinute ~/ 60).toString().padLeft(2, '0')}:${(endMinute % 60).toString().padLeft(2, '0')}';
 }
 
-/// Card de segmento na grade do passo 0.
+/// Opção do tipo da conta (passo 0).
+class _KindCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _KindCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: selected ? color.withValues(alpha: 0.10) : null,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? color : Colors.grey.shade300,
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: selected ? color : Colors.grey.shade600),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Text(subtitle,
+                        style: Theme.of(context).textTheme.bodyMedium),
+                  ],
+                ),
+              ),
+              Icon(
+                selected ? Icons.radio_button_checked : Icons.radio_button_off,
+                color: selected ? color : Colors.grey.shade500,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Card de segmento na grade do passo 1.
 class _SegmentCard extends StatelessWidget {
   final SegmentPreset preset;
   final bool selected;

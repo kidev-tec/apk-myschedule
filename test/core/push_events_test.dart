@@ -30,4 +30,29 @@ void main() {
     expect(find.text('Novo agendamento'), findsOneWidget);
     expect(find.text('Ana — Corte em 30/10, 09:00'), findsOneWidget);
   });
+
+  test('avisos de vínculo abrem a tela de vínculos', () {
+    for (final type in linkNotificationTypes) {
+      final t = PushTarget.from({'type': type, 'link_id': 'x'});
+      expect(t?.openLinks, isTrue, reason: type);
+      expect(t?.day, isNull);
+    }
+  });
+
+  test('agendamento pelo link do estabelecimento não abre a agenda do dono',
+      () {
+    expect(
+        PushTarget.from({
+          'type': 'aggregator_booking',
+          'starts_at': '2026-11-10T13:00:00.000Z',
+        }),
+        isNull);
+    // os demais com starts_at continuam abrindo o dia
+    expect(
+        PushTarget.from({
+          'type': 'new_booking',
+          'starts_at': '2026-11-10T13:00:00.000Z',
+        })?.openLinks,
+        isFalse);
+  });
 }
