@@ -15,6 +15,7 @@ import '../../core/api/paywall_flag.dart';
 import '../../core/update/update_service.dart';
 import '../../theme/app_theme.dart';
 import '../clients/public_link_badge.dart';
+import 'via_aggregator_badge.dart';
 import '../notifications/notification_bell.dart';
 import 'block_time_page.dart';
 import 'booking_wizard.dart' as booking show Appointment;
@@ -159,6 +160,8 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
     router.go('/agenda');
     if (target.waitlistDate != null) {
       router.push('/waitlist?date=${target.waitlistDate}');
+    } else if (target.openLinks) {
+      router.push('/links');
     } else {
       _openTarget(target);
     }
@@ -659,7 +662,13 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                 style: a.isBlock
                     ? const TextStyle(fontStyle: FontStyle.italic)
                     : null),
-            // cliente se cadastrou sozinho no agendamento online
+            // veio pelo link de um estabelecimento (módulo agregador)
+            if (a.aggregatorName != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: ViaAggregatorBadge(a.aggregatorName!,
+                    key: Key('via-${a.id}')),
+              ),
             // observações do prestador (privadas)
             if (a.notes != null && a.notes!.isNotEmpty)
               Padding(
@@ -895,11 +904,13 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
       padding: embedded ? EdgeInsets.zero : const EdgeInsets.all(16),
       shrinkWrap: embedded,
       physics: embedded ? const NeverScrollableScrollPhysics() : null,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         mainAxisSpacing: 12,
         crossAxisSpacing: 12,
-        mainAxisExtent: 124,
+        // linha extra da marca "via {Estabelecimento}" quando algum
+        // agendamento veio pelo link de um estabelecimento
+        mainAxisExtent: items.any((a) => a.aggregatorName != null) ? 144 : 124,
       ),
       itemCount: items.length,
       itemBuilder: (_, i) => _buildAppointmentTile(items[i], timeFmt),
@@ -976,10 +987,17 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                     : _statusSubtitle(a),
                 style: theme.textTheme.bodySmall
                     ?.copyWith(fontStyle: a.isBlock ? FontStyle.italic : null),
-                maxLines: 2,
+                // com a marca "via", o status fica em 1 linha (altura fixa)
+                maxLines: a.aggregatorName != null ? 1 : 2,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            if (a.aggregatorName != null)
+              Padding(
+                padding: const EdgeInsets.only(right: 12, top: 2),
+                child: ViaAggregatorBadge(a.aggregatorName!,
+                    key: Key('via-${a.id}')),
+              ),
           ],
         ),
       ),
@@ -1622,6 +1640,9 @@ class Appointment {
   final String clientOrigin;
   bool get clientFromPublicLink => clientOrigin == 'public_link';
 
+  /// Estabelecimento por cujo link o cliente marcou (null = link próprio).
+  final String? aggregatorName;
+
   bool get isBlock => source == 'block';
 
   Appointment({
@@ -1641,6 +1662,7 @@ class Appointment {
     this.servicePriceCents = 0,
     this.bufferMin = 0,
     this.clientOrigin = 'app',
+    this.aggregatorName,
   });
 
   factory Appointment.fromJson(Map<String, dynamic> j) => Appointment(
@@ -1660,6 +1682,7 @@ class Appointment {
         servicePriceCents: (j['service_price_cents'] ?? 0) as int,
         bufferMin: (j['buffer_min'] ?? j['bufferMin'] ?? 0) as int,
         clientOrigin: j['client_origin'] as String? ?? 'app',
+        aggregatorName: j['aggregator_name'] as String?,
       );
 }
 
@@ -2011,6 +2034,9 @@ class _AppointmentDetailsSheetState extends State<_AppointmentDetailsSheet> {
             row(Icons.event, booking_logic.formatWhen(a.startsAt)),
             row(Icons.miscellaneous_services, a.serviceName),
             row(Icons.info_outline, widget.statusLabel),
+            if (a.aggregatorName != null)
+              row(Icons.groups_outlined,
+                  'Agendado pelo link de ${a.aggregatorName}'),
             if (a.clientPhone.isNotEmpty)
               row(Icons.phone, phoneForDisplay(a.clientPhone)),
             if (widget.loadClientNotes != null) ...[

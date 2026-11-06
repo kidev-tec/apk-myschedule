@@ -20,6 +20,7 @@ import 'features/agenda/booking_wizard.dart' as booking;
 import 'features/clients/clients_page.dart';
 import 'features/clients/clients_ranking_page.dart';
 import 'features/clients/client_form_page.dart';
+import 'features/links/links_page.dart';
 import 'features/notifications/notifications_page.dart';
 import 'features/services/services_page.dart';
 import 'features/settings/time_offs_page.dart';
@@ -192,6 +193,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings',
         builder: (_, __) => const SettingsPage(),
+      ),
+      // vínculos estabelecimento ↔ profissional (módulo agregador)
+      GoRoute(
+        path: '/links',
+        builder: (_, __) => const LinksPage(),
       ),
       GoRoute(
         path: '/theme',

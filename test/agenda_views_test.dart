@@ -305,6 +305,60 @@ void main() {
         findsOneWidget);
   });
 
+  testWidgets('agendamento via estabelecimento mostra a marca "via"',
+      (tester) async {
+    Map<String, dynamic> appt(String id, String nome, int hora, String? via) {
+      final hoje = DateTime.now();
+      final base = DateTime(hoje.year, hoje.month, hoje.day, hora);
+      return {
+        'id': id,
+        'client_name': nome,
+        'client_phone': '+5514999990001',
+        'service_name': 'Barba',
+        'starts_at': base.toIso8601String(),
+        'ends_at': base.add(const Duration(minutes: 30)).toIso8601String(),
+        'status': 'pending',
+        'source': 'public_link',
+        'aggregator_name': via,
+      };
+    }
+
+    adapter.onGet(
+        '/appointments',
+        (s) => s.reply(200, {
+              'appointments': [
+                appt('v1', 'Cliente do Studio', 15, 'Studio Central'),
+                appt('v2', 'Cliente Direto', 16, null),
+              ]
+            }),
+        queryParameters: {'from': Matchers.any, 'to': Matchers.any});
+    await pumpPage(tester);
+
+    // lista: só no agendamento que veio pelo estabelecimento
+    expect(find.byKey(const Key('via-v1')), findsOneWidget);
+    expect(find.byKey(const Key('via-v2')), findsNothing);
+    expect(find.text('via Studio Central'), findsOneWidget);
+
+    // detalhes explicam a origem
+    await tester.tap(find.descendant(
+        of: find.widgetWithText(Card, 'Cliente do Studio'),
+        matching: find.byTooltip('Detalhes e observações')));
+    await tester.pumpAndSettle();
+    expect(find.text('Agendado pelo link de Studio Central'), findsOneWidget);
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+
+    // grade: mesma marca, sem estourar a altura do cartão — com a fonte
+    // um pouco maior, como no aparelho (o E2E pegou estouro de 2px)
+    tester.platformDispatcher.textScaleFactorTestValue = 1.15;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.tap(find.byTooltip('Grade'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('via-v1')), findsOneWidget);
+    expect(find.byKey(const Key('via-v2')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Ver bloqueio mostra dia, horário, duração e motivo; libera',
       (tester) async {
     final amanha = DateTime.now().add(const Duration(days: 1));

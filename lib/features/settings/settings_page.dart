@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
+import 'account_kind_card.dart';
 import 'logo_service.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_config.dart';
@@ -738,6 +739,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           const SizedBox(height: 8),
 
+          // Tipo da conta e códigos (módulo agregador, API 0026)
+          if (_me != null)
+            AccountKindCard(me: _me!, api: widget.api, onChanged: _loadMe),
           // Link público de agendamento (RF-07)
           if (_me != null && _publicUrl != null)
             Card(
@@ -805,7 +809,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 const ListTile(
                   leading: Icon(Icons.info_outline),
                   title: Text('Versão'),
-                  subtitle: Text('1.7.0'),
+                  subtitle: Text('2.0.0'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.privacy_tip_outlined),
