@@ -809,7 +809,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 const ListTile(
                   leading: Icon(Icons.info_outline),
                   title: Text('Versão'),
-                  subtitle: Text('1.7.0'),
+                  subtitle: Text('2.0.0'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.privacy_tip_outlined),
