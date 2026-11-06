@@ -192,15 +192,24 @@ class _LinksPageState extends State<LinksPage> {
     });
   }
 
+  /// Liga/desliga "Aparece no meu link". A chave fica travada até a API
+  /// responder (dois toques seguidos não viram dois PATCH fora de ordem); se
+  /// falhar, recarrega o valor real do servidor.
   Future<void> _toggleShow(ProfessionalLink l, bool show) async {
-    final i = _items.indexWhere((x) => x.id == l.id);
-    setState(() => _items[i] = l.copyWith(showOnLink: show));
+    setState(() {
+      _busy.add(l.id);
+      _items = [
+        for (final x in _items) x.id == l.id ? x.copyWith(showOnLink: show) : x,
+      ];
+    });
     try {
       await _links.update(l.id, showOnLink: show);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _items[i] = l);
       _snack(humanError(e), error: true);
+      await _load(quiet: true);
+    } finally {
+      if (mounted) setState(() => _busy.remove(l.id));
     }
   }
 
@@ -220,8 +229,8 @@ class _LinksPageState extends State<LinksPage> {
       if (x.position != p) changed.add(x);
       updated[x.id] = x.copyWith(position: p);
     }
-    final before = _items;
     setState(() {
+      _busy.add(_reorderKey);
       _items = [
         for (final x in _items) updated[x.id] ?? x,
       ];
@@ -232,10 +241,17 @@ class _LinksPageState extends State<LinksPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _items = before);
       _snack(humanError(e), error: true);
+      // parte das posições pode ter sido gravada: a ordem certa é a do
+      // servidor, não a foto de antes
+      await _load(quiet: true);
+    } finally {
+      if (mounted) setState(() => _busy.remove(_reorderKey));
     }
   }
+
+  /// Marca de "reordenando" em [_busy]: trava os menus de todos os itens.
+  static const _reorderKey = '__reorder__';
 
   Future<void> _shareCode() async {
     final code = _myCode;
@@ -478,7 +494,7 @@ class _LinksPageState extends State<LinksPage> {
   }
 
   Widget _activeTile(ProfessionalLink l, int index, int total) {
-    final busy = _busy.contains(l.id);
+    final busy = _busy.contains(l.id) || _busy.contains(_reorderKey);
     final detail = _detail(l);
     return Card(
       key: Key('link-active-${l.id}'),

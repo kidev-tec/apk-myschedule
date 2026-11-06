@@ -25,7 +25,8 @@ void main() {
     calls.clear();
     final dio = Dio(BaseOptions(baseUrl: 'http://mock.local'));
     adapter = DioAdapter(dio: dio);
-    api = ApiClient(adapter: adapter, idToken: ({forceRefresh = false}) async => null);
+    api = ApiClient(
+        adapter: adapter, idToken: ({forceRefresh = false}) async => null);
     api.dio.interceptors.add(InterceptorsWrapper(onRequest: (o, h) {
       calls.add('${o.method} ${o.path} ${o.data}');
       h.next(o);

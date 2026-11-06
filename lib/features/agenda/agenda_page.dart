@@ -910,8 +910,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
         crossAxisSpacing: 12,
         // linha extra da marca "via {Estabelecimento}" quando algum
         // agendamento veio pelo link de um estabelecimento
-        mainAxisExtent:
-            items.any((a) => a.aggregatorName != null) ? 144 : 124,
+        mainAxisExtent: items.any((a) => a.aggregatorName != null) ? 144 : 124,
       ),
       itemCount: items.length,
       itemBuilder: (_, i) => _buildAppointmentTile(items[i], timeFmt),

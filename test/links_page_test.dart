@@ -214,7 +214,29 @@ void main() {
           isFalse);
     });
 
-    testWidgets('falha ao desligar volta o valor', (tester) async {
+    testWidgets('chave travada enquanto a API não responde', (tester) async {
+      mockMe('aggregator');
+      mockLinks('aggregator', [link('a3', name: 'Ana')]);
+      adapter.onPatch('/links/a3',
+          (s) => s.reply(200, {}, delay: const Duration(milliseconds: 300)),
+          data: {'show_on_link': false});
+      await pump(tester);
+      await tester.tap(find.byKey(const Key('link-show-a3')));
+      await tester.pump();
+      final sw =
+          tester.widget<SwitchListTile>(find.byKey(const Key('link-show-a3')));
+      expect(sw.value, isFalse);
+      expect(sw.onChanged, isNull); // segundo toque não dispara outro PATCH
+      await tester.pumpAndSettle(const Duration(milliseconds: 400));
+      expect(
+          tester
+              .widget<SwitchListTile>(find.byKey(const Key('link-show-a3')))
+              .onChanged,
+          isNotNull);
+    });
+
+    testWidgets('falha ao desligar mostra o valor real do servidor',
+        (tester) async {
       mockMe('aggregator');
       mockLinks('aggregator', [link('a3', name: 'Ana')]);
       adapter.onPatch('/links/a3', (s) => s.reply(500, {'error': 'Falhou'}),
@@ -248,6 +270,40 @@ void main() {
       await tester.pumpAndSettle();
       expect(calls, contains('PATCH /links/a3 {position: 1}'));
       expect(calls, contains('PATCH /links/a4 {position: 0}'));
+      expect(tester.getTopLeft(find.text('Davi')).dy,
+          lessThan(tester.getTopLeft(find.text('Ana')).dy));
+    });
+
+    testWidgets('falha no meio da reordenação recarrega a ordem do servidor',
+        (tester) async {
+      mockMe('aggregator');
+      var gets = 0;
+      final first = [
+        link('a3', position: 0, name: 'Ana'),
+        link('a4', position: 1, name: 'Davi'),
+      ];
+      // depois da falha, o servidor diz: Davi na frente (1º PATCH gravou)
+      final after = [
+        link('a3', position: 1, name: 'Ana'),
+        link('a4', position: 0, name: 'Davi'),
+      ];
+      mockLinks('aggregator', first);
+      adapter
+        ..onPatch('/links/a3', (s) => s.reply(200, {}), data: {'position': 1})
+        ..onPatch('/links/a4', (s) => s.reply(500, {'error': 'Caiu'}),
+            data: {'position': 0});
+      api.dio.interceptors.add(InterceptorsWrapper(onRequest: (o, h) {
+        if (o.method == 'GET' && o.path == '/links') gets++;
+        h.next(o);
+      }));
+      await pump(tester);
+      mockLinks('aggregator', after);
+      await tester.tap(find.byKey(const Key('link-menu-a3')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Mover para baixo'));
+      await tester.pumpAndSettle();
+      expect(find.text('Caiu'), findsOneWidget);
+      expect(gets, 2); // recarregou do servidor
       expect(tester.getTopLeft(find.text('Davi')).dy,
           lessThan(tester.getTopLeft(find.text('Ana')).dy));
     });

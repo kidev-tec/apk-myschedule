@@ -91,10 +91,11 @@ void main() {
     expect(find.text('Voltar a ser profissional independente'), findsOneWidget);
   });
 
-  testWidgets('transformar em estabelecimento: confirma, chama a API e recarrega',
+  testWidgets(
+      'transformar em estabelecimento: confirma, chama a API e recarrega',
       (tester) async {
-    adapter.onPut('/me/account-kind',
-        (s) => s.reply(200, {'account_kind': 'aggregator'}),
+    adapter.onPut(
+        '/me/account-kind', (s) => s.reply(200, {'account_kind': 'aggregator'}),
         data: Matchers.any);
     await pump(tester, indep);
     await tester.tap(find.text('Transformar em estabelecimento'));
@@ -106,8 +107,8 @@ void main() {
       {'account_kind': 'aggregator'}
     ]);
     expect(reloads, 1);
-    expect(find.text('Pronto! Agora você é um estabelecimento.'),
-        findsOneWidget);
+    expect(
+        find.text('Pronto! Agora você é um estabelecimento.'), findsOneWidget);
   });
 
   testWidgets('cancelar o diálogo não chama a API', (tester) async {
