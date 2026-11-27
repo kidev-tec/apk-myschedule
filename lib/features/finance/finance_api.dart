@@ -5,6 +5,7 @@ import '../../core/api/api_client.dart';
 import 'cash_models.dart';
 import 'expense_models.dart';
 import 'payment_models.dart';
+import 'report_models.dart';
 
 final financeApiProvider =
     Provider<FinanceApi>((ref) => FinanceApi(ApiClient().dio));
@@ -112,6 +113,40 @@ class FinanceApi {
       for (final s in ((r.data as Map<String, dynamic>)['sessions'] as List))
         CashSession.fromJson(s as Map<String, dynamic>),
     ];
+  }
+
+  // ---- Relatórios e metas (F3) ----
+
+  Future<ReportSummary> reportSummary(DateTime from, DateTime to) async {
+    final r = await _dio.get('/finance/reports/summary',
+        queryParameters: {'from': dateKey(from), 'to': dateKey(to)});
+    return ReportSummary.fromJson(r.data as Map<String, dynamic>);
+  }
+
+  Future<List<ServiceRevenue>> reportServices(
+      DateTime from, DateTime to) async {
+    final r = await _dio.get('/finance/reports/services',
+        queryParameters: {'from': dateKey(from), 'to': dateKey(to)});
+    return [
+      for (final i in ((r.data as Map<String, dynamic>)['items'] as List))
+        ServiceRevenue.fromJson(i as Map<String, dynamic>),
+    ];
+  }
+
+  Future<Goal> goal(DateTime month) async {
+    final r = await _dio.get('/finance/goals/${monthKey(month)}');
+    return Goal.fromJson(r.data as Map<String, dynamic>);
+  }
+
+  Future<Goal> setGoal(DateTime month, int targetCents) async {
+    final r = await _dio.put('/finance/goals/${monthKey(month)}',
+        data: {'target_cents': targetCents});
+    return Goal.fromJson(r.data as Map<String, dynamic>);
+  }
+
+  Future<Goal> deleteGoal(DateTime month) async {
+    final r = await _dio.delete('/finance/goals/${monthKey(month)}');
+    return Goal.fromJson(r.data as Map<String, dynamic>);
   }
 
   /// Valor do atendimento (desconto/acréscimo).
