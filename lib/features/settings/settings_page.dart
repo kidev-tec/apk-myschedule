@@ -645,6 +645,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           const SizedBox(height: 8),
 
+          // Módulo de finanças: recebimentos e contas a receber
+          if (_me != null)
+            Card(
+              child: ListTile(
+                key: const Key('settings-finance'),
+                leading: Icon(Icons.account_balance_wallet_outlined,
+                    color: AppColors.primaryOf(context)),
+                title: const Text('Finanças'),
+                subtitle: const Text('A receber e recebimentos avulsos'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/finance'),
+              ),
+            ),
+          const SizedBox(height: 8),
+
           // Cadastro de clientes: lista, criar e editar (dados completos,
           // endereço com busca de CEP e informações privadas).
           if (_me != null)

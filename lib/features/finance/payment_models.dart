@@ -112,19 +112,96 @@ class NewPayment {
   final int installments;
   final String? notes;
 
+  /// Cliente do recebimento avulso (opcional).
+  final String? clientId;
+
   const NewPayment({
     required this.amountCents,
     required this.method,
     this.installments = 1,
     this.notes,
+    this.clientId,
   });
 
   Map<String, dynamic> toJson({String? appointmentId, String? clientId}) => {
         if (appointmentId != null) 'appointment_id': appointmentId,
-        if (clientId != null) 'client_id': clientId,
+        if ((clientId ?? this.clientId) != null)
+          'client_id': clientId ?? this.clientId,
         'amount_cents': amountCents,
         'payment_method': method.api,
         if (method == PaymentMethod.credit) 'installments': installments,
         if (notes != null && notes!.trim().isNotEmpty) 'notes': notes!.trim(),
       };
+}
+
+/// Item de "A receber": agendamento com saldo em aberto.
+class Receivable {
+  final String id;
+  final DateTime startsAt;
+  final String status;
+  final String clientName;
+  final String serviceName;
+  final int priceCents;
+  final int paidCents;
+  final int balanceCents;
+  final PaymentStatus paymentStatus;
+
+  const Receivable({
+    required this.id,
+    required this.startsAt,
+    required this.status,
+    required this.clientName,
+    required this.serviceName,
+    required this.priceCents,
+    required this.paidCents,
+    required this.balanceCents,
+    required this.paymentStatus,
+  });
+
+  /// Já aconteceu (ou começou) e não foi pago por inteiro.
+  bool isOverdue(DateTime now) => !startsAt.isAfter(now);
+
+  factory Receivable.fromJson(Map<String, dynamic> j) => Receivable(
+        id: j['id'] as String,
+        startsAt: DateTime.parse(j['starts_at'] as String).toLocal(),
+        status: (j['status'] ?? 'pending') as String,
+        clientName: (j['client_name'] ?? '') as String,
+        serviceName: (j['service_name'] ?? '') as String,
+        priceCents: (j['price_cents'] ?? 0) as int,
+        paidCents: (j['paid_cents'] ?? 0) as int,
+        balanceCents: (j['balance_cents'] ?? 0) as int,
+        paymentStatus: PaymentStatus.fromApi(j['payment_status'] as String?),
+      );
+}
+
+/// Resposta de GET /finance/receivables.
+class Receivables {
+  final List<Receivable> items;
+  final int totalOpenCents;
+  final int overdueCents;
+  final int upcomingCents;
+
+  const Receivables({
+    required this.items,
+    required this.totalOpenCents,
+    required this.overdueCents,
+    required this.upcomingCents,
+  });
+
+  factory Receivables.fromJson(Map<String, dynamic> j) => Receivables(
+        items: [
+          for (final i in (j['items'] as List? ?? const []))
+            Receivable.fromJson(i as Map<String, dynamic>),
+        ],
+        totalOpenCents: (j['total_open_cents'] ?? 0) as int,
+        overdueCents: (j['overdue_cents'] ?? 0) as int,
+        upcomingCents: (j['upcoming_cents'] ?? 0) as int,
+      );
+}
+
+/// Cliente para os filtros/avulso (só o necessário).
+class ClientOption {
+  final String id;
+  final String name;
+  const ClientOption(this.id, this.name);
 }

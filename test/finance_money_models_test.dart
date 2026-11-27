@@ -139,6 +139,65 @@ void main() {
     });
   });
 
+  group('FinanceApi — a receber e clientes', () {
+    test('receivables envia filtros em UTC e parseia a resposta', () async {
+      final adapter = _Adapter((o) => o.path == '/clients'
+          ? _json([
+              {'id': 'c1', 'name': 'Ana'},
+              {'id': 'c2'},
+            ])
+          : _json({
+              'items': [
+                {
+                  'id': 'a1',
+                  'starts_at': '2026-11-20T12:00:00.000Z',
+                  'status': 'done',
+                  'client_name': 'Ana',
+                  'service_name': 'Corte',
+                  'price_cents': 10000,
+                  'paid_cents': 2000,
+                  'balance_cents': 8000,
+                  'payment_status': 'partial',
+                },
+                {'id': 'a2', 'starts_at': '2026-12-01T12:00:00.000Z'},
+              ],
+              'total_open_cents': 8000,
+              'overdue_cents': 8000,
+              'upcoming_cents': 0,
+            }));
+      final api = FinanceApi(Dio()..httpClientAdapter = adapter);
+
+      final from = DateTime.utc(2026, 11, 1);
+      final r = await api.receivables(
+          from: from, to: DateTime.utc(2026, 11, 30), clientId: 'c1');
+      expect(adapter.calls.single.queryParameters, {
+        'from': '2026-11-01T00:00:00.000Z',
+        'to': '2026-11-30T00:00:00.000Z',
+        'client_id': 'c1',
+      });
+      expect(r.items.first.balanceCents, 8000);
+      expect(r.items.first.paymentStatus, PaymentStatus.partial);
+      expect(r.items.first.isOverdue(DateTime.utc(2026, 11, 27)), isTrue);
+      expect(r.items.last.clientName, '');
+      expect(r.items.last.paymentStatus, PaymentStatus.none);
+      expect(r.totalOpenCents, 8000);
+      expect(r.overdueCents, 8000);
+      expect(r.upcomingCents, 0);
+
+      await api.receivables();
+      expect(adapter.calls.last.queryParameters, isEmpty);
+
+      final clients = await api.clients();
+      expect(clients.map((c) => '${c.id}:${c.name}'), ['c1:Ana', 'c2:']);
+    });
+
+    test('Receivables.fromJson vazio', () {
+      final r = Receivables.fromJson({});
+      expect(r.items, isEmpty);
+      expect(r.totalOpenCents, 0);
+    });
+  });
+
   group('FinanceApi', () {
     test('chama as rotas certas', () async {
       final adapter = _Adapter((o) {

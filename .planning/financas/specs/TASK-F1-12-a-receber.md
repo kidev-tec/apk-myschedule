@@ -1,6 +1,6 @@
 # TASK-F1-12 — Área Finanças + "A receber" (app)
 
-- **Status:** Ready
+- **Status:** Done
 - **O QUE É:** nova entrada "Finanças" no menu com a tela "A receber" (primeira tela do módulo; o resumo do mês chega na F3).
 - **EXECUTION MODE:** Interactive (checkpoint visual com o Ezequias)
 - **RF-IDs:** RF-F04
@@ -8,13 +8,13 @@
 
 ## PRE-CONDITIONS
 - Rotas em `lib/main.dart` (GoRouter, rotas de topo como `/clients`, `/services`).
-- Menu de navegação da agenda usa `lib/core/widgets/home_action.dart` (confirmar no código antes de criar a entrada).
+- O "menu" do app é a tela Configurações (cards → `context.push`). Entradas: card "Finanças" em Configurações + atalho (carteira) no AppBar da agenda.
 
 ## O QUE CRIAR
 - Rota `/finance` → `finance_home_page.dart` (por ora: cards "A receber" e "Receber avulso").
 - Rota `/finance/receivables` → `receivables_page.dart`:
   - topo: total em aberto, atrasado (realizados/passados) e a receber (futuros);
-  - filtro de período (padrão: até +60 dias) e cliente;
+  - filtro de período (chips: Até 60 dias [padrão], Atrasados, Próximos 7 dias, Este mês) e cliente;
   - lista agrupada em "Atrasados" e "Próximos": data, cliente, serviço, saldo, chip;
   - toque abre o `receive_payment_sheet` com o saldo; ao salvar, item sai da lista se ficar pago.
 - "Receber avulso": mesmo sheet sem agendamento, cliente opcional (D7).

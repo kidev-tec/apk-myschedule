@@ -15,11 +15,15 @@ class ReceivePaymentSheet extends StatefulWidget {
   final String title;
   final Future<void> Function(NewPayment payment) onSubmit;
 
+  /// Recebimento avulso: lista para escolher o cliente (opcional).
+  final List<ClientOption>? clients;
+
   const ReceivePaymentSheet({
     super.key,
     required this.onSubmit,
     this.balanceCents,
     this.title = 'Receber',
+    this.clients,
   });
 
   @override
@@ -34,6 +38,7 @@ class _ReceivePaymentSheetState extends State<ReceivePaymentSheet> {
   final _notes = TextEditingController();
   PaymentMethod _method = PaymentMethod.pix;
   int _installments = 1;
+  String? _clientId;
   bool _saving = false;
   String? _error;
 
@@ -75,6 +80,7 @@ class _ReceivePaymentSheetState extends State<ReceivePaymentSheet> {
         method: _method,
         installments: _method == PaymentMethod.credit ? _installments : 1,
         notes: _notes.text,
+        clientId: _clientId,
       ));
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
@@ -119,6 +125,23 @@ class _ReceivePaymentSheetState extends State<ReceivePaymentSheet> {
                 errorText: _amountProblem,
               ),
             ),
+            if (widget.clients != null) ...[
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String?>(
+                key: const Key('receive-client'),
+                initialValue: _clientId,
+                isExpanded: true,
+                decoration:
+                    const InputDecoration(labelText: 'Cliente (opcional)'),
+                items: [
+                  const DropdownMenuItem(
+                      value: null, child: Text('Sem cliente')),
+                  for (final c in widget.clients!)
+                    DropdownMenuItem(value: c.id, child: Text(c.name)),
+                ],
+                onChanged: (v) => setState(() => _clientId = v),
+              ),
+            ],
             const SizedBox(height: 16),
             Text('Forma de pagamento', style: theme.textTheme.titleSmall),
             const SizedBox(height: 8),

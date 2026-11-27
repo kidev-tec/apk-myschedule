@@ -355,6 +355,16 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             onOpen: _openNotifications,
           ),
           IconButton(
+            key: const Key('open-finance'),
+            icon: const Icon(Icons.account_balance_wallet_outlined),
+            tooltip: 'Finanças',
+            // ao voltar, recarrega: pode ter recebido algo na área
+            onPressed: () async {
+              await context.push('/finance');
+              if (mounted) await _loadAppointments();
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.settings),
             tooltip: 'Configurações',
             onPressed: () => context.push('/settings'),
