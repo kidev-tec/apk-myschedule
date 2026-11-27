@@ -25,6 +25,8 @@ import 'features/notifications/notifications_page.dart';
 import 'features/services/services_page.dart';
 import 'features/settings/time_offs_page.dart';
 import 'features/settings/waitlist_page.dart';
+import 'features/finance/finance_home_page.dart';
+import 'features/finance/receivables_page.dart';
 import 'features/settings/edit_business_page.dart';
 import 'features/services/service_form_page.dart';
 import 'features/settings/settings_page.dart';
@@ -182,6 +184,17 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: ':id/edit',
             builder: (_, state) =>
                 ServiceFormPage(serviceId: state.pathParameters['id']),
+          ),
+        ],
+      ),
+      // módulo de finanças (api .planning/financas)
+      GoRoute(
+        path: '/finance',
+        builder: (_, __) => const FinanceHomePage(),
+        routes: [
+          GoRoute(
+            path: 'receivables',
+            builder: (_, __) => const ReceivablesPage(),
           ),
         ],
       ),

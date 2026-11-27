@@ -1,3 +1,7 @@
+import '../finance/finance_api.dart';
+import '../finance/payment_models.dart';
+import '../finance/payment_section.dart';
+import '../finance/payment_status_chip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -351,6 +355,16 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
             onOpen: _openNotifications,
           ),
           IconButton(
+            key: const Key('open-finance'),
+            icon: const Icon(Icons.account_balance_wallet_outlined),
+            tooltip: 'Finanças',
+            // ao voltar, recarrega: pode ter recebido algo na área
+            onPressed: () async {
+              await context.push('/finance');
+              if (mounted) await _loadAppointments();
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.settings),
             tooltip: 'Configurações',
             onPressed: () => context.push('/settings'),
@@ -669,6 +683,13 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                 child: ViaAggregatorBadge(a.aggregatorName!,
                     key: Key('via-${a.id}')),
               ),
+            // situação do pagamento (módulo de finanças)
+            if (!a.isBlock && a.paymentStatus != PaymentStatus.none)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child:
+                    PaymentStatusChip(a.paymentStatus, key: Key('pay-${a.id}')),
+              ),
             // observações do prestador (privadas)
             if (a.notes != null && a.notes!.isNotEmpty)
               Padding(
@@ -850,6 +871,7 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
   /// Painel com os dados do agendamento e as observações (privadas do
   /// prestador), com edição da observação no próprio painel.
   Future<void> _showDetails(Appointment a) async {
+    var paymentsChanged = false;
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -870,11 +892,20 @@ class _AgendaPageState extends ConsumerState<AgendaPage> {
                     .get('/clients/${a.clientId}');
                 return (r.data as Map<String, dynamic>)['notes'] as String?;
               },
+        payments: a.isBlock
+            ? null
+            : PaymentSection(
+                appointmentId: a.id,
+                api: ref.read(financeApiProvider),
+                onChanged: () => paymentsChanged = true,
+              ),
       ),
     );
     if (saved == true && mounted) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Observação salva')));
+      await _loadAppointments();
+    } else if (paymentsChanged && mounted) {
       await _loadAppointments();
     }
   }
@@ -1643,6 +1674,12 @@ class Appointment {
   /// Estabelecimento por cujo link o cliente marcou (null = link próprio).
   final String? aggregatorName;
 
+  /// Finanças (API 0027): valor cobrado neste atendimento e situação.
+  final int priceCents;
+  final int paidCents;
+  final int balanceCents;
+  final PaymentStatus paymentStatus;
+
   bool get isBlock => source == 'block';
 
   Appointment({
@@ -1663,6 +1700,10 @@ class Appointment {
     this.bufferMin = 0,
     this.clientOrigin = 'app',
     this.aggregatorName,
+    this.priceCents = 0,
+    this.paidCents = 0,
+    this.balanceCents = 0,
+    this.paymentStatus = PaymentStatus.none,
   });
 
   factory Appointment.fromJson(Map<String, dynamic> j) => Appointment(
@@ -1683,6 +1724,14 @@ class Appointment {
         bufferMin: (j['buffer_min'] ?? j['bufferMin'] ?? 0) as int,
         clientOrigin: j['client_origin'] as String? ?? 'app',
         aggregatorName: j['aggregator_name'] as String?,
+        // API sem o módulo de finanças: cai no preço de tabela, sem situação
+        priceCents: (j['price_cents'] ?? j['service_price_cents'] ?? 0) as int,
+        paidCents: (j['paid_cents'] ?? 0) as int,
+        balanceCents: (j['balance_cents'] ??
+            j['price_cents'] ??
+            j['service_price_cents'] ??
+            0) as int,
+        paymentStatus: PaymentStatus.fromApi(j['payment_status'] as String?),
       );
 }
 
@@ -1959,11 +2008,15 @@ class _AppointmentDetailsSheet extends StatefulWidget {
   /// Busca as informações do CLIENTE (cadastro), só quando pedidas.
   final Future<String?> Function()? loadClientNotes;
 
+  /// Bloco "Pagamento" (módulo de finanças); null = bloqueio de horário.
+  final Widget? payments;
+
   const _AppointmentDetailsSheet({
     required this.appointment,
     required this.statusLabel,
     required this.onSave,
     this.loadClientNotes,
+    this.payments,
   });
 
   @override
@@ -2093,6 +2146,10 @@ class _AppointmentDetailsSheetState extends State<_AppointmentDetailsSheet> {
                     },
                   ),
                 ),
+            ],
+            if (widget.payments != null) ...[
+              const Divider(height: 24),
+              widget.payments!,
             ],
             const Divider(height: 24),
             Row(children: [
