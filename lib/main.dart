@@ -27,6 +27,8 @@ import 'features/settings/time_offs_page.dart';
 import 'features/settings/waitlist_page.dart';
 import 'features/finance/finance_home_page.dart';
 import 'features/finance/receivables_page.dart';
+import 'features/finance/cash_page.dart';
+import 'features/finance/expenses_page.dart';
 import 'features/settings/edit_business_page.dart';
 import 'features/services/service_form_page.dart';
 import 'features/settings/settings_page.dart';
@@ -195,6 +197,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'receivables',
             builder: (_, __) => const ReceivablesPage(),
+          ),
+          GoRoute(
+            path: 'cash',
+            builder: (_, __) => const CashPage(),
+          ),
+          GoRoute(
+            path: 'expenses',
+            builder: (_, __) => const ExpensesPage(),
           ),
         ],
       ),

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:minha_agenda/features/finance/cash_models.dart';
 import 'package:minha_agenda/features/finance/finance_api.dart';
 import 'package:minha_agenda/features/finance/finance_home_page.dart';
 import 'package:minha_agenda/features/finance/payment_models.dart';
@@ -48,6 +49,9 @@ class FakeReceivablesApi extends FinanceApi {
         overdueCents: overdue,
         upcomingCents: all - overdue);
   }
+
+  @override
+  Future<CashSession?> cashCurrent() async => null;
 
   @override
   Future<List<ClientOption>> clients() async {

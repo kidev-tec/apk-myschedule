@@ -2,6 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import 'cash_models.dart';
+import 'expense_models.dart';
 import 'payment_models.dart';
 
 final financeApiProvider =
@@ -46,6 +48,69 @@ class FinanceApi {
     return [
       for (final c in (r.data as List))
         ClientOption((c as Map)['id'] as String, (c['name'] ?? '') as String),
+    ];
+  }
+
+  // ---- Despesas (F2) ----
+
+  Future<Expenses> expenses(
+      {DateTime? from, DateTime? to, String? status}) async {
+    final r = await _dio.get('/finance/expenses', queryParameters: {
+      if (from != null) 'from': from.toUtc().toIso8601String(),
+      if (to != null) 'to': to.toUtc().toIso8601String(),
+      if (status != null) 'status': status,
+    });
+    return Expenses.fromJson(r.data as Map<String, dynamic>);
+  }
+
+  Future<void> createExpense(NewExpense e) async {
+    await _dio.post('/finance/expenses', data: e.toJson());
+  }
+
+  Future<void> payExpense(String id, PaymentMethod method) async {
+    await _dio.post('/finance/expenses/$id/pay',
+        data: {'payment_method': method.api});
+  }
+
+  // ---- Caixa diário (F2) ----
+
+  /// Caixa aberto (null = fechado).
+  Future<CashSession?> cashCurrent() async {
+    final r = await _dio.get('/finance/cash/current');
+    final s = (r.data as Map<String, dynamic>)['session'];
+    return s == null ? null : CashSession.fromJson(s as Map<String, dynamic>);
+  }
+
+  Future<void> cashOpen(int openingCents) async {
+    await _dio
+        .post('/finance/cash/open', data: {'opening_cents': openingCents});
+  }
+
+  /// [cashIn] true = suprimento; false = sangria.
+  Future<void> cashMove(
+      {required bool cashIn, required int amountCents, String? notes}) async {
+    await _dio.post('/finance/cash/movements', data: {
+      'direction': cashIn ? 'in' : 'out',
+      'amount_cents': amountCents,
+      if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+    });
+  }
+
+  Future<CashSession> cashClose(int countedCents, {String? notes}) async {
+    final r = await _dio.post('/finance/cash/close', data: {
+      'counted_cents': countedCents,
+      if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+    });
+    return CashSession.fromJson(
+        (r.data as Map<String, dynamic>)['session'] as Map<String, dynamic>);
+  }
+
+  /// Últimos caixas fechados.
+  Future<List<CashSession>> cashHistory() async {
+    final r = await _dio.get('/finance/cash');
+    return [
+      for (final s in ((r.data as Map<String, dynamic>)['sessions'] as List))
+        CashSession.fromJson(s as Map<String, dynamic>),
     ];
   }
 
