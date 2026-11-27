@@ -8,6 +8,7 @@ import 'package:minha_agenda/features/finance/cash_models.dart';
 import 'package:minha_agenda/features/finance/finance_api.dart';
 import 'package:minha_agenda/features/finance/finance_home_page.dart';
 import 'package:minha_agenda/features/finance/payment_models.dart';
+import 'package:minha_agenda/features/finance/report_models.dart';
 import 'package:minha_agenda/features/finance/receivables_page.dart';
 
 final _now = DateTime(2026, 11, 27, 12);
@@ -28,6 +29,13 @@ Receivable _item(String id, DateTime at, int balance,
 
 /// API falsa de "A receber": devolve [items] e grava filtros e recebimentos.
 class FakeReceivablesApi extends FinanceApi {
+  @override
+  Future<ReportSummary> reportSummary(DateTime from, DateTime to) async =>
+      const ReportSummary(revenueCents: 0, expensesCents: 0, resultCents: 0);
+
+  @override
+  Future<Goal> goal(DateTime month) async => const Goal(month: '2026-11');
+
   FakeReceivablesApi(this.items) : super(Dio());
   List<Receivable> items;
   final queries = <(DateTime?, DateTime?, String?)>[];
@@ -210,6 +218,8 @@ void main() {
       await t.pumpWidget(routed(api));
       await t.pumpAndSettle();
 
+      // o resumo do mês (F3) fica no topo: rola até o atalho
+      await t.scrollUntilVisible(find.byKey(const Key('finance-walk-in')), 200);
       await t.tap(find.byKey(const Key('finance-walk-in')));
       await t.pumpAndSettle();
       expect(find.text('Receber avulso'), findsWidgets);

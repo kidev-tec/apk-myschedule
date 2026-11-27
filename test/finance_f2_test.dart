@@ -14,6 +14,7 @@ import 'package:minha_agenda/features/finance/expenses_page.dart';
 import 'package:minha_agenda/features/finance/finance_api.dart';
 import 'package:minha_agenda/features/finance/finance_home_page.dart';
 import 'package:minha_agenda/features/finance/payment_models.dart';
+import 'package:minha_agenda/features/finance/report_models.dart';
 
 final _now = DateTime(2026, 11, 27, 12);
 
@@ -588,6 +589,13 @@ void main() {
 
 /// Home também consulta "A receber".
 class _HomeApi extends FakeF2Api {
+  @override
+  Future<ReportSummary> reportSummary(DateTime from, DateTime to) async =>
+      const ReportSummary(revenueCents: 0, expensesCents: 0, resultCents: 0);
+
+  @override
+  Future<Goal> goal(DateTime month) async => const Goal(month: '2026-11');
+
   @override
   Future<Receivables> receivables(
           {DateTime? from, DateTime? to, String? clientId}) async =>
