@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import 'cash_models.dart';
+import 'cashflow_models.dart';
 import 'expense_models.dart';
+import 'online_models.dart';
 import 'payment_models.dart';
+import 'report_models.dart';
 
 final financeApiProvider =
     Provider<FinanceApi>((ref) => FinanceApi(ApiClient().dio));
@@ -112,6 +115,89 @@ class FinanceApi {
       for (final s in ((r.data as Map<String, dynamic>)['sessions'] as List))
         CashSession.fromJson(s as Map<String, dynamic>),
     ];
+  }
+
+  // ---- Relatórios e metas (F3) ----
+
+  Future<ReportSummary> reportSummary(DateTime from, DateTime to) async {
+    final r = await _dio.get('/finance/reports/summary',
+        queryParameters: {'from': dateKey(from), 'to': dateKey(to)});
+    return ReportSummary.fromJson(r.data as Map<String, dynamic>);
+  }
+
+  Future<List<ServiceRevenue>> reportServices(
+      DateTime from, DateTime to) async {
+    final r = await _dio.get('/finance/reports/services',
+        queryParameters: {'from': dateKey(from), 'to': dateKey(to)});
+    return [
+      for (final i in ((r.data as Map<String, dynamic>)['items'] as List))
+        ServiceRevenue.fromJson(i as Map<String, dynamic>),
+    ];
+  }
+
+  Future<Goal> goal(DateTime month) async {
+    final r = await _dio.get('/finance/goals/${monthKey(month)}');
+    return Goal.fromJson(r.data as Map<String, dynamic>);
+  }
+
+  Future<Goal> setGoal(DateTime month, int targetCents) async {
+    final r = await _dio.put('/finance/goals/${monthKey(month)}',
+        data: {'target_cents': targetCents});
+    return Goal.fromJson(r.data as Map<String, dynamic>);
+  }
+
+  Future<Goal> deleteGoal(DateTime month) async {
+    final r = await _dio.delete('/finance/goals/${monthKey(month)}');
+    return Goal.fromJson(r.data as Map<String, dynamic>);
+  }
+
+  // ---- Fluxo projetado e comprovante (F4) ----
+
+  Future<Cashflow> cashflow({int days = 30}) async {
+    final r =
+        await _dio.get('/finance/cashflow', queryParameters: {'days': days});
+    return Cashflow.fromJson(r.data as Map<String, dynamic>);
+  }
+
+  /// Dados do comprovante (a API atribui o número na 1ª emissão).
+  Future<Receipt> receipt(String paymentId) async {
+    final r = await _dio.get('/finance/transactions/$paymentId/receipt');
+    return Receipt.fromJson(r.data as Map<String, dynamic>);
+  }
+
+  // ---- Recebimento online (F5, Asaas) ----
+
+  Future<OnlineAccount> onlineAccount() async {
+    final r = await _dio.get('/finance/online/account');
+    return OnlineAccount.fromJson(r.data as Map<String, dynamic>);
+  }
+
+  Future<OnlineAccount> activateOnline(OnlineActivation a) async {
+    final r = await _dio.post('/finance/online/account', data: a.toJson());
+    return OnlineAccount.fromJson(r.data as Map<String, dynamic>);
+  }
+
+  Future<List<Charge>> charges(String appointmentId) async {
+    final r = await _dio.get('/finance/charges',
+        queryParameters: {'appointment_id': appointmentId});
+    return [
+      for (final c in ((r.data as Map<String, dynamic>)['charges'] as List))
+        Charge.fromJson(c as Map<String, dynamic>),
+    ];
+  }
+
+  /// [amountCents] null = saldo a cobrar.
+  Future<Charge> createCharge(String appointmentId, {int? amountCents}) async {
+    final r = await _dio.post('/finance/charges', data: {
+      'appointment_id': appointmentId,
+      if (amountCents != null) 'amount_cents': amountCents,
+    });
+    return Charge.fromJson(
+        (r.data as Map<String, dynamic>)['charge'] as Map<String, dynamic>);
+  }
+
+  Future<void> cancelCharge(String chargeId) async {
+    await _dio.delete('/finance/charges/$chargeId');
   }
 
   /// Valor do atendimento (desconto/acréscimo).

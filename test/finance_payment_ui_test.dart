@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:minha_agenda/features/agenda/agenda_page.dart';
 import 'package:minha_agenda/features/finance/finance_api.dart';
+import 'package:minha_agenda/features/finance/online_models.dart';
 import 'package:minha_agenda/features/finance/payment_models.dart';
 import 'package:minha_agenda/features/finance/payment_section.dart';
 import 'package:minha_agenda/features/finance/payment_status_chip.dart';
@@ -11,6 +12,10 @@ import 'package:minha_agenda/features/finance/receive_payment_sheet.dart';
 
 /// API falsa: guarda o estado e as chamadas, sem rede.
 class FakeFinanceApi extends FinanceApi {
+  @override
+  Future<OnlineAccount> onlineAccount() async =>
+      const OnlineAccount(available: false, status: 'none');
+
   FakeFinanceApi(this.state) : super(Dio());
   AppointmentFinance state;
   final received = <NewPayment>[];
