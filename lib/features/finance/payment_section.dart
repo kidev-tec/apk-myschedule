@@ -5,6 +5,7 @@ import '../../core/api/api_error.dart';
 import '../../theme/app_theme.dart';
 import 'finance_api.dart';
 import 'money.dart';
+import 'online_charge_sheet.dart';
 import 'payment_models.dart';
 import 'payment_status_chip.dart';
 import 'receipt_sheet.dart';
@@ -31,6 +32,12 @@ class PaymentSection extends StatefulWidget {
 
 class _PaymentSectionState extends State<PaymentSection> {
   late Future<AppointmentFinance> _future = _load();
+
+  /// Recebimento online aprovado? (F5) — falha na consulta = esconde o botão.
+  late final Future<bool> _online = widget.api
+      .onlineAccount()
+      .then((a) => a.isApproved)
+      .catchError((Object _) => false);
 
   Future<AppointmentFinance> _load() =>
       widget.api.appointment(widget.appointmentId);
@@ -64,6 +71,22 @@ class _PaymentSectionState extends State<PaymentSection> {
       _snack('Recebimento registrado');
       _reload();
     }
+  }
+
+  Future<void> _chargeLink(AppointmentFinance f) async {
+    var changed = false;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => OnlineChargeSheet(
+        appointmentId: widget.appointmentId,
+        balanceCents: f.balanceCents,
+        api: widget.api,
+        onChanged: () => changed = true,
+      ),
+    );
+    if (changed && mounted) _reload();
   }
 
   Future<void> _editPrice(AppointmentFinance f) async {
@@ -219,6 +242,18 @@ class _PaymentSectionState extends State<PaymentSection> {
                   onPressed: () => _receive(f),
                   icon: const Icon(Icons.payments_outlined),
                   label: const Text('Receber'),
+                ),
+              if (f.balanceCents > 0)
+                FutureBuilder<bool>(
+                  future: _online,
+                  builder: (_, on) => on.data == true
+                      ? OutlinedButton.icon(
+                          key: const Key('payment-charge-link'),
+                          onPressed: () => _chargeLink(f),
+                          icon: const Icon(Icons.link),
+                          label: const Text('Cobrar pelo link'),
+                        )
+                      : const SizedBox.shrink(),
                 ),
               if (f.status != PaymentStatus.paid)
                 OutlinedButton.icon(

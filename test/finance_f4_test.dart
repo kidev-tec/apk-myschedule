@@ -12,6 +12,7 @@ import 'package:minha_agenda/features/finance/cash_page.dart';
 import 'package:minha_agenda/features/finance/cashflow_models.dart';
 import 'package:minha_agenda/features/finance/cashflow_page.dart';
 import 'package:minha_agenda/features/finance/finance_api.dart';
+import 'package:minha_agenda/features/finance/online_models.dart';
 import 'package:minha_agenda/features/finance/payment_models.dart';
 import 'package:minha_agenda/features/finance/payment_section.dart';
 import 'package:minha_agenda/features/finance/receipt_sheet.dart';
@@ -109,6 +110,10 @@ Cashflow _flow({bool overdue = true, bool empty = false}) => Cashflow.fromJson({
     });
 
 class FakeF4Api extends FinanceApi {
+  @override
+  Future<OnlineAccount> onlineAccount() async =>
+      const OnlineAccount(available: false, status: 'none');
+
   FakeF4Api() : super(Dio());
   final windows = <int>[];
   Cashflow flow = _flow();

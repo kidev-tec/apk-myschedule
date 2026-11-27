@@ -31,6 +31,7 @@ import 'features/finance/cash_page.dart';
 import 'features/finance/expenses_page.dart';
 import 'features/finance/reports_page.dart';
 import 'features/finance/cashflow_page.dart';
+import 'features/finance/online_account_page.dart';
 import 'features/settings/edit_business_page.dart';
 import 'features/services/service_form_page.dart';
 import 'features/settings/settings_page.dart';
@@ -215,6 +216,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'cashflow',
             builder: (_, __) => const CashflowPage(),
+          ),
+          GoRoute(
+            path: 'online',
+            builder: (_, __) => const OnlineAccountPage(),
           ),
         ],
       ),

@@ -173,6 +173,17 @@ class _FinanceHomePageState extends ConsumerState<FinanceHomePage> {
           const SizedBox(height: 8),
           Card(
             child: ListTile(
+              key: const Key('finance-online'),
+              leading: Icon(Icons.link, color: primary),
+              title: const Text('Recebimento online'),
+              subtitle: const Text('Cobre por link: Pix, cartão ou boleto'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _go('/finance/online'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: ListTile(
               key: const Key('finance-walk-in'),
               leading: Icon(Icons.point_of_sale, color: primary),
               title: const Text('Receber avulso'),

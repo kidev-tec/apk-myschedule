@@ -220,6 +220,9 @@ void main() {
 
       // o resumo do mês (F3) fica no topo: rola até o atalho
       await t.scrollUntilVisible(find.byKey(const Key('finance-walk-in')), 200);
+      // garante o card inteiro na tela antes do toque
+      await t.ensureVisible(find.byKey(const Key('finance-walk-in')));
+      await t.pumpAndSettle();
       await t.tap(find.byKey(const Key('finance-walk-in')));
       await t.pumpAndSettle();
       expect(find.text('Receber avulso'), findsWidgets);
