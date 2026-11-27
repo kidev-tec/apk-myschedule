@@ -150,6 +150,17 @@ class _FinanceHomePageState extends ConsumerState<FinanceHomePage> {
           const SizedBox(height: 8),
           Card(
             child: ListTile(
+              key: const Key('finance-cashflow'),
+              leading: Icon(Icons.trending_up, color: primary),
+              title: const Text('Fluxo projetado'),
+              subtitle: const Text('O que entra e sai nos próximos dias'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _go('/finance/cashflow'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: ListTile(
               key: const Key('finance-reports'),
               leading: Icon(Icons.bar_chart, color: primary),
               title: const Text('Relatórios'),

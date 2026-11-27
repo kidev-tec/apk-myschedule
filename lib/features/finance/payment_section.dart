@@ -7,6 +7,7 @@ import 'finance_api.dart';
 import 'money.dart';
 import 'payment_models.dart';
 import 'payment_status_chip.dart';
+import 'receipt_sheet.dart';
 import 'receive_payment_sheet.dart';
 
 /// Bloco "Pagamento" do detalhe do agendamento (TASK-F1-11, RF-F01/F02/F03):
@@ -194,12 +195,21 @@ class _PaymentSectionState extends State<PaymentSection> {
                       ].join(' • ')),
                 trailing: p.isVoided
                     ? null
-                    : IconButton(
-                        key: Key('void-${p.id}'),
-                        tooltip: 'Estornar',
-                        icon: const Icon(Icons.undo),
-                        onPressed: () => _void(p),
-                      ),
+                    : Row(mainAxisSize: MainAxisSize.min, children: [
+                        IconButton(
+                          key: Key('receipt-${p.id}'),
+                          tooltip: 'Comprovante',
+                          icon: const Icon(Icons.receipt_long_outlined),
+                          onPressed: () =>
+                              showReceipt(context, widget.api, p.id),
+                        ),
+                        IconButton(
+                          key: Key('void-${p.id}'),
+                          tooltip: 'Estornar',
+                          icon: const Icon(Icons.undo),
+                          onPressed: () => _void(p),
+                        ),
+                      ]),
               ),
             const SizedBox(height: 8),
             Wrap(spacing: 8, children: [

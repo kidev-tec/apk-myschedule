@@ -29,6 +29,10 @@ class CashMovement {
   bool get isIn => type == 'income';
   bool get isVoided => voidedAt != null;
 
+  /// Recebimento (gera comprovante); suprimento não.
+  bool get isReceivable =>
+      !isVoided && (kind == 'payment' || kind == 'deposit');
+
   String get label => switch (kind) {
         'cash_in' => 'Suprimento',
         'cash_out' => 'Sangria',

@@ -326,6 +326,7 @@ void main() {
           'R\$ 150,00');
       expect(find.byKey(const Key('goal-define')), findsOneWidget);
       expect(api.periods.single, (DateTime(2026, 11), DateTime(2026, 11, 30)));
+      await t.scrollUntilVisible(find.byKey(const Key('finance-reports')), 200);
       expect(find.byKey(const Key('finance-reports')), findsOneWidget);
     });
   });

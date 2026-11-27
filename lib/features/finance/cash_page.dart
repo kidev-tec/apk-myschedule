@@ -8,6 +8,7 @@ import '../../theme/app_theme.dart';
 import 'cash_models.dart';
 import 'finance_api.dart';
 import 'money.dart';
+import 'receipt_sheet.dart';
 
 /// Caixa do dia (TASK-F2-12, RF-F05): abrir com troco, suprimento/sangria,
 /// fechar com o valor contado (diferença ao vivo) e histórico.
@@ -273,6 +274,10 @@ class _CashPageState extends ConsumerState<CashPage> {
                     .join(' • ')),
             trailing:
                 Text('${m.isIn ? '+' : '−'} ${formatCents(m.amountCents)}'),
+            // recebimento: toque abre o comprovante
+            onTap: m.isReceivable
+                ? () => showReceipt(context, ref.read(financeApiProvider), m.id)
+                : null,
           ),
       ],
     );

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import 'cash_models.dart';
+import 'cashflow_models.dart';
 import 'expense_models.dart';
 import 'payment_models.dart';
 import 'report_models.dart';
@@ -147,6 +148,20 @@ class FinanceApi {
   Future<Goal> deleteGoal(DateTime month) async {
     final r = await _dio.delete('/finance/goals/${monthKey(month)}');
     return Goal.fromJson(r.data as Map<String, dynamic>);
+  }
+
+  // ---- Fluxo projetado e comprovante (F4) ----
+
+  Future<Cashflow> cashflow({int days = 30}) async {
+    final r =
+        await _dio.get('/finance/cashflow', queryParameters: {'days': days});
+    return Cashflow.fromJson(r.data as Map<String, dynamic>);
+  }
+
+  /// Dados do comprovante (a API atribui o número na 1ª emissão).
+  Future<Receipt> receipt(String paymentId) async {
+    final r = await _dio.get('/finance/transactions/$paymentId/receipt');
+    return Receipt.fromJson(r.data as Map<String, dynamic>);
   }
 
   /// Valor do atendimento (desconto/acréscimo).
