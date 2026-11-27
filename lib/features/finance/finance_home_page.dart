@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/widgets/home_action.dart';
 import '../../theme/app_theme.dart';
+import 'cash_models.dart';
 import 'finance_api.dart';
 import 'money.dart';
 import 'payment_models.dart';
 import 'receive_payment_sheet.dart';
 
-/// Área "Finanças" (TASK-F1-12). Fase 1: atalhos para "A receber" e
-/// "Receber avulso"; o resumo do mês chega na Fase 3.
+/// Área "Finanças" (TASK-F1-12, F2): A receber, Caixa do dia, Despesas e
+/// Receber avulso; o resumo do mês chega na Fase 3.
 class FinanceHomePage extends ConsumerStatefulWidget {
   const FinanceHomePage({super.key});
 
@@ -20,13 +22,22 @@ class FinanceHomePage extends ConsumerStatefulWidget {
 
 class _FinanceHomePageState extends ConsumerState<FinanceHomePage> {
   late Future<Receivables> _open = _loadOpen();
+  late Future<CashSession?> _cash = ref.read(financeApiProvider).cashCurrent();
+  static final _time = DateFormat('HH:mm', 'pt_BR');
 
   Future<Receivables> _loadOpen() => ref.read(financeApiProvider).receivables();
 
   void _refresh() {
     setState(() {
       _open = _loadOpen();
+      _cash = ref.read(financeApiProvider).cashCurrent();
     });
+  }
+
+  /// Abre a tela e, ao voltar, atualiza os resumos.
+  Future<void> _go(String path) async {
+    await context.push(path);
+    if (mounted) _refresh();
   }
 
   Future<void> _receiveWalkIn() async {
@@ -81,10 +92,41 @@ class _FinanceHomePageState extends ConsumerState<FinanceHomePage> {
                 ),
               ),
               trailing: const Icon(Icons.chevron_right),
-              onTap: () async {
-                await context.push('/finance/receivables');
-                if (mounted) _refresh();
-              },
+              onTap: () => _go('/finance/receivables'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: ListTile(
+              key: const Key('finance-cash'),
+              leading: Icon(Icons.point_of_sale, color: primary),
+              title: const Text('Caixa do dia'),
+              subtitle: FutureBuilder<CashSession?>(
+                future: _cash,
+                builder: (_, snap) => Text(
+                  !snap.hasData
+                      ? (snap.connectionState == ConnectionState.done
+                          ? 'Fechado'
+                          : 'Abrir, conferir e fechar o dinheiro do dia')
+                      : 'Aberto às ${_time.format(snap.data!.openedAt)} • '
+                          'esperado ${formatCents(snap.data!.expectedCents)}',
+                  key: const Key('finance-cash-status'),
+                ),
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _go('/finance/cash'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: ListTile(
+              key: const Key('finance-expenses'),
+              leading: Icon(Icons.receipt_long_outlined, color: primary),
+              title: const Text('Despesas'),
+              subtitle:
+                  const Text('Materiais, aluguel, taxas e contas a pagar'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _go('/finance/expenses'),
             ),
           ),
           const SizedBox(height: 8),
